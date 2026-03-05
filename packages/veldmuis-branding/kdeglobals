@@ -3,8 +3,8 @@ AccentColor=240,176,48
 LastUsedCustomAccentColor=240,176,48
 
 [KDE]
-DefaultDarkLookAndFeel=org.kde.breezedark.desktop
-LookAndFeelPackage=org.kde.breezedark.desktop
+DefaultDarkLookAndFeel=org.veldmuis.desktop
+LookAndFeelPackage=org.veldmuis.desktop
 
 [Colors:Selection]
 BackgroundAlternate=224,128,64

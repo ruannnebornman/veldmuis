@@ -1,0 +1,14 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Veldmuis Linux"
+            }
+        ],
+        "Description": "Breeze Dark with Veldmuis defaults",
+        "Id": "org.veldmuis.desktop",
+        "License": "GPLv2+",
+        "Name": "Veldmuis"
+    }
+}

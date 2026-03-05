@@ -1,12 +1,13 @@
 pkgbase = veldmuis-branding
 	pkgdesc = Branding assets and default theme configuration for Veldmuis Linux
 	pkgver = 20260306
-	pkgrel = 2
+	pkgrel = 3
 	url = https://github.com/ruannnebornman/veldmuis
 	arch = any
 	license = MIT
 	license = CC-BY-SA
 	license = LGPL-2.0-or-later
+	license = GPL-2.0-or-later
 	source = rat1.png
 	source = veldmuis-sddm.conf
 	source = kdeglobals

@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Veldmuis Linux"
+            }
+        ],
+        "Id": "VeldmuisDawn",
+        "License": "Veldmuis Asset",
+        "Name": "Veldmuis Dawn"
+    }
+}
