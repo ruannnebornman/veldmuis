@@ -1,7 +1,7 @@
 pkgbase = veldmuis-desktop
 	pkgdesc = Top-level desktop install metapackage for Veldmuis Linux
 	pkgver = 20260306
-	pkgrel = 1
+	pkgrel = 2
 	url = https://github.com/ruannnebornman/veldmuis
 	arch = any
 	license = MIT
@@ -10,5 +10,6 @@ pkgbase = veldmuis-desktop
 	depends = veldmuis-displaymanager
 	depends = veldmuis-desktop-kde
 	depends = veldmuis-multimedia
+	depends = veldmuis-branding
 
 pkgname = veldmuis-desktop

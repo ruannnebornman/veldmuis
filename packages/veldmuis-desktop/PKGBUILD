@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop
 pkgver=20260306
-pkgrel=1
+pkgrel=2
 pkgdesc="Top-level desktop install metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -11,6 +11,7 @@ depends=(
   "veldmuis-displaymanager"
   "veldmuis-desktop-kde"
   "veldmuis-multimedia"
+  "veldmuis-branding"
 )
 sha256sums=()
 

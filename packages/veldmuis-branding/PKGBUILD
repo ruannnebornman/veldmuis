@@ -1,0 +1,29 @@
+pkgname=veldmuis-branding
+pkgver=20260306
+pkgrel=2
+pkgdesc="Branding assets and default theme configuration for Veldmuis Linux"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT" "CC-BY-SA" "LGPL-2.0-or-later")
+source=(
+  "rat1.png"
+  "veldmuis-sddm.conf"
+  "kdeglobals"
+)
+sha256sums=(
+  "SKIP"
+  "SKIP"
+  "SKIP"
+)
+
+package() {
+  install -Dm644 "${srcdir}/rat1.png" \
+    "${pkgdir}/usr/share/veldmuis/wallpapers/rat1.png"
+  install -Dm644 "${srcdir}/veldmuis-sddm.conf" \
+    "${pkgdir}/etc/sddm.conf.d/veldmuis-sddm.conf"
+  install -Dm644 "${srcdir}/kdeglobals" \
+    "${pkgdir}/etc/xdg/kdeglobals"
+  install -d "${pkgdir}/usr/share/sddm/themes"
+  cp -a "${startdir}/veldmuis-breeze" \
+    "${pkgdir}/usr/share/sddm/themes/veldmuis-breeze"
+}
