@@ -1,0 +1,15 @@
+pkgname=veldmuis-devel
+pkgver=20260306
+pkgrel=2
+pkgdesc="Optional development tools metapackage for Veldmuis Linux"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT")
+depends=(
+  "base-devel"
+)
+sha256sums=()
+
+package() {
+  :
+}
