@@ -1,0 +1,15 @@
+# Veldmuis Linux mirror list
+#
+# Replace the primary URL once real repository hosting exists.
+# For early testing you can temporarily switch to a local HTTP or file URL.
+
+Server = https://packages.veldmuis.dev/$repo/os/$arch
+
+# Host-side test server from a QEMU guest using user-mode networking:
+# Server = http://10.0.2.2:8000/$repo/os/$arch
+
+# LAN test server:
+# Server = http://192.168.1.10/veldmuis/$repo/os/$arch
+
+# Direct local filesystem test:
+# Server = file:///srv/repo/veldmuis/$repo/os/$arch

@@ -1,0 +1,3 @@
+packages/*/pkg/
+packages/*/src/
+packages/*/*.pkg.tar.*
