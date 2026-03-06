@@ -1,0 +1,4 @@
+Veldmuis Linux preview ISO
+
+This image is built from the local Veldmuis package repos.
+The current goal is to validate the package model and ISO pipeline before adding installer and live-session polish.

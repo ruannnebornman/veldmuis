@@ -1,0 +1,12 @@
+# Archiso live-environment requirements
+amd-ucode
+arch-install-scripts
+archinstall
+intel-ucode
+memtest86+-efi
+mkinitcpio
+mkinitcpio-archiso
+
+# Current Veldmuis install targets
+veldmuis-desktop
+veldmuis-devel

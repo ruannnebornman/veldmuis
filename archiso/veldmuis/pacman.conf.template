@@ -1,0 +1,24 @@
+[options]
+Architecture = auto
+CheckSpace
+SigLevel = Required DatabaseOptional
+LocalFileSigLevel = Required
+ParallelDownloads = 5
+GPGDir = @VELDMUIS_PACMAN_GPGDIR@
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+
+[veldmuis-core]
+SigLevel = Required DatabaseOptional
+Server = file://@VELDMUIS_REPO_ROOT@/veldmuis-core/os/$arch
+
+[veldmuis-extra]
+SigLevel = Required DatabaseOptional
+Server = file://@VELDMUIS_REPO_ROOT@/veldmuis-extra/os/$arch
