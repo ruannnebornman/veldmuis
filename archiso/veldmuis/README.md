@@ -14,10 +14,15 @@ It is meant to get a real ISO building against your package model before adding 
 
 Important:
 
-- the profile includes `bootstrap_packages.x86_64`
+- the profile uses `packages.x86_64` for the live package set
 - the profile ships the minimal `efiboot/loader/` files required by current `mkarchiso`
 - the profile is UEFI-only on purpose
+- the live image includes the `veldmuis-install` wrapper for the current `archinstall` bootstrap path
 
 Use the top-level helper script to build it:
 
 - `/home/kaazrot/Documents/Code/veldmuis/scripts/build-archiso.sh`
+
+Repeatable VM smoke-test steps live in:
+
+- `/home/kaazrot/Documents/Code/veldmuis/repo/archiso/SMOKE_TEST.md`

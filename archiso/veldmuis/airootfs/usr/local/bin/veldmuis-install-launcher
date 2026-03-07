@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+exec konsole --hold -e sudo /usr/local/bin/veldmuis-install

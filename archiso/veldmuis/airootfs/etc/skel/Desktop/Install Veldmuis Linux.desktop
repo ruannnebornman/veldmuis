@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install Veldmuis Linux
+Comment=Launch the guided Veldmuis installation flow
+Exec=/usr/local/bin/veldmuis-install-launcher
+Icon=drive-harddisk
+Terminal=false
+Categories=System;
+StartupNotify=true
