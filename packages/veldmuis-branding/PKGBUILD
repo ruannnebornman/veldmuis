@@ -1,6 +1,6 @@
 pkgname=veldmuis-branding
 pkgver=20260306
-pkgrel=3
+pkgrel=4
 pkgdesc="Branding assets and default theme configuration for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -9,8 +9,14 @@ source=(
   "rat1.png"
   "veldmuis-sddm.conf"
   "kdeglobals"
+  "veldmuis-first-login.desktop"
+  "veldmuis-apply-plasma-defaults.sh"
+  "veldmuis-first-login-pending"
 )
 sha256sums=(
+  "SKIP"
+  "SKIP"
+  "SKIP"
   "SKIP"
   "SKIP"
   "SKIP"
@@ -32,4 +38,10 @@ package() {
   install -d "${pkgdir}/usr/share/sddm/themes"
   cp -a "${startdir}/veldmuis-breeze" \
     "${pkgdir}/usr/share/sddm/themes/veldmuis-breeze"
+  install -Dm755 "${srcdir}/veldmuis-apply-plasma-defaults.sh" \
+    "${pkgdir}/usr/lib/veldmuis/veldmuis-apply-plasma-defaults.sh"
+  install -Dm644 "${srcdir}/veldmuis-first-login.desktop" \
+    "${pkgdir}/etc/xdg/autostart/veldmuis-first-login.desktop"
+  install -Dm644 "${srcdir}/veldmuis-first-login-pending" \
+    "${pkgdir}/etc/skel/.config/veldmuis/first-login-pending"
 }
