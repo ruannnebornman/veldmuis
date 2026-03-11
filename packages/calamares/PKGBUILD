@@ -33,8 +33,16 @@ makedepends=(
 )
 source=(
   "https://github.com/calamares/calamares/releases/download/v${pkgver}/calamares-${pkgver}.tar.gz"
+  "0001-limit-partition-filesystems.patch"
 )
-sha256sums=("SKIP")
+sha256sums=("SKIP" "SKIP")
+prepare() {
+  cd "calamares-${pkgver}"
+
+  if ! grep -q 'selectableFilesystemTypes' src/modules/partition/gui/PartitionDialogHelpers.h; then
+    patch -Np1 -i "${srcdir}/0001-limit-partition-filesystems.patch"
+  fi
+}
 
 build() {
   cmake -B build -S "calamares-${pkgver}" \

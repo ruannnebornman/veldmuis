@@ -1,0 +1,556 @@
+diff --git a/src/modules/partition/gui/PartitionDialogHelpers.h b/src/modules/partition/gui/PartitionDialogHelpers.h
+index 4f77c3a..6a7c2f1 100644
+--- a/src/modules/partition/gui/PartitionDialogHelpers.h
++++ b/src/modules/partition/gui/PartitionDialogHelpers.h
+@@ -15,6 +15,7 @@
+ #include <kpmcore/core/partitiontable.h>
+ #include <kpmcore/fs/filesystem.h>
+ 
++#include <QList>
+ #include <QStringList>
+ #include <QSet>
+ 
+@@ -69,6 +70,15 @@ setSelectedMountPoint( QComboBox* combo, const QString& selected )
+     setSelectedMountPoint( *combo, selected );
+ }
+ 
++QList< FileSystem::Type >
++selectableFilesystemTypes( PartitionCoreModule* core, const QString& mountPoint, const QStringList& inUse );
++
++void setSelectableFileSystems( PartitionCoreModule* core,
++                               QComboBox& combo,
++                               const QString& mountPoint,
++                               const QStringList& inUse,
++                               FileSystem::Type preferredType = FileSystem::Type::Unknown );
++
+ /** @brief Validate a @p mountPoint and adjust the UI
+  *
+  * If @p mountPoint is valid -- unused and starts with a /, for instance --
+diff --git a/src/modules/partition/gui/PartitionDialogHelpers.cpp b/src/modules/partition/gui/PartitionDialogHelpers.cpp
+index db1943a..deda8db 100644
+--- a/src/modules/partition/gui/PartitionDialogHelpers.cpp
++++ b/src/modules/partition/gui/PartitionDialogHelpers.cpp
+@@ -17,9 +17,11 @@
+ 
+ #include "GlobalStorage.h"
+ #include "JobQueue.h"
+-#include "utils/Logger.h"
++#include "Settings.h"
++#include "partition/FileSystem.h"
+ 
+ #include <kpmcore/fs/filesystem.h>
++#include <kpmcore/fs/filesystemfactory.h>
+ 
+ #include <QComboBox>
+ #include <QLabel>
+@@ -27,6 +29,24 @@
+ #include <QListWidget>
+ #include <QPushButton>
+ 
++using Calamares::Partition::userVisibleFS;
++
++static FileSystem::Type
++defaultFilesystemType()
++{
++    FileSystem::Type defaultFSType = FileSystem::Type::Unknown;
++    PartUtils::canonicalFilesystemName(
++        Calamares::JobQueue::instance()->globalStorage()->value( "defaultFileSystemType" ).toString(), &defaultFSType );
++    return defaultFSType == FileSystem::Type::Unknown ? FileSystem::Type::Ext4 : defaultFSType;
++}
++
++static bool
++isCreatableFilesystem( FileSystem* fs )
++{
++    return ( fs->type() == FileSystem::Type::Zfs && Calamares::Settings::instance()->isModuleEnabled( "zfs" ) )
++        || ( fs->supportCreate() != FileSystem::cmdSupportNone && fs->type() != FileSystem::Extended );
++}
++
+ QStringList
+ standardMountPoints()
+ {
+@@ -83,6 +103,99 @@ setSelectedMountPoint( QComboBox& combo, const QString& selected )
+     }
+ }
+ 
++QList< FileSystem::Type >
++selectableFilesystemTypes( PartitionCoreModule* core, const QString& mountPoint, const QStringList& inUse )
++{
++    if ( !core )
++    {
++        return {};
++    }
++
++    if ( mountPoint.isEmpty() )
++    {
++        return core->dirFSRestrictLayout().anyAllowedFSTypes();
++    }
++
++    const QString efiMountPoint
++        = Calamares::JobQueue::instance()->globalStorage()->value( "efiSystemPartition" ).toString();
++    if ( PartUtils::isEfiSystem() && !efiMountPoint.isEmpty() && mountPoint == efiMountPoint )
++    {
++        return core->dirFSRestrictLayout().allowedFSTypes( mountPoint, inUse, false );
++    }
++
++    return core->dirFSRestrictLayout().allowedFSTypes( mountPoint, inUse, true );
++}
++
++void
++setSelectableFileSystems( PartitionCoreModule* core,
++                          QComboBox& combo,
++                          const QString& mountPoint,
++                          const QStringList& inUse,
++                          FileSystem::Type preferredType )
++{
++    const QList< FileSystem::Type > allowedFsTypes = selectableFilesystemTypes( core, mountPoint, inUse );
++    const QSet< FileSystem::Type > allowedFsSet( allowedFsTypes.cbegin(), allowedFsTypes.cend() );
++    const FileSystem::Type defaultFSType = defaultFilesystemType();
++    const bool wasBlocked = combo.blockSignals( true );
++
++    combo.clear();
++
++    int currentIndex = -1;
++    int defaultIndex = -1;
++    int comboIndex = 0;
++
++    auto addFsType = [ & ]( FileSystem::Type type )
++    {
++        auto fs = FileSystemFactory::map().value( type, nullptr );
++        if ( !fs || !isCreatableFilesystem( fs ) )
++        {
++            return;
++        }
++
++        combo.addItem( userVisibleFS( fs ) );
++        if ( type == preferredType )
++        {
++            currentIndex = comboIndex;
++        }
++        if ( type == defaultFSType )
++        {
++            defaultIndex = comboIndex;
++        }
++        ++comboIndex;
++    };
++
++    for ( auto fs : FileSystemFactory::map() )
++    {
++        if ( allowedFsSet.contains( fs->type() ) && !s_unmountableFS.contains( fs->type() ) )
++        {
++            addFsType( fs->type() );
++        }
++    }
++
++    for ( auto fs : FileSystemFactory::map() )
++    {
++        if ( s_unmountableFS.contains( fs->type() ) )
++        {
++            addFsType( fs->type() );
++        }
++    }
++
++    if ( currentIndex >= 0 )
++    {
++        combo.setCurrentIndex( currentIndex );
++    }
++    else if ( defaultIndex >= 0 )
++    {
++        combo.setCurrentIndex( defaultIndex );
++    }
++    else if ( combo.count() > 0 )
++    {
++        combo.setCurrentIndex( 0 );
++    }
++
++    combo.blockSignals( wasBlocked );
++}
++
+ bool
+ validateMountPoint( PartitionCoreModule* core, const QString& mountPoint, const QStringList& inUse, const QString& fileSystem, QLabel* label, QPushButton* button )
+ {
+@@ -98,55 +211,22 @@ validateMountPoint( PartitionCoreModule* core, const QString& mountPoint, const
+     {
+         msg = CreatePartitionDialog::tr( "Mountpoint must start with a <tt>/</tt>.", "@info" );
+         ok = false;
+-    } else {
+-        // Validate the chosen filesystem + mountpoint combination.
++    }
++    else
++    {
+         FileSystem::Type selectedFsType;
+         PartUtils::canonicalFilesystemName( fileSystem, &selectedFsType );
+-        bool fsTypeIsAllowed = false;
+-        if ( selectedFsType == FileSystem::Type::Unknown )
+-        {
+-            fsTypeIsAllowed = true;
+-        }
+-        else
+-        {
+-            QList< FileSystem::Type > anyAllowedFsTypes = core->dirFSRestrictLayout().anyAllowedFSTypes();
+-            for ( auto& anyAllowedFsType : anyAllowedFsTypes )
+-            {
+-                if ( selectedFsType == anyAllowedFsType )
+-                {
+-                    fsTypeIsAllowed = true;
+-                    break;
+-                }
+-            }
+-        }
++        const bool fsTypeIsAllowed = selectedFsType == FileSystem::Type::Unknown || s_unmountableFS.contains( selectedFsType )
++            || selectableFilesystemTypes( core, mountPoint, inUse ).contains( selectedFsType );
+ 
+-        bool fsTypeIsAllowedForMountPoint = false;
+-        // We allow arbitrary unmountable filesystems here since an
+-        // unmountable filesystem has no mount point associated with it, thus
+-        // any filesystem restriction we'd find at this point would be
+-        // irrelevant.
+-        if ( selectedFsType == FileSystem::Type::Unknown || s_unmountableFS.contains( selectedFsType ) )
+-        {
+-            fsTypeIsAllowedForMountPoint = true;
+-        }
+-        else
++        if ( !fsTypeIsAllowed && mountPoint.isEmpty() )
+         {
+-            QList< FileSystem::Type > allowedFsTypes = core->dirFSRestrictLayout().allowedFSTypes( mountPoint, inUse, false );
+-            for ( auto& allowedFsType : allowedFsTypes )
+-            {
+-                if ( selectedFsType == allowedFsType )
+-                {
+-                    fsTypeIsAllowedForMountPoint = true;
+-                    break;
+-                }
+-            }
+-        }
+-
+-        if ( !fsTypeIsAllowed ) {
+-            msg = CreatePartitionDialog::tr( "Filesystem is prohibited by this distro. Consider selecting another one.", "@info" );
++            msg = CreatePartitionDialog::tr(
++                "Filesystem is prohibited by this distro. Consider selecting another one.", "@info" );
+             ok = true;
+         }
+-        else if ( !fsTypeIsAllowedForMountPoint ) {
++        else if ( !fsTypeIsAllowed )
++        {
+             msg = CreatePartitionDialog::tr( "Filesystem is prohibited for use on this mountpoint. Consider selecting a different filesystem or mountpoint.", "@info" );
+             ok = true;
+         }
+diff --git a/src/modules/partition/gui/CreatePartitionDialog.h b/src/modules/partition/gui/CreatePartitionDialog.h
+index 75a0da0..bf04e96 100644
+--- a/src/modules/partition/gui/CreatePartitionDialog.h
++++ b/src/modules/partition/gui/CreatePartitionDialog.h
+@@ -15,6 +15,7 @@
+ // KPMcore
+ #include <kpmcore/core/partitionrole.h>
+ #include <kpmcore/core/partitiontable.h>
++#include <kpmcore/fs/filesystem.h>
+ 
+ #include <QDialog>
+ #include <QScopedPointer>
+@@ -97,6 +98,7 @@ private:
+     void initGptPartitionTypeUi();
+     void initMbrPartitionTypeUi();
+     void initPartResizerWidget( Partition* );
++    void refreshFilesystemChoices( FileSystem::Type preferredType = FileSystem::Type::Unknown );
+ };
+ 
+ #endif /* CREATEPARTITIONDIALOG_H */
+diff --git a/src/modules/partition/gui/CreatePartitionDialog.cpp b/src/modules/partition/gui/CreatePartitionDialog.cpp
+index 213f5c7..80202f8 100644
+--- a/src/modules/partition/gui/CreatePartitionDialog.cpp
++++ b/src/modules/partition/gui/CreatePartitionDialog.cpp
+@@ -16,7 +16,6 @@
+ 
+ #include "core/ColorUtils.h"
+ #include "core/KPMHelpers.h"
+-#include "core/PartUtils.h"
+ #include "core/PartitionInfo.h"
+ #include "core/PartitionCoreModule.h"
+ #include "gui/PartitionDialogHelpers.h"
+@@ -24,7 +23,6 @@
+ 
+ #include "GlobalStorage.h"
+ #include "JobQueue.h"
+-#include "Settings.h"
+ #include "partition/FileSystem.h"
+ #include "partition/PartitionQuery.h"
+ #include "utils/Logger.h"
+@@ -44,9 +42,6 @@
+ #include <QRegularExpressionValidator>
+ #include <QSet>
+ 
+-using Calamares::Partition::untranslatedFS;
+-using Calamares::Partition::userVisibleFS;
+-
+ CreatePartitionDialog::CreatePartitionDialog( PartitionCoreModule* core,
+                                               Device* device,
+                                               PartitionNode* parentPartition,
+@@ -88,34 +83,6 @@ CreatePartitionDialog::CreatePartitionDialog( PartitionCoreModule* core,
+         initGptPartitionTypeUi();
+     }
+ 
+-    // File system; the config value is translated (best-effort) to a type
+-    FileSystem::Type defaultFSType;
+-    QString untranslatedFSName = PartUtils::canonicalFilesystemName(
+-        Calamares::JobQueue::instance()->globalStorage()->value( "defaultFileSystemType" ).toString(), &defaultFSType );
+-    if ( defaultFSType == FileSystem::Type::Unknown )
+-    {
+-        defaultFSType = FileSystem::Type::Ext4;
+-    }
+-
+-    int defaultFsIndex = -1;
+-    int fsCounter = 0;
+-    QStringList fsNames;
+-    for ( auto fs : FileSystemFactory::map() )
+-    {
+-        // We need to ensure zfs is added to the list if the zfs module is enabled
+-        if ( ( fs->type() == FileSystem::Type::Zfs && Calamares::Settings::instance()->isModuleEnabled( "zfs" ) )
+-             || ( fs->supportCreate() != FileSystem::cmdSupportNone && fs->type() != FileSystem::Extended ) )
+-        {
+-            fsNames << userVisibleFS( fs );  // This is put into the combobox
+-            if ( fs->type() == defaultFSType )
+-            {
+-                defaultFsIndex = fsCounter;
+-            }
+-            fsCounter++;
+-        }
+-    }
+-    m_ui->fsComboBox->addItems( fsNames );
+-
+     // Connections
+     connect( m_ui->fsComboBox, SIGNAL( activated( int ) ), SLOT( updateMountPointUi() ) );
+     connect( m_ui->extendedRadioButton, SIGNAL( toggled( bool ) ), SLOT( updateMountPointUi() ) );
+@@ -123,15 +90,23 @@ CreatePartitionDialog::CreatePartitionDialog( PartitionCoreModule* core,
+     connect( m_ui->mountPointComboBox,
+              &QComboBox::currentTextChanged,
+              this,
+-             &CreatePartitionDialog::checkMountPointSelection );
++             [ this ]( const QString& )
++             {
++                 refreshFilesystemChoices();
++                 updateMountPointUi();
++                 checkMountPointSelection();
++             } );
+ 
+     connect( m_ui->fsComboBox,
+              &QComboBox::currentTextChanged,
+              this,
+-             &CreatePartitionDialog::checkMountPointSelection );
++             [ this ]( const QString& )
++             {
++                 updateMountPointUi();
++                 checkMountPointSelection();
++             } );
+ 
+-    // Select a default
+-    m_ui->fsComboBox->setCurrentIndex( defaultFsIndex );
++    refreshFilesystemChoices();
+     updateMountPointUi();
+     checkMountPointSelection();
+ }
+@@ -172,10 +147,9 @@ CreatePartitionDialog::CreatePartitionDialog( PartitionCoreModule* core,
+     initPartResizerWidget( existingNewPartition.p );
+ 
+     FileSystem::Type fsType = existingNewPartition.p->fileSystem().type();
+-    m_ui->fsComboBox->setCurrentText( FileSystem::nameForType( fsType ) );
+-
+-    setSelectedMountPoint( m_ui->mountPointComboBox, PartitionInfo::mountPoint( existingNewPartition.p ) );
++    refreshFilesystemChoices( fsType );
+     updateMountPointUi();
++    checkMountPointSelection();
+ }
+ 
+ CreatePartitionDialog::~CreatePartitionDialog() {}
+@@ -355,6 +329,18 @@ CreatePartitionDialog::checkMountPointSelection()
+                         m_ui->buttonBox->button( QDialogButtonBox::Ok ) );
+ }
+ 
++void
++CreatePartitionDialog::refreshFilesystemChoices( FileSystem::Type preferredType )
++{
++    if ( preferredType == FileSystem::Type::Unknown )
++    {
++        preferredType = FileSystem::typeForName( m_ui->fsComboBox->currentText() );
++    }
++
++    setSelectableFileSystems(
++        m_core, *( m_ui->fsComboBox ), selectedMountPoint( m_ui->mountPointComboBox ), m_usedMountPoints, preferredType );
++}
++
+ void
+ CreatePartitionDialog::initPartResizerWidget( Partition* partition )
+ {
+diff --git a/src/modules/partition/gui/EditExistingPartitionDialog.h b/src/modules/partition/gui/EditExistingPartitionDialog.h
+index 8674b8b..3254517 100644
+--- a/src/modules/partition/gui/EditExistingPartitionDialog.h
++++ b/src/modules/partition/gui/EditExistingPartitionDialog.h
+@@ -12,6 +12,7 @@
+ #define EDITEXISTINGPARTITIONDIALOG_H
+ 
+ #include <kpmcore/core/partitiontable.h>
++#include <kpmcore/fs/filesystem.h>
+ 
+ #include <QDialog>
+ #include <QScopedPointer>
+@@ -59,6 +60,8 @@ private:
+ 
+     PartitionTable::Flags newFlags() const;
+     void replacePartResizerWidget();
++    void refreshFilesystemChoices( FileSystem::Type preferredType = FileSystem::Type::Unknown,
++                                   bool includeCurrentFileSystem = false );
+     void updateMountPointPicker();
+     void toggleEncryptWidget();
+ };
+diff --git a/src/modules/partition/gui/EditExistingPartitionDialog.cpp b/src/modules/partition/gui/EditExistingPartitionDialog.cpp
+index 2b9b940..c6d051e 100644
+--- a/src/modules/partition/gui/EditExistingPartitionDialog.cpp
++++ b/src/modules/partition/gui/EditExistingPartitionDialog.cpp
+@@ -18,22 +18,17 @@
+ 
+ #include "core/ColorUtils.h"
+ #include "core/KPMHelpers.h"
+-#include "core/PartUtils.h"
+ #include "core/PartitionCoreModule.h"
+ #include "core/PartitionInfo.h"
+ #include "gui/PartitionDialogHelpers.h"
+ #include "gui/PartitionSizeController.h"
+ 
+-#include "GlobalStorage.h"
+-#include "JobQueue.h"
+-#include "Settings.h"
+ #include "partition/FileSystem.h"
+ #include "utils/Logger.h"
+ #include "widgets/TranslationFix.h"
+ 
+ #include <kpmcore/core/device.h>
+ #include <kpmcore/core/partition.h>
+-#include <kpmcore/fs/filesystemfactory.h>
+ #include <kpmcore/fs/luks.h>
+ 
+ #include <QComboBox>
+@@ -42,7 +37,6 @@
+ #include <QProcess>
+ #include <QPushButton>
+ 
+-using Calamares::Partition::untranslatedFS;
+ using Calamares::Partition::userVisibleFS;
+ 
+ static void
+@@ -81,12 +75,24 @@ EditExistingPartitionDialog::EditExistingPartitionDialog( PartitionCoreModule* c
+     connect( m_ui->mountPointComboBox,
+              &QComboBox::currentTextChanged,
+              this,
+-             &EditExistingPartitionDialog::checkMountPointSelection );
++             [ this ]( const QString& )
++             {
++                 if ( m_ui->formatRadioButton->isChecked() )
++                 {
++                     refreshFilesystemChoices();
++                 }
++                 updateMountPointPicker();
++                 checkMountPointSelection();
++             } );
+ 
+     connect( m_ui->fileSystemComboBox,
+              &QComboBox::currentTextChanged,
+              this,
+-             &EditExistingPartitionDialog::checkMountPointSelection );
++             [ this ]( const QString& )
++             {
++                 updateMountPointPicker();
++                 checkMountPointSelection();
++             } );
+ 
+     // The filesystem label field is always enabled, because we may want to change
+     // the label on the current filesystem without formatting.
+@@ -103,47 +109,11 @@ EditExistingPartitionDialog::EditExistingPartitionDialog( PartitionCoreModule* c
+ 
+                  m_ui->fileSystemComboBox->setEnabled( doFormat );
+ 
+-                 if ( !doFormat )
+-                 {
+-                     m_ui->fileSystemComboBox->setCurrentText( userVisibleFS( m_partition->fileSystem() ) );
+-                 }
+-
++                 refreshFilesystemChoices( m_partition->fileSystem().type(), !doFormat );
+                  updateMountPointPicker();
++                 checkMountPointSelection();
+              } );
+-
+-    connect(
+-        m_ui->fileSystemComboBox, &QComboBox::currentTextChanged, [ this ]( QString ) { updateMountPointPicker(); } );
+-
+-    // File system
+-    QStringList fsNames;
+-    for ( auto fs : FileSystemFactory::map() )
+-    {
+-        // We need to ensure zfs is added to the list if the zfs module is enabled
+-        if ( ( fs->type() == FileSystem::Type::Zfs && Calamares::Settings::instance()->isModuleEnabled( "zfs" ) )
+-             || ( fs->supportCreate() != FileSystem::cmdSupportNone && fs->type() != FileSystem::Extended ) )
+-        {
+-            fsNames << userVisibleFS( fs );  // For the combo box
+-        }
+-    }
+-    m_ui->fileSystemComboBox->addItems( fsNames );
+-
+-    FileSystem::Type defaultFSType;
+-    QString untranslatedFSName = PartUtils::canonicalFilesystemName(
+-        Calamares::JobQueue::instance()->globalStorage()->value( "defaultFileSystemType" ).toString(), &defaultFSType );
+-    if ( defaultFSType == FileSystem::Type::Unknown )
+-    {
+-        defaultFSType = FileSystem::Type::Ext4;
+-    }
+-
+-    QString thisFSNameForUser = userVisibleFS( m_partition->fileSystem() );
+-    if ( fsNames.contains( thisFSNameForUser ) )
+-    {
+-        m_ui->fileSystemComboBox->setCurrentText( thisFSNameForUser );
+-    }
+-    else
+-    {
+-        m_ui->fileSystemComboBox->setCurrentText( FileSystem::nameForType( defaultFSType ) );
+-    }
++    refreshFilesystemChoices( m_partition->fileSystem().type(), true );
+ 
+     // Force a format if the existing device is a zfs device since reusing a
+     // zpool isn't currently supported; disable the radio buttons then.
+@@ -158,6 +128,8 @@ EditExistingPartitionDialog::EditExistingPartitionDialog( PartitionCoreModule* c
+     m_ui->fileSystemComboBox->setEnabled( m_ui->formatRadioButton->isChecked() );
+ 
+     setFlagList( *( m_ui->m_listFlags ), m_partition->availableFlags(), PartitionInfo::flags( m_partition ) );
++    updateMountPointPicker();
++    checkMountPointSelection();
+ }
+ 
+ EditExistingPartitionDialog::~EditExistingPartitionDialog() {}
+@@ -168,6 +140,31 @@ EditExistingPartitionDialog::newFlags() const
+     return flagsFromList( *( m_ui->m_listFlags ) );
+ }
+ 
++void
++EditExistingPartitionDialog::refreshFilesystemChoices( FileSystem::Type preferredType, bool includeCurrentFileSystem )
++{
++    if ( preferredType == FileSystem::Type::Unknown )
++    {
++        preferredType = FileSystem::typeForName( m_ui->fileSystemComboBox->currentText() );
++    }
++
++    setSelectableFileSystems( m_core,
++                              *( m_ui->fileSystemComboBox ),
++                              selectedMountPoint( m_ui->mountPointComboBox ),
++                              m_usedMountPoints,
++                              preferredType );
++
++    if ( includeCurrentFileSystem )
++    {
++        const QString currentFsName = userVisibleFS( m_partition->fileSystem() );
++        if ( m_ui->fileSystemComboBox->findText( currentFsName ) < 0 )
++        {
++            m_ui->fileSystemComboBox->addItem( currentFsName );
++        }
++        m_ui->fileSystemComboBox->setCurrentText( currentFsName );
++    }
++}
++
+ void
+ EditExistingPartitionDialog::applyChanges( PartitionCoreModule* core )
+ {

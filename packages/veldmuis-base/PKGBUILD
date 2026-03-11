@@ -7,6 +7,8 @@ url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
 depends=(
   "base"
+  "btrfs-progs"
+  "dosfstools"
   "linux"
   "linux-firmware"
   "networkmanager"
@@ -14,6 +16,7 @@ depends=(
   "veldmuis-keyring"
   "veldmuis-mirrorlist"
   "veldmuis-release"
+  "xfsprogs"
 )
 sha256sums=()
 
