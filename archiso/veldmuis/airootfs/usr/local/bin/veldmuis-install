@@ -80,18 +80,12 @@ config = {
             """\
             set -euo pipefail
 
-            cat >/etc/pacman.d/veldmuis-mirrorlist <<'EOF'
-            # Replace this with hosted mirrors when repository hosting is live:
-            # Server = https://packages.veldmuis.dev/$repo/os/$arch
-
-            # VM test server from a QEMU guest using user-mode networking:
-            # Server = http://10.0.2.2:8000/$repo/os/$arch
-            EOF
-
             grep -qxF 'Include = /etc/pacman.conf.d/veldmuis.conf' /etc/pacman.conf || printf '\\nInclude = /etc/pacman.conf.d/veldmuis.conf\\n' >> /etc/pacman.conf
 
             sed -i '/^\\[veldmuis-core\\]/,/^$/d' /etc/pacman.conf
             sed -i '/^\\[veldmuis-extra\\]/,/^$/d' /etc/pacman.conf
+
+            systemctl enable spice-vdagentd.service >/dev/null 2>&1 || true
 
             pacman -Q veldmuis-release veldmuis-branding veldmuis-desktop >/dev/null
             """

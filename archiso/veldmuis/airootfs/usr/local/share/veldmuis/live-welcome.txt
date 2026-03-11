@@ -1,0 +1,30 @@
+Welcome to Veldmuis Linux
+
+This live session is the current Veldmuis test image.
+
+What this ISO currently supports:
+- booting into a branded KDE Plasma live session
+- launching the Veldmuis install flow from the desktop
+- installing a working Veldmuis system with archinstall
+
+Quick start:
+- double-click "Install Veldmuis Linux" on the desktop to begin
+- the supported install target is UEFI + systemd-boot + KDE Plasma + SDDM
+- use a clean virtual disk when testing installs
+
+Live session notes:
+- the live user is: live
+- sudo is passwordless in the live session
+- networking is managed from the Plasma system tray
+
+If installation fails:
+- keep the installer terminal open and read the last error shown there
+- check system logs with: journalctl -b
+- check package activity with: cat /var/log/pacman.log
+
+Project status:
+- the ISO, repo trust, package stack, branding, and fresh-user defaults are working
+- archinstall is the current bootstrap installer and may still pull a few Arch defaults
+
+Workspace:
+- source repo: https://github.com/ruannnebornman/veldmuis

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Welcome to Veldmuis Linux
+Comment=Open the live session welcome and help notes
+Exec=/usr/local/bin/veldmuis-welcome
+Icon=help-contents
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true

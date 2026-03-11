@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if ! command -v calamares >/dev/null 2>&1; then
+  printf '[veldmuis-calamares] ERROR: calamares is not installed in the live session.\n' >&2
+  exit 1
+fi
+
+exec konsole --hold -e bash -lc \
+  'exec sudo --preserve-env=DISPLAY,XAUTHORITY,XDG_RUNTIME_DIR,WAYLAND_DISPLAY,DBUS_SESSION_BUS_ADDRESS,QT_QPA_PLATFORMTHEME /usr/bin/calamares -d'

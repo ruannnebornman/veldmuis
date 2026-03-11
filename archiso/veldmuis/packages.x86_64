@@ -2,6 +2,8 @@
 amd-ucode
 arch-install-scripts
 archinstall
+calamares
+veldmuis-calamares-config
 intel-ucode
 memtest86+-efi
 mkinitcpio

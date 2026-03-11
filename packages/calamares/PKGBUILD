@@ -1,0 +1,54 @@
+pkgname=calamares
+pkgver=3.3.14
+pkgrel=2
+pkgdesc="Distribution-independent installer framework"
+arch=("x86_64")
+url="https://calamares.io/"
+license=("GPL-3.0-or-later")
+options=("!debug")
+depends=(
+  "boost-libs"
+  "hwinfo"
+  "kcoreaddons"
+  "kcrash"
+  "kdbusaddons"
+  "kglobalaccel"
+  "kirigami"
+  "kpmcore"
+  "libpwquality"
+  "polkit-qt6"
+  "qt6-declarative"
+  "qt6-svg"
+  "qt6-tools"
+  "qt6-translations"
+  "yaml-cpp"
+)
+makedepends=(
+  "boost"
+  "cmake"
+  "extra-cmake-modules"
+  "git"
+  "kpmcore"
+  "python"
+)
+source=(
+  "https://github.com/calamares/calamares/releases/download/v${pkgver}/calamares-${pkgver}.tar.gz"
+)
+sha256sums=("SKIP")
+
+build() {
+  cmake -B build -S "calamares-${pkgver}" \
+    -DCMAKE_BUILD_TYPE=None \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_TESTING=OFF \
+    -DINSTALL_CONFIG=ON \
+    -DWITH_QT6=ON \
+    -DKDE_INSTALL_USE_QT_SYS_PATHS=ON
+
+  cmake --build build
+}
+
+package() {
+  DESTDIR="${pkgdir}" cmake --install build
+}

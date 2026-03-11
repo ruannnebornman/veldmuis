@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Veldmuis Live Welcome
+Comment=Show the Veldmuis live session welcome notes once
+Exec=/usr/local/bin/veldmuis-welcome --auto
+Icon=help-contents
+Terminal=false
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

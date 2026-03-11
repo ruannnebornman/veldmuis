@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+doc_path="/usr/local/share/veldmuis/live-welcome.txt"
+marker="${XDG_CACHE_HOME:-${HOME}/.cache}/veldmuis/live-welcome-shown"
+
+show_welcome() {
+  if command -v kdialog >/dev/null 2>&1; then
+    exec kdialog --title "Welcome to Veldmuis Linux" --textbox "${doc_path}" 760 560
+  fi
+
+  if command -v kate >/dev/null 2>&1; then
+    exec kate "${doc_path}"
+  fi
+
+  if command -v xdg-open >/dev/null 2>&1; then
+    exec xdg-open "${doc_path}"
+  fi
+
+  if command -v konsole >/dev/null 2>&1; then
+    exec konsole --hold -e sh -c "cat '${doc_path}'"
+  fi
+
+  cat "${doc_path}"
+}
+
+if [[ "${1:-}" == "--auto" ]]; then
+  [[ -f "${marker}" ]] && exit 0
+  install -d -m 0755 "$(dirname "${marker}")"
+  : > "${marker}"
+fi
+
+show_welcome

@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: no
+# SPDX-License-Identifier: CC0-1.0
+---
+componentName: veldmuis
+
+welcomeStyleCalamares: false
+welcomeExpandingLogo: true
+
+windowExpanding: normal
+windowSize: 920px,580px
+windowPlacement: center
+
+sidebar: widget
+navigation: widget
+
+strings:
+  productName: "Veldmuis Linux"
+  shortProductName: "Veldmuis"
+  version: "Preview"
+  shortVersion: "Preview"
+  versionedName: "Veldmuis Linux Preview Installer"
+  shortVersionedName: "Veldmuis Preview"
+  bootloaderEntryName: "Veldmuis Linux"
+  productUrl: "https://github.com/ruannnebornman/veldmuis"
+  supportUrl: "https://github.com/ruannnebornman/veldmuis"
+  knownIssuesUrl: "https://github.com/ruannnebornman/veldmuis/issues"
+  releaseNotesUrl: "https://github.com/ruannnebornman/veldmuis"
+  donateUrl: ""
+
+images:
+  productIcon: "logomain.png"
+  productLogo: "logomain.png"
+  productWelcome: "logomain.png"
+
+style:
+  SidebarBackground: "#241513"
+  SidebarText: "#f6eadf"
+  SidebarTextCurrent: "#1e1513"
+  SidebarBackgroundCurrent: "#e59c3f"
+
+slideshow: "show.qml"
+slideshowAPI: 2

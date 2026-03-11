@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Calamares Preview
+Comment=Launch the experimental graphical installer preview for Veldmuis Linux
+Exec=/usr/local/bin/veldmuis-calamares-launcher
+Icon=drive-harddisk
+Terminal=false
+Categories=System;
+StartupNotify=true

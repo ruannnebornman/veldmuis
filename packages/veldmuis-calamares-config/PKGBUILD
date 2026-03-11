@@ -1,0 +1,49 @@
+pkgname=veldmuis-calamares-config
+pkgver=20260308
+pkgrel=7
+pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT" "CC-BY-SA")
+depends=(
+  "arch-install-scripts"
+  "bash"
+  "calamares"
+)
+sha256sums=()
+
+package() {
+  local branding_src="${startdir}/../veldmuis-branding/rat1.png"
+  local logo_src="${startdir}/../../../images/logomain.png"
+
+  [[ -f "${branding_src}" ]] || {
+    printf 'Missing branding asset: %s\n' "${branding_src}" >&2
+    exit 1
+  }
+  [[ -f "${logo_src}" ]] || {
+    printf 'Missing logo asset: %s\n' "${logo_src}" >&2
+    exit 1
+  }
+
+  install -Dm644 "${startdir}/settings.conf" \
+    "${pkgdir}/etc/calamares/settings.conf"
+
+  for module_conf in "${startdir}"/modules/*; do
+    install -Dm644 "${module_conf}" \
+      "${pkgdir}/etc/calamares/modules/$(basename "${module_conf}")"
+  done
+
+  install -Dm755 "${startdir}/veldmuis-calamares-bootstrap.sh" \
+    "${pkgdir}/usr/lib/veldmuis/veldmuis-calamares-bootstrap.sh"
+
+  install -Dm644 "${startdir}/branding/veldmuis/branding.desc" \
+    "${pkgdir}/etc/calamares/branding/veldmuis/branding.desc"
+  install -Dm644 "${startdir}/branding/veldmuis/stylesheet.qss" \
+    "${pkgdir}/etc/calamares/branding/veldmuis/stylesheet.qss"
+  install -Dm644 "${startdir}/branding/veldmuis/show.qml" \
+    "${pkgdir}/etc/calamares/branding/veldmuis/show.qml"
+  install -Dm644 "${branding_src}" \
+    "${pkgdir}/etc/calamares/branding/veldmuis/rat1.png"
+  install -Dm644 "${logo_src}" \
+    "${pkgdir}/etc/calamares/branding/veldmuis/logomain.png"
+}

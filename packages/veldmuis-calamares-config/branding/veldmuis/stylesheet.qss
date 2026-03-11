@@ -1,0 +1,39 @@
+/*
+ * SPDX-FileCopyrightText: no
+ * SPDX-License-Identifier: CC0-1.0
+ */
+
+QWidget {
+  background-color: #201411;
+  color: #f6eadf;
+}
+
+#sidebarApp {
+  border-right: 1px solid rgba(229, 156, 63, 0.25);
+}
+
+QPushButton {
+  background-color: #2a1b17;
+  border: 1px solid rgba(229, 156, 63, 0.35);
+  border-radius: 6px;
+  color: #f6eadf;
+  padding: 6px 12px;
+}
+
+QPushButton:enabled {
+  background-color: #e59c3f;
+  border-color: #e59c3f;
+  color: #1e1513;
+}
+
+QLineEdit,
+QComboBox,
+QTextEdit,
+QPlainTextEdit,
+QListView,
+QTreeView,
+QTableView {
+  background-color: #2a1b17;
+  border: 1px solid rgba(229, 156, 63, 0.25);
+  color: #f6eadf;
+}
