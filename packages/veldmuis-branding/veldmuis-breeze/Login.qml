@@ -17,7 +17,6 @@ SessionManagementScreen {
     property string lastUserName
     property bool loginScreenUiVisible: false
 
-    //the y position that should be ensured visible when the on screen keyboard is visible
     property int visibleBoundary: mapFromItem(loginButton, 0, 0).y
     onHeightChanged: visibleBoundary = mapFromItem(loginButton, 0, 0).y + loginButton.height + Kirigami.Units.smallSpacing
 
@@ -32,15 +31,11 @@ SessionManagementScreen {
     }
 
     onUserSelected: {
-        // Don't startLogin() here, because the signal is connected to the
-        // Escape key as well, for which it wouldn't make sense to trigger
-        // login.
         passwordBox.clear()
         focusFirstVisibleFormControl();
     }
 
     QQC2.StackView.onActivating: {
-        // Controls are not visible yet.
         Qt.callLater(focusFirstVisibleFormControl);
     }
 
@@ -50,14 +45,9 @@ SessionManagementScreen {
             : (passwordBox.visible
                 ? passwordBox
                 : loginButton));
-        // Using TabFocusReason, so that the loginButton gets the visual highlight.
         nextControl.forceActiveFocus(Qt.TabFocusReason);
     }
 
-    /*
-     * Login has been requested with the following username and password
-     * If username field is visible, it will be taken from that, otherwise from the "name" property of the currentIndex
-     */
     function startLogin() {
         const username = showUsernamePrompt ? userNameInput.text : userList.selectedUser
         const password = passwordBox.text
@@ -66,11 +56,6 @@ SessionManagementScreen {
         mainStack.enabled = false
         userListComponent.userList.opacity = 0.75
 
-        // This is partly because it looks nicer, but more importantly it
-        // works round a Qt bug that can trigger if the app is closed with a
-        // TextField focused.
-        //
-        // See https://bugreports.qt.io/browse/QTBUG-55460
         loginButton.forceActiveFocus();
         loginRequest(username, password);
     }
@@ -82,7 +67,7 @@ SessionManagementScreen {
 
         text: lastUserName
         visible: showUsernamePrompt
-        focus: showUsernamePrompt && !lastUserName //if there's a username prompt it gets focus first, otherwise password does
+        focus: showUsernamePrompt && !lastUserName
         placeholderText: i18ndc("plasma-desktop-sddm-theme", "@info:placeholder in textfield", "Username")
 
         onAccepted: {
@@ -103,7 +88,6 @@ SessionManagementScreen {
             placeholderText: i18ndc("plasma-desktop-sddm-theme",  "@info:placeholder in textfield", "Password")
             focus: !showUsernamePrompt || lastUserName
 
-            // Disable reveal password action because SDDM does not have the breeze icon set loaded
             rightActions: []
 
             onAccepted: {
@@ -118,8 +102,6 @@ SessionManagementScreen {
                 mainStack.currentItem.forceActiveFocus();
             }
 
-            //if empty and left or right is pressed change selection in user switch
-            //this cannot be in keys.onLeftPressed as then it doesn't reach the password box
             Keys.onPressed: event => {
                 if (event.key === Qt.Key_Left && !text) {
                     userList.decrementCurrentIndex();

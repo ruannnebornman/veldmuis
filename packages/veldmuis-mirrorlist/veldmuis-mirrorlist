@@ -1,12 +1,1 @@
-# Veldmuis Linux mirror list
-#
-# Default hosted pacman repo.
-# GitHub Pages is the current backend, but clients should use this stable URL.
-
 Server = https://packages.veldmuislinux.org/$repo/os/$arch
-
-# LAN test server:
-# Server = http://192.168.1.10/veldmuis/$repo/os/$arch
-
-# Direct local filesystem test:
-# Server = file:///srv/repo/veldmuis/$repo/os/$arch

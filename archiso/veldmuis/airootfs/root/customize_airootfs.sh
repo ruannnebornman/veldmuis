@@ -24,19 +24,14 @@ EOF
 
 install -d -m 0750 -o live -g live /home/live
 install -d -m 0755 -o live -g live /home/live/Desktop
-install -m 0755 /etc/skel/Desktop/Welcome\ to\ Veldmuis\ Linux.desktop \
-  /home/live/Desktop/Welcome\ to\ Veldmuis\ Linux.desktop
 install -m 0755 /etc/skel/Desktop/Install\ Veldmuis\ Linux.desktop \
   /home/live/Desktop/Install\ Veldmuis\ Linux.desktop
 install -m 0755 /etc/skel/Desktop/Veldmuis\ Calamares\ Preview.desktop \
   /home/live/Desktop/Veldmuis\ Calamares\ Preview.desktop
-chown live:live /home/live/Desktop/Welcome\ to\ Veldmuis\ Linux.desktop
 chown live:live /home/live/Desktop/Install\ Veldmuis\ Linux.desktop
 chown live:live /home/live/Desktop/Veldmuis\ Calamares\ Preview.desktop
-chmod 0755 /home/live/Desktop/Welcome\ to\ Veldmuis\ Linux.desktop
 chmod 0755 /home/live/Desktop/Install\ Veldmuis\ Linux.desktop
 chmod 0755 /home/live/Desktop/Veldmuis\ Calamares\ Preview.desktop
-chmod 0755 /usr/local/bin/veldmuis-welcome
 chmod 0755 /usr/local/bin/veldmuis-calamares-launcher
 chmod 0755 /usr/local/bin/veldmuis-install-launcher
 chmod 0755 /usr/local/bin/veldmuis-install
