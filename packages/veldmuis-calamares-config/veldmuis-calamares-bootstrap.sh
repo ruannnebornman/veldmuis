@@ -68,6 +68,10 @@ main() {
   log "Installing Veldmuis package stack into ${target_root}"
   pacstrap -C "${tmp_pacman_conf}" "${target_root}" veldmuis-desktop
 
+  if [[ -f /etc/pacman.d/mirrorlist ]]; then
+    install -Dm644 /etc/pacman.d/mirrorlist "${target_root}/etc/pacman.d/mirrorlist"
+  fi
+
   if ! grep -qxF 'Include = /etc/pacman.conf.d/veldmuis.conf' "${target_root}/etc/pacman.conf"; then
     printf '\nInclude = /etc/pacman.conf.d/veldmuis.conf\n' >> "${target_root}/etc/pacman.conf"
   fi

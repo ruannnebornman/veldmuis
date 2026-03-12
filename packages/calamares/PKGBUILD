@@ -35,8 +35,9 @@ source=(
   "https://github.com/calamares/calamares/releases/download/v${pkgver}/calamares-${pkgver}.tar.gz"
   "0001-limit-partition-filesystems.patch"
   "0002-users-hostname-and-password-ux.patch"
+  "0003-skip-invalid-vconsole-keymaps.patch"
 )
-sha256sums=("SKIP" "SKIP" "SKIP")
+sha256sums=("SKIP" "SKIP" "SKIP" "SKIP")
 prepare() {
   cd "calamares-${pkgver}"
 
@@ -46,6 +47,10 @@ prepare() {
 
   if ! grep -q '<< "hostname"' src/modules/users/Config.cpp; then
     patch -Np1 -i "${srcdir}/0002-users-hostname-and-password-ux.patch"
+  fi
+
+  if ! grep -q 'No vconsole keymap mapping for X11 layout' src/modules/keyboard/SetKeyboardLayoutJob.cpp; then
+    patch -Np1 -i "${srcdir}/0003-skip-invalid-vconsole-keymaps.patch"
   fi
 }
 
