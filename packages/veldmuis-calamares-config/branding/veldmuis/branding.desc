@@ -6,7 +6,7 @@ componentName: veldmuis
 welcomeStyleCalamares: false
 welcomeExpandingLogo: true
 
-windowExpanding: normal
+windowExpanding: fullscreen
 windowSize: 920px,580px
 windowPlacement: center
 
