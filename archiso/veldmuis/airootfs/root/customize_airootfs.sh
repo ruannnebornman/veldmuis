@@ -33,6 +33,7 @@ chown live:live /home/live/Desktop/Veldmuis\ Calamares\ Preview.desktop
 chmod 0755 /home/live/Desktop/Install\ Veldmuis\ Linux.desktop
 chmod 0755 /home/live/Desktop/Veldmuis\ Calamares\ Preview.desktop
 chmod 0755 /usr/local/bin/veldmuis-calamares-launcher
+chmod 0755 /usr/local/bin/veldmuis-calamares-root-runner
 chmod 0755 /usr/local/bin/veldmuis-install-launcher
 chmod 0755 /usr/local/bin/veldmuis-install
 

@@ -8,4 +8,4 @@ if ! command -v calamares >/dev/null 2>&1; then
 fi
 
 exec konsole --hold -e bash -lc \
-  'exec sudo --preserve-env=DISPLAY,XAUTHORITY,XDG_RUNTIME_DIR,WAYLAND_DISPLAY,DBUS_SESSION_BUS_ADDRESS,QT_QPA_PLATFORMTHEME /usr/bin/calamares -d'
+  'exec sudo --preserve-env=DISPLAY,XAUTHORITY,XDG_RUNTIME_DIR,WAYLAND_DISPLAY,DBUS_SESSION_BUS_ADDRESS,QT_QPA_PLATFORMTHEME /usr/bin/bash /usr/local/bin/veldmuis-calamares-root-runner'

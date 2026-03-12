@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+graphics_conf_path="${VELDMUIS_CALAMARES_GRAPHICS_CONF_PATH:-/etc/calamares/modules/graphics.conf}"
+skip_exec="${VELDMUIS_CALAMARES_SKIP_EXEC:-0}"
+
+detect_graphics() {
+  if ! command -v lspci >/dev/null 2>&1; then
+    return 0
+  fi
+
+  lspci -nn 2>/dev/null | grep -Ei 'VGA compatible controller|3D controller|Display controller' || true
+}
+
+write_header() {
+  cat >"${graphics_conf_path}" <<'EOF'
+---
+mode: required
+method: packages
+
+labels:
+  step: "Graphics Driver"
+
+default: all-open-source
+
+items:
+EOF
+}
+
+write_all_open_source() {
+  cat >>"${graphics_conf_path}" <<'EOF'
+  - id: all-open-source
+    name: "All open-source (default)"
+    description: "Recommended default. Installs the broad open-source graphics stack for AMD, Intel, Nouveau, and general VM use."
+    screenshot: "logomain.png"
+    packages:
+      - mesa
+      - xf86-video-amdgpu
+      - xf86-video-ati
+      - xf86-video-nouveau
+      - libva-intel-driver
+      - intel-media-driver
+      - vulkan-radeon
+      - vulkan-intel
+      - vulkan-nouveau
+      - xorg-server
+      - xorg-xinit
+EOF
+}
+
+write_default_open_source() {
+  cat >>"${graphics_conf_path}" <<'EOF'
+  - id: all-open-source
+    name: "All open-source (default)"
+    description: "Keeps the default open-source graphics stack from the base install. No extra vendor-specific packages are added."
+    screenshot: "logomain.png"
+    packages: []
+EOF
+}
+
+write_amd_open_source() {
+  cat >>"${graphics_conf_path}" <<'EOF'
+  - id: amd-open-source
+    name: "AMD / ATI (open-source)"
+    description: "Installs the AMD / ATI open-source graphics stack."
+    screenshot: "logomain.png"
+    packages:
+      - mesa
+      - xf86-video-amdgpu
+      - xf86-video-ati
+      - vulkan-radeon
+      - xorg-server
+      - xorg-xinit
+EOF
+}
+
+write_intel_open_source() {
+  cat >>"${graphics_conf_path}" <<'EOF'
+  - id: intel-open-source
+    name: "Intel (open-source)"
+    description: "Installs the Intel open-source graphics stack."
+    screenshot: "logomain.png"
+    packages:
+      - mesa
+      - libva-intel-driver
+      - intel-media-driver
+      - vulkan-intel
+      - xorg-server
+      - xorg-xinit
+EOF
+}
+
+write_nvidia_open_source() {
+  cat >>"${graphics_conf_path}" <<'EOF'
+  - id: nvidia-open-source
+    name: "Nvidia (open-source nouveau driver)"
+    description: "Uses the Nouveau stack for Nvidia hardware."
+    screenshot: "logomain.png"
+    packages:
+      - mesa
+      - xf86-video-nouveau
+      - vulkan-nouveau
+      - xorg-server
+      - xorg-xinit
+EOF
+}
+
+main() {
+  local graphics_lines
+  local has_amd=0
+  local has_intel=0
+  local has_nvidia=0
+
+  graphics_lines="$(detect_graphics)"
+
+  if grep -qiE 'AMD/ATI|Advanced Micro Devices|AMD\b|ATI\b' <<<"${graphics_lines}"; then
+    has_amd=1
+  fi
+
+  if grep -qi 'Intel' <<<"${graphics_lines}"; then
+    has_intel=1
+  fi
+
+  if grep -qi 'NVIDIA' <<<"${graphics_lines}"; then
+    has_nvidia=1
+  fi
+
+  write_header
+
+  if (( !has_amd && !has_intel && !has_nvidia )); then
+    write_default_open_source
+  else
+    write_all_open_source
+  fi
+
+  if (( has_amd )); then
+    write_amd_open_source
+  fi
+
+  if (( has_intel )); then
+    write_intel_open_source
+  fi
+
+  if (( has_nvidia )); then
+    write_nvidia_open_source
+  fi
+
+  if [[ "${skip_exec}" == "1" ]]; then
+    exit 0
+  fi
+
+  exec /usr/bin/calamares -d
+}
+
+main "$@"
