@@ -34,13 +34,18 @@ makedepends=(
 source=(
   "https://github.com/calamares/calamares/releases/download/v${pkgver}/calamares-${pkgver}.tar.gz"
   "0001-limit-partition-filesystems.patch"
+  "0002-users-hostname-and-password-ux.patch"
 )
-sha256sums=("SKIP" "SKIP")
+sha256sums=("SKIP" "SKIP" "SKIP")
 prepare() {
   cd "calamares-${pkgver}"
 
   if ! grep -q 'selectableFilesystemTypes' src/modules/partition/gui/PartitionDialogHelpers.h; then
     patch -Np1 -i "${srcdir}/0001-limit-partition-filesystems.patch"
+  fi
+
+  if ! grep -q '<< "hostname"' src/modules/users/Config.cpp; then
+    patch -Np1 -i "${srcdir}/0002-users-hostname-and-password-ux.patch"
   fi
 }
 
