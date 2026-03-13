@@ -23,6 +23,11 @@ require_cmd() {
   }
 }
 
+pacman_keyring_has_secret() {
+  [[ -d "${pacman_gpgdir}/private-keys-v1.d" ]] || return 1
+  find "${pacman_gpgdir}/private-keys-v1.d" -mindepth 1 -type f -print -quit | grep -q .
+}
+
 restore_build_ownership() {
   if [[ -n "${owner_uid}" && -n "${owner_gid}" && -d "${build_root}" ]]; then
     chown -R "${owner_uid}:${owner_gid}" "${build_root}"
@@ -50,6 +55,7 @@ require_cmd sed
 require_cmd pacman-key
 require_cmd chown
 require_cmd find
+require_cmd gpg
 
 if [[ ! -d "${profile_source}" ]]; then
   echo "Archiso profile not found: ${profile_source}" >&2
@@ -80,8 +86,17 @@ cp -a "${repo_file_root}" "${profile_work}/airootfs/opt/veldmuis/repo"
 
 rm -rf "${pacman_gpgdir}"
 mkdir -p "${pacman_gpgdir}"
-cp -a /etc/pacman.d/gnupg/. "${pacman_gpgdir}/"
 chmod 700 "${pacman_gpgdir}"
+
+if [[ -d /etc/pacman.d/gnupg ]]; then
+  cp -a /etc/pacman.d/gnupg/. "${pacman_gpgdir}/"
+  chmod 700 "${pacman_gpgdir}"
+fi
+
+if ! pacman_keyring_has_secret; then
+  pacman-key --gpgdir "${pacman_gpgdir}" --init >/dev/null
+  pacman-key --gpgdir "${pacman_gpgdir}" --populate archlinux >/dev/null
+fi
 
 pacman-key --gpgdir "${pacman_gpgdir}" \
   --populate-from "${veldmuis_keyring_root}" \
