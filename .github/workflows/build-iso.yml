@@ -2,6 +2,9 @@ name: Build ISO
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ci/github-actions-iso-build
 
 permissions:
   contents: read
