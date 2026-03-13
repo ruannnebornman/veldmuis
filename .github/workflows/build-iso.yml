@@ -30,7 +30,7 @@ jobs:
           VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
           VELDMUIS_GPG_PASSPHRASE: ${{ secrets.VELDMUIS_GPG_PASSPHRASE }}
         run: |
-          docker run --rm --privileged \
+          docker run --rm --privileged -i \
             -e BUILDER_USER \
             -e BUILDER_HOME \
             -e GNUPGHOME \
