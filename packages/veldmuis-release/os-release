@@ -1,0 +1,10 @@
+NAME="Veldmuis Linux"
+PRETTY_NAME="Veldmuis Linux"
+ID=veldmuis
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;229;156;63"
+HOME_URL="https://veldmuislinux.org/"
+DOCUMENTATION_URL="https://github.com/ruannnebornman/veldmuis"
+SUPPORT_URL="https://github.com/ruannnebornman/veldmuis/issues"
+BUG_REPORT_URL="https://github.com/ruannnebornman/veldmuis/issues"
