@@ -6,7 +6,7 @@ arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
 source=("veldmuis-mirrorlist")
-sha256sums=("b50d2b4da9331003116381ea560364e4cb5c3be26fca96512a37413ba3e4a3c8")
+sha256sums=("64a8ce0f088374db8fd519bd9d315aae1099808d59a5336f4de88367ad7097b0")
 
 package() {
   install -Dm644 veldmuis-mirrorlist \
