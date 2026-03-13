@@ -1,7 +1,6 @@
 # Archiso live-environment requirements
 amd-ucode
 arch-install-scripts
-archinstall
 calamares
 veldmuis-calamares-config
 intel-ucode

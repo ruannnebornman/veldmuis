@@ -17,8 +17,7 @@ Important:
 - the profile uses `packages.x86_64` for the live package set
 - the profile ships the minimal `efiboot/loader/` files required by current `mkarchiso`
 - the profile is UEFI-only on purpose
-- the live image includes the `veldmuis-install` wrapper for the current `archinstall` bootstrap path
-- the live image now also includes a separate `Calamares Preview` launcher backed by the Veldmuis Calamares config package
+- the live image exposes Calamares as the default Veldmuis installer
 
 Use the top-level helper script to build it:
 
