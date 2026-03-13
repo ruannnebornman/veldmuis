@@ -12,8 +12,6 @@ permissions:
 jobs:
   build-iso:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:base-devel
     defaults:
       run:
         shell: bash
@@ -26,8 +24,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Prepare Arch build environment
+      - name: Build packages, repos, and ISO in privileged Arch container
+        env:
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+          VELDMUIS_GPG_PASSPHRASE: ${{ secrets.VELDMUIS_GPG_PASSPHRASE }}
         run: |
+          docker run --rm --privileged \
+            -e BUILDER_USER \
+            -e BUILDER_HOME \
+            -e GNUPGHOME \
+            -e VELDMUIS_KEY_FPR_FILE \
+            -e VELDMUIS_GPG_PRIVATE_KEY \
+            -e VELDMUIS_GPG_FPR \
+            -e VELDMUIS_GPG_PASSPHRASE \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            -v "${GITHUB_WORKSPACE}:/workspace" \
+            -v "${RUNNER_TEMP}:/runner-temp" \
+            -w /workspace \
+            archlinux:base-devel \
+            bash -s <<'EOF'
+          set -euo pipefail
+
           pacman -Syu --noconfirm --needed \
             archlinux-keyring \
             archiso \
@@ -56,48 +75,44 @@ jobs:
             rsync \
             squashfs-tools \
             yaml-cpp
+
           if ! id -u "${BUILDER_USER}" >/dev/null 2>&1; then
-            useradd -m -U -s /bin/bash "${BUILDER_USER}"
+            useradd -m -u "${HOST_UID}" -s /bin/bash "${BUILDER_USER}"
           fi
-          chown -R "${BUILDER_USER}:${BUILDER_USER}" "${GITHUB_WORKSPACE}"
+
           install -d -m 700 -o "${BUILDER_USER}" -g "${BUILDER_USER}" "${GNUPGHOME}"
 
-      - name: Import signing key
-        env:
-          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
-          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
-          VELDMUIS_GPG_PASSPHRASE: ${{ secrets.VELDMUIS_GPG_PASSPHRASE }}
-        run: |
-          key_file="${RUNNER_TEMP}/veldmuis-ci-signing-subkey.asc"
-          passphrase_file="${RUNNER_TEMP}/veldmuis-gpg-passphrase"
+          key_file="/runner-temp/veldmuis-ci-signing-subkey.asc"
           printf '%s\n' "${VELDMUIS_GPG_PRIVATE_KEY}" > "${key_file}"
           chown "${BUILDER_USER}:${BUILDER_USER}" "${key_file}"
           su "${BUILDER_USER}" -c "GNUPGHOME='${GNUPGHOME}' gpg --batch --import '${key_file}'"
+
           printf '%s\n' "${VELDMUIS_GPG_FPR}" > "${VELDMUIS_KEY_FPR_FILE}"
           chown "${BUILDER_USER}:${BUILDER_USER}" "${VELDMUIS_KEY_FPR_FILE}"
-          if [[ -n "${VELDMUIS_GPG_PASSPHRASE}" ]]; then
-            printf '%s\n' "${VELDMUIS_GPG_PASSPHRASE}" > "${passphrase_file}"
-            chmod 600 "${passphrase_file}"
-            chown "${BUILDER_USER}:${BUILDER_USER}" "${passphrase_file}"
-            echo "VELDMUIS_GPG_PASSPHRASE_FILE=${passphrase_file}" >> "${GITHUB_ENV}"
+
+          if [[ -n "${VELDMUIS_GPG_PASSPHRASE:-}" ]]; then
+            export VELDMUIS_GPG_PASSPHRASE_FILE="/runner-temp/veldmuis-gpg-passphrase"
+            printf '%s\n' "${VELDMUIS_GPG_PASSPHRASE}" > "${VELDMUIS_GPG_PASSPHRASE_FILE}"
+            chmod 600 "${VELDMUIS_GPG_PASSPHRASE_FILE}"
+            chown "${BUILDER_USER}:${BUILDER_USER}" "${VELDMUIS_GPG_PASSPHRASE_FILE}"
           fi
+
           su "${BUILDER_USER}" -c "GNUPGHOME='${GNUPGHOME}' gpg --batch --list-secret-keys '${VELDMUIS_GPG_FPR}'"
           rm -f "${key_file}"
 
-      - name: Build all packages
-        run: |
-          su "${BUILDER_USER}" -c "cd '${GITHUB_WORKSPACE}' && GNUPGHOME='${GNUPGHOME}' ./scripts/build-all-packages.sh"
+          su "${BUILDER_USER}" -c "cd /workspace && GNUPGHOME='${GNUPGHOME}' ./scripts/build-all-packages.sh"
 
-      - name: Build local repo
-        run: |
-          passphrase_env=""
+          repo_cmd="cd /workspace && GNUPGHOME='${GNUPGHOME}' VELDMUIS_KEY_FPR_FILE='${VELDMUIS_KEY_FPR_FILE}'"
           if [[ -n "${VELDMUIS_GPG_PASSPHRASE_FILE:-}" ]]; then
-            passphrase_env="VELDMUIS_GPG_PASSPHRASE_FILE='${VELDMUIS_GPG_PASSPHRASE_FILE}'"
+            repo_cmd+=" VELDMUIS_GPG_PASSPHRASE_FILE='${VELDMUIS_GPG_PASSPHRASE_FILE}'"
           fi
-          su "${BUILDER_USER}" -c "cd '${GITHUB_WORKSPACE}' && GNUPGHOME='${GNUPGHOME}' VELDMUIS_KEY_FPR_FILE='${VELDMUIS_KEY_FPR_FILE}' ${passphrase_env} ./scripts/build-local-repo.sh"
+          repo_cmd+=" ./scripts/build-local-repo.sh"
+          su "${BUILDER_USER}" -c "${repo_cmd}"
 
-      - name: Build ISO
-        run: ./scripts/build-archiso.sh
+          ./scripts/build-archiso.sh
+
+          chown -R "${HOST_UID}:${HOST_GID}" /workspace/build /workspace/repos /workspace/packages
+          EOF
 
       - name: Generate checksum
         id: artifact_prep
