@@ -68,6 +68,51 @@ Server = file://${live_repo_root}/veldmuis-extra/os/\$arch
 EOF
 }
 
+has_secret_key() {
+  local gpgdir="$1"
+
+  gpg --homedir "${gpgdir}" --batch --with-colons -K 2>/dev/null | grep -q '^sec:'
+}
+
+release_key_id_from_dir() {
+  local keyring_dir="$1"
+  local trusted_file="${keyring_dir}/veldmuis-trusted"
+
+  [[ -f "${trusted_file}" ]] || return 0
+
+  awk -F: '
+    NF && $1 !~ /^#/ {
+      print $1
+      exit
+    }
+  ' "${trusted_file}"
+}
+
+ensure_keyring_populated() {
+  local gpgdir="$1"
+  local keyring_dir="$2"
+  local label="$3"
+  local release_key_id=""
+
+  install -d -m700 "${gpgdir}"
+
+  if ! has_secret_key "${gpgdir}"; then
+    log "Initializing ${label} pacman keyring"
+    pacman-key --gpgdir "${gpgdir}" --init
+  fi
+
+  log "Populating ${label} pacman keyring with Arch and Veldmuis signing keys"
+  pacman-key --gpgdir "${gpgdir}" --populate-from "${keyring_dir}" --populate archlinux veldmuis
+  log "Updating ${label} pacman trust database"
+  pacman-key --gpgdir "${gpgdir}" --updatedb
+
+  release_key_id="$(release_key_id_from_dir "${keyring_dir}")"
+  if [[ -n "${release_key_id}" ]]; then
+    log "Locally signing the Veldmuis release key in the ${label} keyring"
+    pacman-key --gpgdir "${gpgdir}" --lsign-key "${release_key_id}"
+  fi
+}
+
 prepare_target_root() {
   local resolver_source=""
 
@@ -85,6 +130,7 @@ prepare_target_root() {
 main() {
   require_cmd pacstrap
   require_cmd pacman-key
+  require_cmd gpg
 
   exec > >(tee "${log_file}") 2>&1
 
@@ -99,17 +145,15 @@ main() {
   write_pacman_conf
   prepare_target_root
 
-  if ! pacman-key --list-keys >/dev/null 2>&1; then
-    log "Initializing live pacman keyring"
-    pacman-key --init
-  fi
-
-  log "Ensuring Arch and Veldmuis signing keys are available in the live keyring"
-  pacman-key --populate archlinux veldmuis
-  pacman-key --updatedb
+  ensure_keyring_populated /etc/pacman.d/gnupg /usr/share/pacman/keyrings live
 
   log "Installing Veldmuis package stack into ${target_root}"
   pacstrap -C "${tmp_pacman_conf}" "${target_root}" veldmuis-desktop
+
+  ensure_keyring_populated \
+    "${target_root}/etc/pacman.d/gnupg" \
+    "${target_root}/usr/share/pacman/keyrings" \
+    target
 
   if [[ -f /etc/pacman.d/mirrorlist ]]; then
     install -Dm644 /etc/pacman.d/mirrorlist "${target_root}/etc/pacman.d/mirrorlist"
