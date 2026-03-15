@@ -1,6 +1,6 @@
 pkgname=veldmuis-release
 pkgver=20260305
-pkgrel=3
+pkgrel=4
 pkgdesc="Release files and repo definitions for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -9,7 +9,7 @@ depends=("filesystem" "veldmuis-keyring" "veldmuis-mirrorlist")
 source=("veldmuis-release" "veldmuis.conf" "os-release")
 sha256sums=(
   "57b863d77a852edf14e376124c732f9d31125ab3da604e9a06a508a2e07d51f6"
-  "254ba6439679c9fd8bb966759f62841abf0e9ca13413e7e6f120b6ea50f39e3a"
+  "f45c8a265691b550562379a489d733d09a52b93c066f840f54ee5964e548d143"
   "7746200f07620bb88a67cb4083527dc86a64d51b459f7a1786cce1caf69c5c08"
 )
 

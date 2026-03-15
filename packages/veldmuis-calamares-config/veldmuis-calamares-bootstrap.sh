@@ -131,6 +131,7 @@ main() {
   require_cmd pacstrap
   require_cmd pacman-key
   require_cmd gpg
+  require_cmd arch-chroot
 
   exec > >(tee "${log_file}") 2>&1
 
@@ -161,6 +162,14 @@ main() {
 
   if ! grep -qxF 'Include = /etc/pacman.conf.d/veldmuis.conf' "${target_root}/etc/pacman.conf"; then
     printf '\nInclude = /etc/pacman.conf.d/veldmuis.conf\n' >> "${target_root}/etc/pacman.conf"
+  fi
+
+  if [[ -x "${target_root}/usr/bin/flatpak" && \
+        -f "${target_root}/usr/share/flatpak/remotes.d/flathub.flatpakrepo" ]]; then
+    log "Configuring Flathub in the target system"
+    arch-chroot "${target_root}" \
+      /usr/bin/flatpak remote-add --if-not-exists --system --from \
+      flathub /usr/share/flatpak/remotes.d/flathub.flatpakrepo
   fi
 
   log "Bootstrap complete"

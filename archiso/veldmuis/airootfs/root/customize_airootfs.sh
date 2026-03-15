@@ -44,6 +44,11 @@ Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
 Server = https://fastly.mirror.pkgbuild.com/$repo/os/$arch
 EOF
 
+if [[ -x /usr/bin/flatpak && -f /usr/share/flatpak/remotes.d/flathub.flatpakrepo ]]; then
+  flatpak remote-add --if-not-exists --system --from \
+    flathub /usr/share/flatpak/remotes.d/flathub.flatpakrepo
+fi
+
 systemctl enable sddm.service
 systemctl enable NetworkManager.service
 systemctl enable pacman-init.service
