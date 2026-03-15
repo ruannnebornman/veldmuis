@@ -24,6 +24,34 @@ cleanup() {
   [[ -n "${tmp_pacman_conf}" ]] && rm -f "${tmp_pacman_conf}"
 }
 
+has_non_loopback_nameserver() {
+  local resolver_path="$1"
+
+  awk '
+    $1 == "nameserver" && $2 !~ /^(127\.|::1$|0\.0\.0\.0$)/ { found=1 }
+    END { exit found ? 0 : 1 }
+  ' "${resolver_path}"
+}
+
+pick_resolver_source() {
+  local candidate
+
+  for candidate in \
+    /run/systemd/resolve/resolv.conf \
+    /run/NetworkManager/no-stub-resolv.conf \
+    /run/NetworkManager/resolv.conf \
+    /etc/resolv.conf
+  do
+    [[ -f "${candidate}" ]] || continue
+    if has_non_loopback_nameserver "${candidate}"; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 write_pacman_conf() {
   tmp_pacman_conf="$(mktemp -t veldmuis-calamares-pacman.XXXXXX)"
   cp /etc/pacman.conf "${tmp_pacman_conf}"
@@ -40,11 +68,25 @@ Server = file://${live_repo_root}/veldmuis-extra/os/\$arch
 EOF
 }
 
+prepare_target_root() {
+  local resolver_source=""
+
+  install -d -m755 "${target_root}/etc"
+  install -Dm644 /dev/null "${target_root}/etc/vconsole.conf"
+
+  if resolver_source="$(pick_resolver_source)"; then
+    log "Copying resolver config from ${resolver_source} into ${target_root}"
+    install -Dm644 "${resolver_source}" "${target_root}/etc/resolv.conf"
+  else
+    die "Could not find a non-loopback resolver config in the live environment."
+  fi
+}
+
 main() {
   require_cmd pacstrap
   require_cmd pacman-key
 
-  exec > >(tee -a "${log_file}") 2>&1
+  exec > >(tee "${log_file}") 2>&1
 
   [[ -n "${target_root}" ]] || die "Missing target root argument."
   [[ -d "${target_root}" ]] || die "Target root does not exist: ${target_root}"
@@ -55,6 +97,7 @@ main() {
 
   trap cleanup EXIT
   write_pacman_conf
+  prepare_target_root
 
   if ! pacman-key --list-keys >/dev/null 2>&1; then
     log "Initializing live pacman keyring"

@@ -4,6 +4,8 @@ set -euo pipefail
 
 graphics_conf_path="${VELDMUIS_CALAMARES_GRAPHICS_CONF_PATH:-/etc/calamares/modules/graphics.conf}"
 skip_exec="${VELDMUIS_CALAMARES_SKIP_EXEC:-0}"
+calamares_log_path="${VELDMUIS_CALAMARES_LOG_PATH:-/tmp/veldmuis-calamares-debug.log}"
+bootstrap_log_path="${VELDMUIS_CALAMARES_BOOTSTRAP_LOG_PATH:-/tmp/veldmuis-calamares-bootstrap.log}"
 
 detect_graphics() {
   if ! command -v lspci >/dev/null 2>&1; then
@@ -106,6 +108,11 @@ write_nvidia_open_source() {
 EOF
 }
 
+prepare_logs() {
+  rm -f "${calamares_log_path}" "${bootstrap_log_path}"
+  touch "${calamares_log_path}"
+}
+
 main() {
   local graphics_lines
   local has_amd=0
@@ -145,6 +152,10 @@ main() {
   if (( has_nvidia )); then
     write_nvidia_open_source
   fi
+
+  prepare_logs
+
+  exec > >(tee "${calamares_log_path}") 2>&1
 
   if [[ "${skip_exec}" == "1" ]]; then
     exit 0

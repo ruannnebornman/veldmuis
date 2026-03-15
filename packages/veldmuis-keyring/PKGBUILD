@@ -1,6 +1,6 @@
 pkgname=veldmuis-keyring
 pkgver=20260305
-pkgrel=1
+pkgrel=2
 pkgdesc="Pacman keyring for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -10,7 +10,7 @@ install=veldmuis-keyring.install
 source=("veldmuis.gpg" "veldmuis-trusted" "veldmuis-revoked")
 sha256sums=(
   "3a350dba2f7e1faaf95383512a222cbcff5cdad1a0dbafcc355a023d05e8aa6e"
-  "02a3902c5b9d1ec416d183b34eef7004df95810addacaa7ffbdce73a9d616155"
+  "14c8de5a0aabac2808523ffe30b8ca53b54d4795e5aab9f4b09fe82a8041b070"
   "fc4bec5477e98e0e764eb5999058dfd8fa8f377d8a251d63c8b2ad90dbe6af69"
 )
 

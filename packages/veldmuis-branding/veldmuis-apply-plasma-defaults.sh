@@ -27,6 +27,8 @@ mkdir -p "${config_home}/veldmuis" "${log_dir}"
   plasma-apply-lookandfeel --resetLayout --apply org.veldmuis.desktop
   kwriteconfig6 --file "${config_home}/kdeglobals" --group KDE --key LookAndFeelPackage org.veldmuis.desktop
   kwriteconfig6 --file "${config_home}/kdeglobals" --group KDE --key DefaultDarkLookAndFeel org.veldmuis.desktop
+  kwriteconfig6 --file "${config_home}/kwalletrc" --group Wallet --key Enabled false
+  kwriteconfig6 --file "${config_home}/kwalletrc" --group Wallet --key "First Use" false
   rm -f "${marker}"
   : > "${stamp}"
   printf '[%s] defaults applied successfully\n' "$(date --iso-8601=seconds)"
