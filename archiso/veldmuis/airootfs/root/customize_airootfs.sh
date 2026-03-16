@@ -2,6 +2,14 @@
 
 set -euo pipefail
 
+enable_service_if_present() {
+  local unit="$1"
+
+  if [[ -f "/usr/lib/systemd/system/${unit}" || -f "/etc/systemd/system/${unit}" ]]; then
+    systemctl enable "${unit}"
+  fi
+}
+
 if ! id -u live >/dev/null 2>&1; then
   useradd -m -G wheel,audio,video,storage,input -s /usr/bin/bash live
 fi
@@ -41,6 +49,7 @@ chmod 0440 /etc/sudoers.d/00-live
 # needs at least one active Arch mirror before Calamares can bootstrap the target.
 cat >/etc/pacman.d/mirrorlist <<'EOF'
 Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+Server = https://europe.mirror.pkgbuild.com/$repo/os/$arch
 Server = https://fastly.mirror.pkgbuild.com/$repo/os/$arch
 EOF
 
@@ -49,8 +58,11 @@ if [[ -x /usr/bin/flatpak && -f /usr/share/flatpak/remotes.d/flathub.flatpakrepo
     flathub /usr/share/flatpak/remotes.d/flathub.flatpakrepo
 fi
 
-systemctl enable sddm.service
-systemctl enable NetworkManager.service
-systemctl enable pacman-init.service
-systemctl enable spice-vdagentd.service
+enable_service_if_present sddm.service
+enable_service_if_present NetworkManager.service
+enable_service_if_present bluetooth.service
+enable_service_if_present udisks2.service
+enable_service_if_present power-profiles-daemon.service
+enable_service_if_present pacman-init.service
+enable_service_if_present spice-vdagentd.service
 systemctl set-default graphical.target

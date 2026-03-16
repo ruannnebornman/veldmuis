@@ -56,6 +56,19 @@ write_pacman_conf() {
   tmp_pacman_conf="$(mktemp -t veldmuis-calamares-pacman.XXXXXX)"
   cp /etc/pacman.conf "${tmp_pacman_conf}"
 
+  # The installer should favor reliability over throughput on weak Wi-Fi.
+  # Multiple concurrent downloads and pacman's low-speed timeout have caused
+  # large desktop installs to fail on bare metal.
+  if grep -q '^ParallelDownloads' "${tmp_pacman_conf}"; then
+    sed -i 's/^ParallelDownloads.*/ParallelDownloads = 1/' "${tmp_pacman_conf}"
+  else
+    sed -i '/^\[options\]/a ParallelDownloads = 1' "${tmp_pacman_conf}"
+  fi
+
+  if ! grep -q '^DisableDownloadTimeout$' "${tmp_pacman_conf}"; then
+    sed -i '/^\[options\]/a DisableDownloadTimeout' "${tmp_pacman_conf}"
+  fi
+
   cat >>"${tmp_pacman_conf}" <<EOF
 
 [veldmuis-core]
