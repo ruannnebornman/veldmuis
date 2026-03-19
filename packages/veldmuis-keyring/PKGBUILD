@@ -1,6 +1,6 @@
 pkgname=veldmuis-keyring
 pkgver=20260305
-pkgrel=2
+pkgrel=3
 pkgdesc="Pacman keyring for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
