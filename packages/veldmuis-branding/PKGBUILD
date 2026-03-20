@@ -1,6 +1,6 @@
 pkgname=veldmuis-branding
 pkgver=20260306
-pkgrel=5
+pkgrel=9
 pkgdesc="Branding assets and default theme configuration for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -9,11 +9,13 @@ source=(
   "rat1.png"
   "veldmuis-sddm.conf"
   "kdeglobals"
+  "kwalletrc"
   "veldmuis-first-login.desktop"
   "veldmuis-apply-plasma-defaults.sh"
   "veldmuis-first-login-pending"
 )
 sha256sums=(
+  "SKIP"
   "SKIP"
   "SKIP"
   "SKIP"
@@ -29,6 +31,8 @@ package() {
     "${pkgdir}/etc/sddm.conf.d/veldmuis-sddm.conf"
   install -Dm644 "${srcdir}/kdeglobals" \
     "${pkgdir}/etc/xdg/kdeglobals"
+  install -Dm644 "${srcdir}/kwalletrc" \
+    "${pkgdir}/etc/xdg/kwalletrc"
   install -d "${pkgdir}/usr/share/wallpapers/VeldmuisDawn"
   cp -a "${startdir}/veldmuis-wallpaper/." \
     "${pkgdir}/usr/share/wallpapers/VeldmuisDawn/"
@@ -44,4 +48,6 @@ package() {
     "${pkgdir}/etc/xdg/autostart/veldmuis-first-login.desktop"
   install -Dm644 "${srcdir}/veldmuis-first-login-pending" \
     "${pkgdir}/etc/skel/.config/veldmuis/first-login-pending"
+  install -Dm644 "${srcdir}/kwalletrc" \
+    "${pkgdir}/etc/skel/.config/kwalletrc"
 }

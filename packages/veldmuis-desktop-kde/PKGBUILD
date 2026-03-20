@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=2
+pkgrel=8
 pkgdesc="KDE Plasma desktop metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -15,13 +15,20 @@ depends=(
   "kwayland"
   "xdg-desktop-portal-kde"
   "plasma-nm"
+  "bluez"
+  "bluez-utils"
   "bluedevil"
   "kde-gtk-config"
-  "kwallet-pam"
   "powerdevil"
+  "power-profiles-daemon"
   "konsole"
   "yakuake"
+  "firefox"
+  "discover"
+  "flatpak"
+  "steam"
   "dolphin"
+  "udisks2"
   "kate"
   "gwenview"
   "kcalc"
