@@ -1,0 +1,11 @@
+[Unit]
+Description=Finalize Veldmuis pacman keyring
+After=local-fs.target time-sync.target
+Wants=time-sync.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/veldmuis/veldmuis-keyring-init.sh
+
+[Install]
+WantedBy=multi-user.target
