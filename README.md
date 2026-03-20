@@ -8,6 +8,9 @@ Website: https://veldmuislinux.org/
 
 - `archiso/veldmuis/`
   The Archiso profile used to build the live image
+- `development/`
+  Helper scripts for local package, repo, ISO, VM, USB, and repo publishing
+  workflows
 - `packages/`
   Package definitions for the Veldmuis stack and installer integration
 - `repos/`

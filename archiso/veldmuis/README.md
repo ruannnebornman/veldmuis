@@ -19,10 +19,9 @@ Important:
 - the profile is UEFI-only on purpose
 - the live image exposes Calamares as the default Veldmuis installer
 
-Use the top-level helper script to build it:
+Use the development helper script from the repo root to build it:
 
-- `/home/kaazrot/Documents/Code/veldmuis/scripts/build-archiso.sh`
+- `development/build-archiso.sh`
 
-Repeatable VM smoke-test steps live in:
-
-- `/home/kaazrot/Documents/Code/veldmuis/repo/archiso/SMOKE_TEST.md`
+Repeatable VM smoke-test notes currently live in the surrounding workspace
+docs archive.
