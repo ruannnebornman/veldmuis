@@ -1,6 +1,6 @@
 pkgname=veldmuis-base
 pkgver=20260305
-pkgrel=1
+pkgrel=3
 pkgdesc="Minimal base metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"

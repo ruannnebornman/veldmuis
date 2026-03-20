@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=8
+pkgrel=9
 pkgdesc="KDE Plasma desktop metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -10,6 +10,7 @@ depends=(
   "plasma-desktop"
   "plasma-workspace"
   "systemsettings"
+  "ksshaskpass"
   "kscreen"
   "kscreenlocker"
   "kwayland"

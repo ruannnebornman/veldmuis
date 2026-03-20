@@ -164,6 +164,26 @@ prepare_target_root() {
   fi
 }
 
+normalize_keyring_permissions() {
+  local gpgdir="$1"
+
+  [[ -d "${gpgdir}" ]] || return 0
+
+  chmod 755 "${gpgdir}"
+
+  for dir_name in crls.d openpgp-revocs.d private-keys-v1.d; do
+    [[ -d "${gpgdir}/${dir_name}" ]] || continue
+    chmod 700 "${gpgdir}/${dir_name}"
+  done
+
+  for file_name in pubring.gpg trustdb.gpg gpg.conf gpg-agent.conf tofu.db; do
+    [[ -f "${gpgdir}/${file_name}" ]] || continue
+    chmod 644 "${gpgdir}/${file_name}"
+  done
+
+  [[ -f "${gpgdir}/secring.gpg" ]] && chmod 600 "${gpgdir}/secring.gpg"
+}
+
 main() {
   require_cmd pacstrap
   require_cmd pacman-key
@@ -191,6 +211,7 @@ main() {
   pacstrap -C "${tmp_pacman_conf}" "${target_root}" veldmuis-desktop
 
   ensure_target_keyring_populated "${release_key_id}"
+  normalize_keyring_permissions "${target_root}/etc/pacman.d/gnupg"
 
   if [[ -f /etc/pacman.d/mirrorlist ]]; then
     install -Dm644 /etc/pacman.d/mirrorlist "${target_root}/etc/pacman.d/mirrorlist"

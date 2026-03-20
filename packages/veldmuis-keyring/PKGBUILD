@@ -1,25 +1,20 @@
 pkgname=veldmuis-keyring
 pkgver=20260305
-pkgrel=5
+pkgrel=7
 pkgdesc="Pacman keyring for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
 depends=("pacman" "gnupg")
-install=veldmuis-keyring.install
 source=(
   "veldmuis.gpg"
   "veldmuis-trusted"
   "veldmuis-revoked"
-  "veldmuis-keyring-init.service"
-  "veldmuis-keyring-init.sh"
 )
 sha256sums=(
   "60b1f36cf8830eb141933f055364d458cabc2068a7cb4ee10777c2135d2923d9"
   "b306fc55fff61ad80f4e9295c8d79b9b1f232de8e8438b00f48dec7bd1614e32"
   "284b09a519f9c0918ce86f82261ae989f7c1850c3abeda335b7755af2a4d94a7"
-  "SKIP"
-  "SKIP"
 )
 
 package() {
@@ -28,8 +23,4 @@ package() {
     "$pkgdir/usr/share/pacman/keyrings/veldmuis-trusted"
   install -Dm644 veldmuis-revoked \
     "$pkgdir/usr/share/pacman/keyrings/veldmuis-revoked"
-  install -Dm644 veldmuis-keyring-init.service \
-    "$pkgdir/usr/lib/systemd/system/veldmuis-keyring-init.service"
-  install -Dm755 veldmuis-keyring-init.sh \
-    "$pkgdir/usr/lib/veldmuis/veldmuis-keyring-init.sh"
 }
