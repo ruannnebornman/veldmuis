@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=13
+pkgrel=14
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -14,7 +14,7 @@ sha256sums=()
 
 package() {
   local branding_src="${startdir}/../veldmuis-branding/rat1.png"
-  local logo_src="${startdir}/../../../images/logomain.png"
+  local logo_src="${startdir}/branding/veldmuis/logomain.png"
 
   [[ -f "${branding_src}" ]] || {
     printf 'Missing branding asset: %s\n' "${branding_src}" >&2
