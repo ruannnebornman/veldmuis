@@ -9,6 +9,8 @@ development_root="${repo_root}/development"
 packages_root="${repo_root}/packages"
 usb_device="${USB_DEVICE:-}"
 dd_bs="${DD_BS:-4M}"
+sudo_cmd=(sudo)
+makepkg_config_override=""
 
 log() {
   printf '[rebuild-iso-usb] %s\n' "$*"
@@ -21,6 +23,29 @@ die() {
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
+}
+
+cleanup() {
+  [[ -n "${makepkg_config_override}" ]] && rm -f "${makepkg_config_override}"
+}
+
+setup_askpass_support() {
+  if [[ -z "${SUDO_ASKPASS:-}" ]]; then
+    if command -v ksshaskpass >/dev/null 2>&1; then
+      export SUDO_ASKPASS="$(command -v ksshaskpass)"
+    elif command -v ssh-askpass >/dev/null 2>&1; then
+      export SUDO_ASKPASS="$(command -v ssh-askpass)"
+    fi
+  fi
+
+  if [[ -n "${SUDO_ASKPASS:-}" ]]; then
+    sudo_cmd=(sudo -A -p "Password: ")
+    makepkg_config_override="$(mktemp -t veldmuis-makepkg.XXXXXX)"
+    cp /etc/makepkg.conf "${makepkg_config_override}"
+    cat >>"${makepkg_config_override}" <<'EOF'
+PACMAN_AUTH=(sudo -A -p "Password: ")
+EOF
+  fi
 }
 
 usage() {
@@ -64,16 +89,21 @@ collect_changed_packages() {
 build_package() {
   local package_name="$1"
   local package_dir="${packages_root}/${package_name}"
+  local -a makepkg_cmd=(makepkg)
 
   [[ -d "${package_dir}" ]] || die "Package directory not found: ${package_dir}"
+
+  if [[ -n "${makepkg_config_override}" ]]; then
+    makepkg_cmd+=(--config "${makepkg_config_override}")
+  fi
 
   log "Building package: ${package_name}"
   (
     cd "${package_dir}"
     if [[ "${package_name}" == veldmuis-* ]]; then
-      makepkg --nodeps -f
+      "${makepkg_cmd[@]}" --nodeps -f
     else
-      makepkg -sf
+      "${makepkg_cmd[@]}" -sf
     fi
   )
 }
@@ -115,7 +145,7 @@ unmount_usb_partitions() {
 
   mapfile -t partitions < <(lsblk -lnpo NAME,TYPE "${usb_device}" | awk '$2 == "part" { print $1 }')
   for partition in "${partitions[@]}"; do
-    sudo umount "${partition}" >/dev/null 2>&1 || true
+    "${sudo_cmd[@]}" umount "${partition}" >/dev/null 2>&1 || true
   done
 }
 
@@ -144,6 +174,9 @@ main() {
   require_cmd dd
   require_cmd sync
   require_cmd sudo
+
+  trap cleanup EXIT
+  setup_askpass_support
 
   if (($# > 0)); then
     package_targets=("$@")
@@ -180,7 +213,7 @@ main() {
   unmount_usb_partitions
 
   log "Writing ${iso_path} to ${usb_device}"
-  sudo dd if="${iso_path}" of="${usb_device}" bs="${dd_bs}" status=progress conv=fsync
+  "${sudo_cmd[@]}" dd if="${iso_path}" of="${usb_device}" bs="${dd_bs}" status=progress conv=fsync
   sync
 
   log "ISO written to ${usb_device}"

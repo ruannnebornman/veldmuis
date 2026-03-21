@@ -19,12 +19,27 @@ archiso_keep_builds="${ARCHISO_KEEP_BUILDS:-3}"
 archiso_keep_isos="${ARCHISO_KEEP_ISOS:-3}"
 owner_uid="${SUDO_UID:-}"
 owner_gid="${SUDO_GID:-}"
+sudo_cmd=(sudo)
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "Missing required command: $1" >&2
     exit 1
   }
+}
+
+setup_askpass_support() {
+  if [[ -z "${SUDO_ASKPASS:-}" ]]; then
+    if command -v ksshaskpass >/dev/null 2>&1; then
+      export SUDO_ASKPASS="$(command -v ksshaskpass)"
+    elif command -v ssh-askpass >/dev/null 2>&1; then
+      export SUDO_ASKPASS="$(command -v ssh-askpass)"
+    fi
+  fi
+
+  if [[ -n "${SUDO_ASKPASS:-}" ]]; then
+    sudo_cmd=(sudo -A -p "Password: ")
+  fi
 }
 
 require_non_negative_integer() {
@@ -131,8 +146,10 @@ purge_cached_local_packages() {
   done < <(find "${repo_file_root}" -type f -name '*.pkg.tar.zst' | sort -u)
 }
 
+setup_askpass_support
+
 if (( EUID != 0 )); then
-  exec sudo "$0" "$@"
+  exec "${sudo_cmd[@]}" "$0" "$@"
 fi
 
 require_cmd mkarchiso
