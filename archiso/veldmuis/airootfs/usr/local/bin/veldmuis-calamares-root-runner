@@ -16,15 +16,17 @@ detect_graphics() {
 }
 
 write_header() {
-  cat >"${graphics_conf_path}" <<'EOF'
+  local default_id="$1"
+
+  cat >"${graphics_conf_path}" <<EOF
 ---
 mode: required
-method: packages
+method: legacy
 
 labels:
   step: "Graphics Driver"
 
-default: all-open-source
+default: ${default_id}
 
 items:
 EOF
@@ -36,28 +38,15 @@ write_all_open_source() {
     name: "All open-source (default)"
     description: "Recommended default. Installs the broad open-source graphics stack for AMD, Intel, Nouveau, and general VM use."
     screenshot: "logomain.png"
-    packages:
-      - mesa
-      - xf86-video-amdgpu
-      - xf86-video-ati
-      - xf86-video-nouveau
-      - libva-intel-driver
-      - intel-media-driver
-      - vulkan-radeon
-      - vulkan-intel
-      - vulkan-nouveau
-      - xorg-server
-      - xorg-xinit
 EOF
 }
 
 write_default_open_source() {
   cat >>"${graphics_conf_path}" <<'EOF'
-  - id: all-open-source
+  - id: default-open-source
     name: "All open-source (default)"
     description: "Keeps the default open-source graphics stack from the base install. No extra vendor-specific packages are added."
     screenshot: "logomain.png"
-    packages: []
 EOF
 }
 
@@ -67,13 +56,6 @@ write_amd_open_source() {
     name: "AMD / ATI (open-source)"
     description: "Installs the AMD / ATI open-source graphics stack."
     screenshot: "logomain.png"
-    packages:
-      - mesa
-      - xf86-video-amdgpu
-      - xf86-video-ati
-      - vulkan-radeon
-      - xorg-server
-      - xorg-xinit
 EOF
 }
 
@@ -83,13 +65,6 @@ write_intel_open_source() {
     name: "Intel (open-source)"
     description: "Installs the Intel open-source graphics stack."
     screenshot: "logomain.png"
-    packages:
-      - mesa
-      - libva-intel-driver
-      - intel-media-driver
-      - vulkan-intel
-      - xorg-server
-      - xorg-xinit
 EOF
 }
 
@@ -99,12 +74,15 @@ write_nvidia_open_source() {
     name: "Nvidia (open-source nouveau driver)"
     description: "Uses the Nouveau stack for Nvidia hardware."
     screenshot: "logomain.png"
-    packages:
-      - mesa
-      - xf86-video-nouveau
-      - vulkan-nouveau
-      - xorg-server
-      - xorg-xinit
+EOF
+}
+
+write_nvidia_580xx_dkms() {
+  cat >>"${graphics_conf_path}" <<'EOF'
+  - id: nvidia-580xx-dkms
+    name: "Nvidia (580xx DKMS from AUR)"
+    description: "Builds and installs nvidia-580xx-utils, nvidia-580xx-dkms, and lib32-nvidia-580xx-utils from the AUR during installation. Internet required."
+    screenshot: "logomain.png"
 EOF
 }
 
@@ -133,11 +111,11 @@ main() {
     has_nvidia=1
   fi
 
-  write_header
-
   if (( !has_amd && !has_intel && !has_nvidia )); then
+    write_header default-open-source
     write_default_open_source
   else
+    write_header all-open-source
     write_all_open_source
   fi
 
@@ -151,6 +129,7 @@ main() {
 
   if (( has_nvidia )); then
     write_nvidia_open_source
+    write_nvidia_580xx_dkms
   fi
 
   prepare_logs
