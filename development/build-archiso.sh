@@ -28,6 +28,11 @@ require_cmd() {
   }
 }
 
+pacman_keyring_has_secret() {
+  [[ -d "${pacman_gpgdir}/private-keys-v1.d" ]] || return 1
+  find "${pacman_gpgdir}/private-keys-v1.d" -mindepth 1 -type f -print -quit | grep -q .
+}
+
 setup_askpass_support() {
   if [[ -z "${SUDO_ASKPASS:-}" ]]; then
     if command -v ksshaskpass >/dev/null 2>&1; then
@@ -159,6 +164,7 @@ require_cmd chown
 require_cmd find
 require_cmd findmnt
 require_cmd umount
+require_cmd gpg
 require_non_negative_integer "ARCHISO_KEEP_BUILDS" "${archiso_keep_builds}"
 require_non_negative_integer "ARCHISO_KEEP_ISOS" "${archiso_keep_isos}"
 
@@ -197,8 +203,18 @@ cp -a "${repo_file_root}" "${profile_work}/airootfs/opt/veldmuis/repo"
 
 rm -rf "${pacman_gpgdir}"
 mkdir -p "${pacman_gpgdir}"
-cp -a /etc/pacman.d/gnupg/. "${pacman_gpgdir}/"
+if [[ -d /etc/pacman.d/gnupg ]]; then
+  cp -a /etc/pacman.d/gnupg/. "${pacman_gpgdir}/"
+fi
 chmod 700 "${pacman_gpgdir}"
+
+# Fresh CI containers can have a pacman GPG directory without an initialized
+# secret key. In that case, pacman-key needs a local trust root before it can
+# populate the Arch and Veldmuis keyrings for mkarchiso.
+if ! pacman_keyring_has_secret; then
+  pacman-key --gpgdir "${pacman_gpgdir}" --init >/dev/null
+  pacman-key --gpgdir "${pacman_gpgdir}" --populate archlinux >/dev/null
+fi
 
 pacman-key --gpgdir "${pacman_gpgdir}" \
   --populate-from "${veldmuis_keyring_root}" \
