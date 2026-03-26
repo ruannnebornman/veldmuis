@@ -67,6 +67,37 @@ Likely files if this becomes a default:
 
 - `packages/veldmuis-desktop/PKGBUILD`
 
+### 4. Hosted ISO Builds Instead Of Local-Only Builds
+
+Main decision:
+
+- Move ISO generation off the developer workstation and into a hosted build pipeline, likely GitHub plus either a self-hosted Arch runner or another dedicated remote builder
+- Preferred direction is now captured in `development/tagged-release-pipeline-plan.md`: workflow on `main`, trigger on release tags, gate release jobs with approvals, and publish artifacts to Cloudflare R2
+- Draft implementation now exists in `.github/workflows/release-iso.yml`, with GitHub environment setup notes in `development/release-environment-setup.md`
+
+Things to consider:
+
+- GitHub-hosted runners are convenient, but `mkarchiso` and the current build flow may require privileges and environment assumptions that do not map cleanly onto stock hosted runners
+- Release signing keys should not casually live on a random CI runner; this needs a clear key-management story
+- If builds happen remotely, the output location, retention, and release publishing flow should be defined up front
+- Remote builds would make release generation more repeatable and less dependent on one machine
+- This is also a supply-chain and provenance improvement if the workflow produces consistent logs, checksums, signatures, and release artifacts
+
+Open questions:
+
+- Do we want GitHub Actions with a self-hosted runner, or a separate always-on build box that GitHub triggers?
+- Should remote CI build unsigned artifacts only, with signing kept on a separate trusted release host?
+- Do we want every push to build an ISO, or only tagged releases and manual dispatches?
+
+Likely files if this is implemented:
+
+- `.github/workflows/` for CI/release automation
+- `development/build-archiso.sh`
+- `development/build-local-repo.sh`
+- `development/rebuild-iso-vm.sh`
+- `development/key-rotation/`
+- `README.md`
+
 ## General Checklist For Future Additions
 
 Before making something default, check:
@@ -83,3 +114,4 @@ Before making something default, check:
 1. Verify `multilib` on a real fresh install and confirm no manual pacman edits are needed.
 2. Decide whether `lutris` should be truly default or grouped into a future gaming metapackage.
 3. Decide whether `discord` should be default or an installer-time optional app.
+4. Decide what remote ISO build model Veldmuis should use: GitHub-hosted CI, GitHub-triggered self-hosted runner, or a separate release builder.

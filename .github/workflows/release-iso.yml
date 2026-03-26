@@ -1,0 +1,367 @@
+name: Release ISO
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing tag to build and publish, for example v1.4.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-release:
+    name: Validate Release Ref
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      release_ref: ${{ steps.resolve.outputs.release_ref }}
+      release_sha: ${{ steps.resolve.outputs.release_sha }}
+      release_version: ${{ steps.resolve.outputs.release_version }}
+      is_stable: ${{ steps.resolve.outputs.is_stable }}
+    steps:
+      - name: Check out repository metadata
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Resolve release tag
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_tag="${{ inputs.release_tag }}"
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+
+          [[ "${release_tag}" =~ ^v.+ ]] || {
+            echo "Release tags must start with v, got: ${release_tag}" >&2
+            exit 1
+          }
+
+          release_ref="refs/tags/${release_tag}"
+          git rev-parse --verify "${release_ref}" >/dev/null 2>&1 || {
+            echo "Release tag not found: ${release_tag}" >&2
+            exit 1
+          }
+
+          release_sha="$(git rev-list -n 1 "${release_ref}")"
+          git merge-base --is-ancestor "${release_sha}" origin/main || {
+            echo "Release tag ${release_tag} does not point to a commit on main" >&2
+            exit 1
+          }
+
+          release_version="${release_tag#v}"
+          is_stable=0
+          if [[ "${release_version}" != *-* ]]; then
+            is_stable=1
+          fi
+
+          {
+            echo "release_tag=${release_tag}"
+            echo "release_ref=${release_ref}"
+            echo "release_sha=${release_sha}"
+            echo "release_version=${release_version}"
+            echo "is_stable=${is_stable}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build-and-publish:
+    name: Build And Publish ISO
+    needs: validate-release
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      BUILDER_USER: builder
+      BUILDER_HOME: /home/builder
+      GNUPGHOME: /home/builder/.gnupg
+      VELDMUIS_KEY_FPR_FILE: /home/builder/current-signing-key.fpr
+      RELEASE_TAG: ${{ needs.validate-release.outputs.release_tag }}
+      RELEASE_SHA: ${{ needs.validate-release.outputs.release_sha }}
+      RELEASE_VERSION: ${{ needs.validate-release.outputs.release_version }}
+      RELEASE_IS_STABLE: ${{ needs.validate-release.outputs.is_stable }}
+      VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+      VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+      CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+      CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+      CF_R2_ACCOUNT_ID: ${{ vars.CF_R2_ACCOUNT_ID }}
+      CF_R2_BUCKET: ${{ vars.CF_R2_BUCKET }}
+      CF_R2_PREFIX: ${{ vars.CF_R2_PREFIX }}
+      CF_R2_PUBLIC_BASE_URL: ${{ vars.CF_R2_PUBLIC_BASE_URL }}
+      VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
+    steps:
+      - name: Check out release ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate-release.outputs.release_ref }}
+
+      - name: Validate protected environment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=0
+
+          for secret_name in \
+            VELDMUIS_GPG_PRIVATE_KEY \
+            VELDMUIS_GPG_FPR \
+            CF_R2_ACCESS_KEY_ID \
+            CF_R2_SECRET_ACCESS_KEY
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing required environment secret: ${secret_name}" >&2
+              missing=1
+            fi
+          done
+
+          for var_name in CF_R2_ACCOUNT_ID CF_R2_BUCKET; do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "Missing required environment variable: ${var_name}" >&2
+              missing=1
+            fi
+          done
+
+          (( missing == 0 )) || exit 1
+
+      - name: Build packages, repo, and ISO in privileged Arch container
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          host_build_root="${RUNNER_TEMP}/veldmuis-build"
+          mkdir -p "${host_build_root}"
+
+          docker run --rm --privileged -i \
+            -e BUILDER_USER \
+            -e BUILDER_HOME \
+            -e GNUPGHOME \
+            -e VELDMUIS_KEY_FPR_FILE \
+            -e VELDMUIS_GPG_PRIVATE_KEY \
+            -e VELDMUIS_GPG_FPR \
+            -e VELDMUIS_PACKAGER \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            -v "${GITHUB_WORKSPACE}:/workspace/veldmuis" \
+            -v "${host_build_root}:/workspace/build" \
+            -v "${RUNNER_TEMP}:/runner-temp" \
+            -w /workspace/veldmuis \
+            archlinux:base-devel \
+            bash -s <<'EOF'
+          set -euo pipefail
+
+          pacman -Syu --noconfirm --needed \
+            archlinux-keyring \
+            archiso \
+            base-devel \
+            boost \
+            boost-libs \
+            cmake \
+            extra-cmake-modules \
+            git \
+            gnupg \
+            hwinfo \
+            kcoreaddons \
+            kcrash \
+            kdbusaddons \
+            kglobalaccel \
+            kirigami \
+            kpmcore \
+            libpwquality \
+            pacman-contrib \
+            polkit-qt6 \
+            python \
+            qt6-declarative \
+            qt6-svg \
+            qt6-tools \
+            qt6-translations \
+            rsync \
+            squashfs-tools \
+            yaml-cpp
+
+          if ! id -u "${BUILDER_USER}" >/dev/null 2>&1; then
+            useradd -m -u "${HOST_UID}" -s /bin/bash "${BUILDER_USER}"
+          fi
+
+          install -d -m 700 -o "${BUILDER_USER}" -g "${BUILDER_USER}" "${GNUPGHOME}"
+
+          key_file="/runner-temp/veldmuis-ci-signing-subkey.asc"
+          printf '%s\n' "${VELDMUIS_GPG_PRIVATE_KEY}" > "${key_file}"
+          chown "${BUILDER_USER}:${BUILDER_USER}" "${key_file}"
+          su "${BUILDER_USER}" -c "GNUPGHOME='${GNUPGHOME}' gpg --batch --import '${key_file}'"
+
+          printf '%s\n' "${VELDMUIS_GPG_FPR}" > "${VELDMUIS_KEY_FPR_FILE}"
+          chown "${BUILDER_USER}:${BUILDER_USER}" "${VELDMUIS_KEY_FPR_FILE}"
+
+          su "${BUILDER_USER}" -c "GNUPGHOME='${GNUPGHOME}' gpg --batch --list-secret-keys '${VELDMUIS_GPG_FPR}'"
+          rm -f "${key_file}"
+
+          su "${BUILDER_USER}" -c "cd /workspace/veldmuis && PACKAGER='${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}' GNUPGHOME='${GNUPGHOME}' ./development/build-all-packages.sh"
+          su "${BUILDER_USER}" -c "cd /workspace/veldmuis && GNUPGHOME='${GNUPGHOME}' VELDMUIS_KEY_FPR_FILE='${VELDMUIS_KEY_FPR_FILE}' ./development/build-local-repo.sh"
+
+          cd /workspace/veldmuis
+          GNUPGHOME="${GNUPGHOME}" ./development/build-archiso.sh
+
+          chown -R "${HOST_UID}:${HOST_GID}" /workspace/build /workspace/veldmuis/repos /workspace/veldmuis/packages
+          EOF
+
+      - name: Ensure AWS CLI is available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v aws >/dev/null 2>&1; then
+            python3 -m pip install --user awscli
+            export PATH="${HOME}/.local/bin:${PATH}"
+            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          fi
+
+          aws --version
+
+      - name: Generate checksums and manifest
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          output_root="${RUNNER_TEMP}/veldmuis-build/archiso/out"
+          iso_path="$(find "${output_root}" -maxdepth 1 -type f -name 'veldmuis-*.iso' -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
+          [[ -n "${iso_path}" ]] || {
+            echo "No ISO found under ${output_root}" >&2
+            exit 1
+          }
+
+          iso_name="$(basename "${iso_path}")"
+          sha256="$(sha256sum "${iso_path}" | awk '{print $1}')"
+          sha_path="${iso_path}.sha256"
+          printf '%s  %s\n' "${sha256}" "${iso_name}" > "${sha_path}"
+
+          manifest_name="${iso_name%.iso}.manifest.txt"
+          manifest_path="${output_root}/${manifest_name}"
+          {
+            echo "release_tag=${RELEASE_TAG}"
+            echo "release_version=${RELEASE_VERSION}"
+            echo "release_sha=${RELEASE_SHA}"
+            echo "iso_name=${iso_name}"
+            echo "sha256=${sha256}"
+            echo "signing_fingerprint=${VELDMUIS_GPG_FPR}"
+            echo "built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "${manifest_path}"
+
+          r2_prefix="${CF_R2_PREFIX:-iso}"
+          iso_object_key="${r2_prefix}/${iso_name}"
+          sha_object_key="${r2_prefix}/${iso_name}.sha256"
+          manifest_object_key="${r2_prefix}/${manifest_name}"
+
+          {
+            echo "iso_path=${iso_path}"
+            echo "sha_path=${sha_path}"
+            echo "manifest_path=${manifest_path}"
+            echo "iso_name=${iso_name}"
+            echo "manifest_name=${manifest_name}"
+            echo "sha256=${sha256}"
+            echo "artifact_name=veldmuis-iso-${RELEASE_TAG}"
+            echo "iso_object_key=${iso_object_key}"
+            echo "sha_object_key=${sha_object_key}"
+            echo "manifest_object_key=${manifest_object_key}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Upload debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: |
+            ${{ steps.metadata.outputs.iso_path }}
+            ${{ steps.metadata.outputs.sha_path }}
+            ${{ steps.metadata.outputs.manifest_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release artifacts to R2
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail
+
+          endpoint="https://${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          bucket="${CF_R2_BUCKET}"
+          prefix="${CF_R2_PREFIX:-iso}"
+
+          aws s3 cp "${{ steps.metadata.outputs.iso_path }}" \
+            "s3://${bucket}/${{ steps.metadata.outputs.iso_object_key }}" \
+            --endpoint-url "${endpoint}" \
+            --only-show-errors \
+            --content-type application/octet-stream
+
+          aws s3 cp "${{ steps.metadata.outputs.sha_path }}" \
+            "s3://${bucket}/${{ steps.metadata.outputs.sha_object_key }}" \
+            --endpoint-url "${endpoint}" \
+            --only-show-errors \
+            --content-type text/plain
+
+          aws s3 cp "${{ steps.metadata.outputs.manifest_path }}" \
+            "s3://${bucket}/${{ steps.metadata.outputs.manifest_object_key }}" \
+            --endpoint-url "${endpoint}" \
+            --only-show-errors \
+            --content-type text/plain
+
+          if [[ "${RELEASE_IS_STABLE}" == "1" ]]; then
+            aws s3 cp "${{ steps.metadata.outputs.iso_path }}" \
+              "s3://${bucket}/${prefix}/latest.iso" \
+              --endpoint-url "${endpoint}" \
+              --only-show-errors \
+              --content-type application/octet-stream
+
+            aws s3 cp "${{ steps.metadata.outputs.sha_path }}" \
+              "s3://${bucket}/${prefix}/latest.iso.sha256" \
+              --endpoint-url "${endpoint}" \
+              --only-show-errors \
+              --content-type text/plain
+
+            aws s3 cp "${{ steps.metadata.outputs.manifest_path }}" \
+              "s3://${bucket}/${prefix}/latest.manifest.txt" \
+              --endpoint-url "${endpoint}" \
+              --only-show-errors \
+              --content-type text/plain
+          fi
+
+      - name: Write release summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## Release ISO"
+            echo
+            echo "- Tag: \`${RELEASE_TAG}\`"
+            echo "- Commit: \`${RELEASE_SHA}\`"
+            echo "- ISO: \`${{ steps.metadata.outputs.iso_name }}\`"
+            echo "- SHA256: \`${{ steps.metadata.outputs.sha256 }}\`"
+            echo "- Bucket: \`${CF_R2_BUCKET}\`"
+            echo "- Object key: \`${{ steps.metadata.outputs.iso_object_key }}\`"
+
+            if [[ -n "${CF_R2_PUBLIC_BASE_URL:-}" ]]; then
+              public_base="${CF_R2_PUBLIC_BASE_URL%/}"
+              echo "- Public ISO URL: ${public_base}/${{ steps.metadata.outputs.iso_name }}"
+              echo "- Public SHA256 URL: ${public_base}/${{ steps.metadata.outputs.iso_name }}.sha256"
+            fi
+
+            if [[ "${RELEASE_IS_STABLE}" == "1" ]]; then
+              echo "- Stable aliases updated under \`${CF_R2_PREFIX:-iso}/latest.*\`"
+            else
+              echo "- Stable aliases not updated for prerelease tag"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
