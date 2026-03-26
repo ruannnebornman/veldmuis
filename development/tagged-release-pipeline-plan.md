@@ -115,6 +115,11 @@ Optional stable aliases:
 - `iso/latest.iso.sha256`
 - `iso/latest-manifest.txt`
 
+Current operational choice:
+
+- Clear the configured release prefix before each upload so the bucket does not accumulate old ISO artifacts
+- This keeps storage costs down, but it also means a failed publish can leave the prefix temporarily empty until the next successful upload
+
 ### Access model
 
 - Serve downloads from an R2 custom domain such as `downloads.veldmuislinux.org`

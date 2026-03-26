@@ -259,6 +259,13 @@ jobs:
           } > "${manifest_path}"
 
           r2_prefix="${CF_R2_PREFIX:-iso}"
+          r2_prefix="${r2_prefix#/}"
+          r2_prefix="${r2_prefix%/}"
+          [[ -n "${r2_prefix}" ]] || {
+            echo "CF_R2_PREFIX resolves to an empty path" >&2
+            exit 1
+          }
+
           iso_object_key="${r2_prefix}/${iso_name}"
           sha_object_key="${r2_prefix}/${iso_name}.sha256"
           manifest_object_key="${r2_prefix}/${manifest_name}"
@@ -299,6 +306,17 @@ jobs:
           endpoint="https://${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           bucket="${CF_R2_BUCKET}"
           prefix="${CF_R2_PREFIX:-iso}"
+          prefix="${prefix#/}"
+          prefix="${prefix%/}"
+          [[ -n "${prefix}" ]] || {
+            echo "CF_R2_PREFIX resolves to an empty path" >&2
+            exit 1
+          }
+
+          aws s3 rm "s3://${bucket}/${prefix}" \
+            --recursive \
+            --endpoint-url "${endpoint}" \
+            --only-show-errors
 
           aws s3 cp "${{ steps.metadata.outputs.iso_path }}" \
             "s3://${bucket}/${{ steps.metadata.outputs.iso_object_key }}" \

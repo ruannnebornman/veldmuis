@@ -80,6 +80,7 @@ Things to consider:
 - GitHub-hosted runners are convenient, but `mkarchiso` and the current build flow may require privileges and environment assumptions that do not map cleanly onto stock hosted runners
 - Release signing keys should not casually live on a random CI runner; this needs a clear key-management story
 - If builds happen remotely, the output location, retention, and release publishing flow should be defined up front
+- Current preferred publish behavior is to delete everything under the configured R2 release prefix before uploading the new ISO set, so the bucket does not accumulate old artifacts
 - Remote builds would make release generation more repeatable and less dependent on one machine
 - This is also a supply-chain and provenance improvement if the workflow produces consistent logs, checksums, signatures, and release artifacts
 
