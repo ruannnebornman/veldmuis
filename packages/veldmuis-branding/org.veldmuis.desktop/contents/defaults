@@ -20,5 +20,8 @@ cursorTheme=breeze_cursors
 library=org.kde.breeze
 theme=Breeze
 
+[kwinrc][ElectricBorders]
+TopLeft=None
+
 [KSplash]
 Theme=org.kde.Breeze
