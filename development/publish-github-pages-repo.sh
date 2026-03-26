@@ -11,6 +11,8 @@ branch="${PAGES_BRANCH:-gh-pages}"
 remote="${PAGES_REMOTE:-origin}"
 pages_base="${PAGES_BASE_URL:-https://packages.veldmuislinux.org}"
 cname="${PAGES_CNAME:-packages.veldmuislinux.org}"
+git_author_name="${PAGES_GIT_AUTHOR_NAME:-}"
+git_author_email="${PAGES_GIT_AUTHOR_EMAIL:-}"
 
 log() {
   printf '[publish-github-pages-repo] %s\n' "$*"
@@ -111,6 +113,18 @@ publish_tree() {
 commit_and_push() {
   (
     cd "${worktree_dir}"
+    if [[ -n "${git_author_name}" ]]; then
+      git config user.name "${git_author_name}"
+    elif ! git config user.name >/dev/null 2>&1; then
+      git config user.name "Veldmuis Pages Bot"
+    fi
+
+    if [[ -n "${git_author_email}" ]]; then
+      git config user.email "${git_author_email}"
+    elif ! git config user.email >/dev/null 2>&1; then
+      git config user.email "actions@veldmuislinux.org"
+    fi
+
     git add -A
     if git diff --cached --quiet; then
       log "No GitHub Pages changes to publish."
