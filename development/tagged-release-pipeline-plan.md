@@ -6,6 +6,8 @@ Implementation status:
 
 - Workflow draft: `.github/workflows/release-iso.yml`
 - GitHub setup checklist: `development/release-environment-setup.md`
+- Release operator flow: `development/release-operator-flow.md`
+- Release notes convention: `development/release-notes/README.md`
 
 ## Core Decision
 
@@ -13,8 +15,15 @@ Implementation status:
 - Keep the workflow file on `main`
 - Trigger the release workflow when a release tag is pushed from `main`
 - Allow `workflow_dispatch` for manual recovery or test runs
+- Treat every pushed `v*` tag as a real release event, not just a build trigger
 
 This is the right mental model. The branch does not need to be special. `main` stays the source of truth, and tags decide when a real release build happens.
+
+## Release Contract
+
+- Every pushed `v*` tag should create or update the matching GitHub Release entry
+- Release highlights should come from a repo-tracked notes file named after the tag
+- There should not be a separate manual GitHub Release creation step after a successful tagged build
 
 ## Recommended Release Flow
 
@@ -27,7 +36,7 @@ This is the right mental model. The branch does not need to be special. `main` s
 7. The workflow generates checksums and any release metadata.
 8. The workflow uploads the ISO and checksum files to Cloudflare R2.
 9. The workflow updates any `latest` pointers or manifests used by the website.
-10. The workflow optionally creates or updates a GitHub Release entry with links and checksums.
+10. The workflow creates or updates a GitHub Release entry with links and checksums.
 
 ## Trigger Model
 
@@ -75,7 +84,9 @@ Reason for combining build and signing initially:
 - Uploads the final ISO and checksum files to Cloudflare R2
 - Publishes immutable versioned filenames
 - Optionally updates stable aliases such as `latest.iso` and `latest.sha256`
-- Optionally creates or updates a GitHub Release page
+- Creates or updates a GitHub Release page
+- Uses a repo-tracked notes file for maintainer-written highlights
+- Can append auto-generated GitHub release notes below those highlights
 
 ## Signing Model
 
@@ -135,10 +146,12 @@ Current operational choice:
 ## Repository Changes Expected
 
 - Add the release workflow under `.github/workflows/`
+- Add a GitHub Release creation/update step after successful publish
 - Move or adapt the existing ISO workflow logic from the CI branch into `main`
 - Add environment-aware secret handling for the release workflow
 - Add release metadata generation for checksums and manifests
 - Add documentation in `README.md` or a dedicated release operations doc
+- Add a repo convention for release highlights input files
 - Update key-rotation docs to mention the dedicated CI signing subkey
 
 ## Implementation Phases
@@ -157,7 +170,7 @@ Current operational choice:
 
 ### Phase 3. Release polish
 
-- Add GitHub Release notes generation
+- Add GitHub Release notes generation and automatic Release creation
 - Add `latest` aliases and a small release manifest in R2
 - Add post-release verification checks
 
@@ -179,6 +192,5 @@ Current operational choice:
 ## Open Decisions
 
 - Final tag naming scheme
-- Whether to also create GitHub Releases automatically
 - Whether `latest.iso` should always track the newest tag or only stable releases
 - Whether beta and stable releases should publish to separate R2 prefixes
