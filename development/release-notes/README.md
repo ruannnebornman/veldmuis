@@ -13,8 +13,8 @@ Examples:
 
 ## Current Versioning Direction
 
-- The next real public release should be `v1.4.0`
-- After that, increment stable releases as normal semantic versions
+- Stable public releases use semantic-version tags like `v1.4.1`
+- After `v1.4.1`, increment from the latest stable GitHub release
 - Do not create new beta or alpha release tags unless the release plan changes deliberately
 
 ## Suggested Structure
