@@ -336,6 +336,20 @@ jobs:
             --only-show-errors \
             --content-type text/plain
 
+      - name: Ensure GitHub CLI is available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if command -v gh >/dev/null 2>&1; then
+            gh --version
+            exit 0
+          fi
+
+          sudo apt-get update
+          sudo apt-get install -y gh
+          gh --version
+
       - name: Create or update GitHub release
         id: github_release
         shell: bash
@@ -347,127 +361,61 @@ jobs:
         run: |
           set -euo pipefail
 
-          python - <<'PY'
-          import json
-          import os
-          import pathlib
-          import urllib.error
-          import urllib.parse
-          import urllib.request
+          note_file="development/release-notes/${RELEASE_TAG}.md"
+          body_file="${RUNNER_TEMP}/release-${RELEASE_TAG}.md"
 
-          repo = os.environ["GITHUB_REPOSITORY"]
-          token = os.environ["GH_TOKEN"]
-          tag = os.environ["RELEASE_TAG"]
-          release_sha = os.environ["RELEASE_SHA"]
-          release_is_stable = os.environ["RELEASE_IS_STABLE"] == "1"
-          public_base = os.environ.get("CF_R2_PUBLIC_BASE_URL", "").rstrip("/")
-          note_path = pathlib.Path("development") / "release-notes" / f"{tag}.md"
-          asset_paths = [
-              pathlib.Path(os.environ["ISO_ASSET_PATH"]),
-              pathlib.Path(os.environ["SHA_ASSET_PATH"]),
-              pathlib.Path(os.environ["MANIFEST_ASSET_PATH"]),
-          ]
+          if [[ -f "${note_file}" ]]; then
+            cat "${note_file}" > "${body_file}"
+          else
+            printf '%s\n' \
+              '# Highlights' \
+              '' \
+              '- Tagged releases now build, sign, and publish the ISO end to end.' \
+              '- The website-facing R2 bucket only keeps the latest release files.' \
+              > "${body_file}"
+          fi
 
-          def request_json(method, url, payload=None):
-              data = None
-              headers = {
-                  "Authorization": f"Bearer {token}",
-                  "Accept": "application/vnd.github+json",
-                  "X-GitHub-Api-Version": "2022-11-28",
-              }
-              if payload is not None:
-                  data = json.dumps(payload).encode()
-                  headers["Content-Type"] = "application/json"
+          {
+            echo
+            echo "# Assets"
+            echo
+            echo "- ISO asset: \`$(basename "${ISO_ASSET_PATH}")\`"
+            echo "- SHA256: \`$(cat "${SHA_ASSET_PATH}")\`"
+            echo "- Commit: \`${RELEASE_SHA}\`"
 
-              request = urllib.request.Request(url, data=data, method=method, headers=headers)
-              try:
-                  with urllib.request.urlopen(request) as response:
-                      body = response.read().decode()
-              except urllib.error.HTTPError as exc:
-                  message = exc.read().decode()
-                  raise SystemExit(f"{method} {url} failed: {exc.code} {message}") from exc
+            if [[ -n "${CF_R2_PUBLIC_BASE_URL:-}" ]]; then
+              public_base="${CF_R2_PUBLIC_BASE_URL%/}"
+              echo "- Website download: ${public_base}/latest.iso"
+              echo "- Website checksum: ${public_base}/latest.iso.sha256"
+            fi
+          } >> "${body_file}"
 
-              return json.loads(body) if body else {}
+          release_title="Veldmuis ${RELEASE_TAG}"
+          prerelease_flag=()
+          if [[ "${RELEASE_IS_STABLE}" != "1" ]]; then
+            prerelease_flag+=(--prerelease)
+          fi
 
-          def upload_asset(upload_url, asset_path):
-              asset_name = asset_path.name
-              encoded_name = urllib.parse.quote(asset_name)
-              url = f"{upload_url}?name={encoded_name}"
-              content_type = "application/octet-stream" if asset_path.suffix == ".iso" else "text/plain"
-              headers = {
-                  "Authorization": f"Bearer {token}",
-                  "Content-Type": content_type,
-                  "Accept": "application/vnd.github+json",
-                  "X-GitHub-Api-Version": "2022-11-28",
-              }
-              data = asset_path.read_bytes()
-              request = urllib.request.Request(url, data=data, method="POST", headers=headers)
-              try:
-                  with urllib.request.urlopen(request) as response:
-                      response.read()
-              except urllib.error.HTTPError as exc:
-                  message = exc.read().decode()
-                  raise SystemExit(f"Asset upload failed for {asset_name}: {exc.code} {message}") from exc
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --title "${release_title}" \
+              --notes-file "${body_file}" \
+              "${prerelease_flag[@]}"
+          else
+            gh release create "${RELEASE_TAG}" \
+              --title "${release_title}" \
+              --target "${RELEASE_SHA}" \
+              --notes-file "${body_file}" \
+              "${prerelease_flag[@]}"
+          fi
 
-          body_sections = []
-          if note_path.is_file():
-              body_sections.append(note_path.read_text().strip())
-          else:
-              body_sections.append(
-                  "# Highlights\n\n"
-                  "- Tagged releases now build, sign, and publish the ISO end to end.\n"
-                  "- The website-facing R2 bucket only keeps the latest release files."
-              )
+          gh release upload "${RELEASE_TAG}" \
+            "${ISO_ASSET_PATH}" \
+            "${SHA_ASSET_PATH}" \
+            "${MANIFEST_ASSET_PATH}" \
+            --clobber
 
-          assets_lines = [
-              "# Assets",
-              "",
-              f"- ISO asset: `{asset_paths[0].name}`",
-              f"- SHA256: `{asset_paths[1].read_text().strip()}`",
-              f"- Commit: `{release_sha}`",
-          ]
-
-          if public_base:
-              assets_lines.append(f"- Website download: {public_base}/latest.iso")
-              assets_lines.append(f"- Website checksum: {public_base}/latest.iso.sha256")
-
-          body_sections.append("\n".join(assets_lines))
-          release_body = "\n\n".join(section.strip() for section in body_sections if section.strip())
-
-          api_root = f"https://api.github.com/repos/{repo}"
-          release_name = f"Veldmuis {tag}"
-          release_payload = {
-              "tag_name": tag,
-              "target_commitish": release_sha,
-              "name": release_name,
-              "body": release_body,
-              "draft": False,
-              "prerelease": not release_is_stable,
-          }
-
-          try:
-              release = request_json("GET", f"{api_root}/releases/tags/{tag}")
-              release_id = release["id"]
-              release = request_json("PATCH", f"{api_root}/releases/{release_id}", release_payload)
-          except SystemExit as exc:
-              if "404" not in str(exc):
-                  raise
-              release = request_json("POST", f"{api_root}/releases", release_payload)
-
-          existing_assets = {asset["name"]: asset["id"] for asset in release.get("assets", [])}
-          for asset_path in asset_paths:
-              asset_id = existing_assets.get(asset_path.name)
-              if asset_id is not None:
-                  request_json("DELETE", f"{api_root}/releases/assets/{asset_id}")
-
-          upload_url = release["upload_url"].split("{", 1)[0]
-          for asset_path in asset_paths:
-              upload_asset(upload_url, asset_path)
-
-          output_path = pathlib.Path(os.environ["GITHUB_OUTPUT"])
-          with output_path.open("a", encoding="utf-8") as output_file:
-              output_file.write(f"html_url={release['html_url']}\n")
-          PY
+          echo "html_url=$(gh release view "${RELEASE_TAG}" --json url -q .url)" >> "${GITHUB_OUTPUT}"
 
       - name: Publish pacman repo to GitHub Pages
         shell: bash
