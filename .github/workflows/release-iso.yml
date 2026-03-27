@@ -246,6 +246,9 @@ jobs:
 
           manifest_name="${iso_name%.iso}.manifest.txt"
           manifest_path="${output_root}/${manifest_name}"
+          download_iso_name="veldmuis-${RELEASE_VERSION}-x86_64.iso"
+          download_sha_name="${download_iso_name}.sha256"
+          download_manifest_name="veldmuis-${RELEASE_VERSION}-x86_64.manifest.txt"
           {
             echo "release_tag=${RELEASE_TAG}"
             echo "release_version=${RELEASE_VERSION}"
@@ -274,6 +277,9 @@ jobs:
             echo "manifest_path=${manifest_path}"
             echo "iso_name=${iso_name}"
             echo "manifest_name=${manifest_name}"
+            echo "download_iso_name=${download_iso_name}"
+            echo "download_sha_name=${download_sha_name}"
+            echo "download_manifest_name=${download_manifest_name}"
             echo "sha256=${sha256}"
             echo "artifact_name=veldmuis-iso-${RELEASE_TAG}"
             echo "iso_object_key=${iso_object_key}"
@@ -320,18 +326,21 @@ jobs:
             "s3://${bucket}/${{ steps.metadata.outputs.iso_object_key }}" \
             --endpoint-url "${endpoint}" \
             --only-show-errors \
+            --content-disposition "attachment; filename=\"${{ steps.metadata.outputs.download_iso_name }}\"" \
             --content-type application/octet-stream
 
           aws s3 cp "${{ steps.metadata.outputs.sha_path }}" \
             "s3://${bucket}/${{ steps.metadata.outputs.sha_object_key }}" \
             --endpoint-url "${endpoint}" \
             --only-show-errors \
+            --content-disposition "attachment; filename=\"${{ steps.metadata.outputs.download_sha_name }}\"" \
             --content-type text/plain
 
           aws s3 cp "${{ steps.metadata.outputs.manifest_path }}" \
             "s3://${bucket}/${{ steps.metadata.outputs.manifest_object_key }}" \
             --endpoint-url "${endpoint}" \
             --only-show-errors \
+            --content-disposition "attachment; filename=\"${{ steps.metadata.outputs.download_manifest_name }}\"" \
             --content-type text/plain
 
       - name: Ensure GitHub CLI is available
@@ -385,7 +394,7 @@ jobs:
               public_base="${public_base%/}"
               iso_download_url="${public_base}/latest.iso"
             else
-              iso_download_url="http://downloads.veldmuislinux.org"
+              iso_download_url="https://downloads.veldmuislinux.org/iso/latest.iso"
             fi
 
             echo "ISO download: ${iso_download_url}"
