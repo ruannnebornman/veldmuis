@@ -397,7 +397,10 @@ jobs:
               iso_download_url="https://downloads.veldmuislinux.org/iso/latest.iso"
             fi
 
+            sha_download_url="${iso_download_url}.sha256"
+
             echo "ISO download: ${iso_download_url}"
+            echo "SHA256 download: ${sha_download_url}"
             echo "Checksum asset: \`$(basename "${SHA_ASSET_PATH}")\`"
             echo "SHA256: \`$(cat "${SHA_ASSET_PATH}")\`"
             echo
