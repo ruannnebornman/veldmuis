@@ -98,6 +98,7 @@ jobs:
       CF_R2_BUCKET: ${{ vars.CF_R2_BUCKET }}
       CF_R2_PREFIX: ${{ vars.CF_R2_PREFIX }}
       CF_R2_PUBLIC_BASE_URL: ${{ vars.CF_R2_PUBLIC_BASE_URL }}
+      VELDMUIS_DOWNLOAD_URL: ${{ vars.VELDMUIS_DOWNLOAD_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
     steps:
       - name: Check out release ref
@@ -376,16 +377,30 @@ jobs:
 
           {
             echo
-            echo "# Assets"
+            echo "## Downloads"
+            echo
+            if [[ -n "${VELDMUIS_DOWNLOAD_URL:-}" ]]; then
+              iso_download_url="${VELDMUIS_DOWNLOAD_URL}"
+            elif [[ -n "${CF_R2_PUBLIC_BASE_URL:-}" ]]; then
+              public_base="${CF_R2_PUBLIC_BASE_URL%/}"
+              iso_download_url="${public_base}/latest.iso"
+            else
+              iso_download_url="http://downloads.veldmuislinux.org"
+            fi
+
+            echo "ISO download: ${iso_download_url}"
+            echo "Checksum asset: \`$(basename "${SHA_ASSET_PATH}")\`"
+            echo "SHA256: \`$(cat "${SHA_ASSET_PATH}")\`"
+            echo
+            echo "## Build Metadata"
             echo
             echo "- ISO file: \`${{ steps.metadata.outputs.iso_name }}\`"
-            echo "- SHA256: \`$(cat "${SHA_ASSET_PATH}")\`"
             echo "- Commit: \`${RELEASE_SHA}\`"
 
             if [[ -n "${CF_R2_PUBLIC_BASE_URL:-}" ]]; then
               public_base="${CF_R2_PUBLIC_BASE_URL%/}"
-              echo "- Website download: ${public_base}/latest.iso"
-              echo "- Website checksum: ${public_base}/latest.iso.sha256"
+              echo "- Direct HTTPS ISO: ${public_base}/latest.iso"
+              echo "- Direct HTTPS checksum: ${public_base}/latest.iso.sha256"
             fi
           } >> "${body_file}"
 

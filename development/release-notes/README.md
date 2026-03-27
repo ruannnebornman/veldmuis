@@ -10,7 +10,12 @@ Veldmuis release notes should live in this directory.
 Examples:
 
 - `v1.4.0.md`
-- `v1.4.1-beta1.md`
+
+## Current Versioning Direction
+
+- The next real public release should be `v1.4.0`
+- After that, increment stable releases as normal semantic versions
+- Do not create new beta or alpha release tags unless the release plan changes deliberately
 
 ## Suggested Structure
 
