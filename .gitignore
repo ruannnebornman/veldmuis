@@ -2,4 +2,3 @@ packages/*/pkg/
 packages/*/src/
 packages/*/*.pkg.tar.*
 repos/
-temp r2 keys*.txt
