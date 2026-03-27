@@ -4,13 +4,6 @@ Crafted in the veld, built in the open.
 
 Website: https://veldmuislinux.org/
 
-## Downloads
-
-Latest beta release: `1.3.1 beta` (`2026-03-20`)
-
-- ISO: [veldmuis-2026.03.20-x86_64.iso](https://drive.proton.me/urls/JAPPF1REF0#uNqfMqsNx5vI)
-- SHA256: `a2a73789aeb88b4b726c544bd569389a5d44a4692e4e77d75a96692123bd8b63`
-
 ## Repository Layout
 
 - `archiso/veldmuis/`
