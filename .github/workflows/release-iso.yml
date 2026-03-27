@@ -376,10 +376,13 @@ jobs:
             echo
             echo "## Downloads"
             echo
-            if [[ -n "${VELDMUIS_DOWNLOAD_URL:-}" ]]; then
-              iso_download_url="${VELDMUIS_DOWNLOAD_URL}"
-            elif [[ -n "${CF_R2_PUBLIC_BASE_URL:-}" ]]; then
-              public_base="${CF_R2_PUBLIC_BASE_URL%/}"
+            download_url="$(printf '%s' "${VELDMUIS_DOWNLOAD_URL:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+            public_base="$(printf '%s' "${CF_R2_PUBLIC_BASE_URL:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+            if [[ "${download_url}" =~ ^https?:// ]]; then
+              iso_download_url="${download_url}"
+            elif [[ "${public_base}" =~ ^https?:// ]]; then
+              public_base="${public_base%/}"
               iso_download_url="${public_base}/latest.iso"
             else
               iso_download_url="http://downloads.veldmuislinux.org"
@@ -394,8 +397,8 @@ jobs:
             echo "- ISO file: \`${{ steps.metadata.outputs.iso_name }}\`"
             echo "- Commit: \`${RELEASE_SHA}\`"
 
-            if [[ -n "${CF_R2_PUBLIC_BASE_URL:-}" ]]; then
-              public_base="${CF_R2_PUBLIC_BASE_URL%/}"
+            if [[ "${public_base}" =~ ^https?:// ]]; then
+              public_base="${public_base%/}"
               echo "- Direct HTTPS ISO: ${public_base}/latest.iso"
               echo "- Direct HTTPS checksum: ${public_base}/latest.iso.sha256"
             fi
@@ -455,8 +458,9 @@ jobs:
             echo "- GitHub Release: ${{ steps.github_release.outputs.html_url }}"
             echo "- Package repo: https://packages.veldmuislinux.org"
 
-            if [[ -n "${CF_R2_PUBLIC_BASE_URL:-}" ]]; then
-              public_base="${CF_R2_PUBLIC_BASE_URL%/}"
+            public_base="$(printf '%s' "${CF_R2_PUBLIC_BASE_URL:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+            if [[ "${public_base}" =~ ^https?:// ]]; then
+              public_base="${public_base%/}"
               echo "- Public ISO URL: ${public_base}/latest.iso"
               echo "- Public SHA256 URL: ${public_base}/latest.iso.sha256"
             fi
