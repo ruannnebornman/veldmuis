@@ -45,8 +45,8 @@ jobs:
             release_tag="${GITHUB_REF_NAME}"
           fi
 
-          [[ "${release_tag}" =~ ^v.+ ]] || {
-            echo "Release tags must start with v, got: ${release_tag}" >&2
+          [[ "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Release tags must use stable semver like v1.4.0, got: ${release_tag}" >&2
             exit 1
           }
 
@@ -63,10 +63,7 @@ jobs:
           }
 
           release_version="${release_tag#v}"
-          is_stable=0
-          if [[ "${release_version}" != *-* ]]; then
-            is_stable=1
-          fi
+          is_stable=1
 
           {
             echo "release_tag=${release_tag}"
