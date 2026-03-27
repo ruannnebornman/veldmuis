@@ -355,7 +355,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          ISO_ASSET_PATH: ${{ steps.metadata.outputs.iso_path }}
           SHA_ASSET_PATH: ${{ steps.metadata.outputs.sha_path }}
           MANIFEST_ASSET_PATH: ${{ steps.metadata.outputs.manifest_path }}
         run: |
@@ -379,7 +378,7 @@ jobs:
             echo
             echo "# Assets"
             echo
-            echo "- ISO asset: \`$(basename "${ISO_ASSET_PATH}")\`"
+            echo "- ISO file: \`${{ steps.metadata.outputs.iso_name }}\`"
             echo "- SHA256: \`$(cat "${SHA_ASSET_PATH}")\`"
             echo "- Commit: \`${RELEASE_SHA}\`"
 
@@ -410,12 +409,11 @@ jobs:
           fi
 
           gh release upload "${RELEASE_TAG}" \
-            "${ISO_ASSET_PATH}" \
             "${SHA_ASSET_PATH}" \
             "${MANIFEST_ASSET_PATH}" \
             --clobber
 
-          echo "html_url=$(gh release view "${RELEASE_TAG}" --json url -q .url)" >> "${GITHUB_OUTPUT}"
+          echo "html_url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
 
       - name: Publish pacman repo to GitHub Pages
         shell: bash
