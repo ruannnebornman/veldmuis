@@ -1,6 +1,6 @@
 pkgname=veldmuis-boot
 pkgver=20260305
-pkgrel=1
+pkgrel=3
 pkgdesc="UEFI boot policy metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -10,8 +10,18 @@ depends=(
   "systemd"
   "efibootmgr"
 )
-sha256sums=()
+source=(
+  "95-veldmuis-kernel-install-sync.hook"
+  "veldmuis-kernel-install-sync"
+)
+sha256sums=(
+  "SKIP"
+  "SKIP"
+)
 
 package() {
-  :
+  install -Dm644 "${srcdir}/95-veldmuis-kernel-install-sync.hook" \
+    "${pkgdir}/usr/share/libalpm/hooks/95-veldmuis-kernel-install-sync.hook"
+  install -Dm755 "${srcdir}/veldmuis-kernel-install-sync" \
+    "${pkgdir}/usr/lib/veldmuis/veldmuis-kernel-install-sync"
 }

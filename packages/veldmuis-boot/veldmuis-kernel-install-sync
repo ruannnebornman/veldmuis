@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+kernel_install_bin="${KERNEL_INSTALL_BIN:-kernel-install}"
+inspect_output=""
+boot_root=""
+entry_token=""
+
+have_bls_layout() {
+  if ! inspect_output="$("${kernel_install_bin}" inspect --json=short --no-pager 2>/dev/null)"; then
+    return 1
+  fi
+
+  [[ "${inspect_output}" == *'"Layout":"bls"'* ]]
+}
+
+json_field() {
+  local field_name="$1"
+
+  printf '%s\n' "${inspect_output}" \
+    | sed -n "s/.*\"${field_name}\":\"\\([^\"]*\\)\".*/\\1/p"
+}
+
+load_bls_paths() {
+  boot_root="$(json_field "BootRoot")"
+  entry_token="$(json_field "EntryToken")"
+
+  [[ -n "${boot_root}" ]]
+  [[ -n "${entry_token}" ]]
+}
+
+sync_present_kernels() {
+  local kernel_image=""
+  local version=""
+
+  shopt -s nullglob
+  for kernel_image in /usr/lib/modules/*/vmlinuz; do
+    version="${kernel_image#/usr/lib/modules/}"
+    version="${version%/vmlinuz}"
+    "${kernel_install_bin}" add "${version}" "${kernel_image}"
+  done
+  shopt -u nullglob
+}
+
+prune_missing_entries() {
+  local entry_path=""
+  local version=""
+  local entry_prefix="${boot_root}/loader/entries/${entry_token}-"
+
+  shopt -s nullglob
+  for entry_path in "${entry_prefix}"*.conf; do
+    version="${entry_path#${entry_prefix}}"
+    version="${version%.conf}"
+    [[ -e "/usr/lib/modules/${version}/vmlinuz" ]] && continue
+    "${kernel_install_bin}" remove "${version}"
+  done
+  shopt -u nullglob
+}
+
+main() {
+  command -v "${kernel_install_bin}" >/dev/null 2>&1 || exit 0
+  have_bls_layout || exit 0
+  load_bls_paths || exit 0
+
+  sync_present_kernels
+  prune_missing_entries
+}
+
+main "$@"
