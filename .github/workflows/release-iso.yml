@@ -4,15 +4,22 @@ on:
   push:
     tags:
       - "v*"
+  schedule:
+    # 12:00 Africa/Johannesburg on the 1st of each month.
+    - cron: "0 10 1 * *"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing tag to build and publish, for example v1.4.0
+        description: Existing tag to build and publish, for example v1.4.0 or 2026.04
         required: true
         type: string
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-iso
+  cancel-in-progress: false
 
 jobs:
   validate-release:
@@ -41,12 +48,22 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             release_tag="${{ inputs.release_tag }}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            release_tag="$(date -u +%Y.%m)"
+            release_ref="refs/tags/${release_tag}"
+            if ! git rev-parse --verify "${release_ref}" >/dev/null 2>&1; then
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git tag -a "${release_tag}" origin/main -m "Monthly automated ISO build ${release_tag}"
+              git push origin "refs/tags/${release_tag}"
+              git fetch --force --tags origin
+            fi
           else
             release_tag="${GITHUB_REF_NAME}"
           fi
 
-          [[ "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "Release tags must use stable semver like v1.4.0, got: ${release_tag}" >&2
+          [[ "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "${release_tag}" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])$ ]] || {
+            echo "Release tags must use stable semver like v1.4.0 or monthly snapshots like 2026.04, got: ${release_tag}" >&2
             exit 1
           }
 
@@ -372,6 +389,13 @@ jobs:
 
           if [[ -f "${note_file}" ]]; then
             cat "${note_file}" > "${body_file}"
+          elif [[ "${RELEASE_TAG}" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])$ ]]; then
+            printf '%s\n' \
+              '# Highlights' \
+              '' \
+              '- Updated all packages to the latest Arch versions.' \
+              '- Refreshed the ISO environment.' \
+              > "${body_file}"
           else
             printf '%s\n' \
               '# Highlights' \
@@ -416,7 +440,11 @@ jobs:
             fi
           } >> "${body_file}"
 
-          release_title="Veldmuis ${RELEASE_TAG}"
+          if [[ "${RELEASE_TAG}" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])$ ]]; then
+            release_title="Veldmuis Linux ${RELEASE_TAG}"
+          else
+            release_title="Veldmuis ${RELEASE_TAG}"
+          fi
           prerelease_flag=()
           if [[ "${RELEASE_IS_STABLE}" != "1" ]]; then
             prerelease_flag+=(--prerelease)
