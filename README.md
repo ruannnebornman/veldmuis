@@ -2,28 +2,33 @@
 
 Crafted in the veld, built in the open.
 
-Website: https://veldmuislinux.org/
+Veldmuis Linux is an Arch-based KDE Plasma distribution with a signed package flow, a Calamares installer, and a systemd-boot-based install path.
+
+## Official Links
+
+- Website: https://veldmuislinux.org/
+- Source, issues, and releases: https://github.com/ruannnebornman/veldmuis
+- Issue tracker: https://github.com/ruannnebornman/veldmuis/issues
+
+## Safety
+
+Official Veldmuis communication currently happens through the website and GitHub repository above.
+
+Veldmuis does not currently have official outside affiliations, community platforms, or fundraising pages. If that changes, it will be announced through those official links.
 
 ## Repository Layout
 
 - `archiso/veldmuis/`
-  The Archiso profile used to build the live image
+  Archiso profile used to build the live image
 - `development/`
-  Helper scripts for local package, repo, ISO, VM, USB, and repo publishing
-  workflows
+  Helper scripts for local package, repo, ISO, VM, USB, and publishing workflows
 - `packages/`
   Package definitions for the Veldmuis stack and installer integration
 - `repos/`
   Local pacman repo output generated during development and ignored from Git
-- `LICENSE`
-  Repository license
 
-The package tree currently includes:
+## Core Packages
 
-- `calamares`
-- `veldmuis-calamares-config`
-- `veldmuis-keyring`
-- `veldmuis-mirrorlist`
 - `veldmuis-release`
 - `veldmuis-base`
 - `veldmuis-common`
@@ -33,4 +38,13 @@ The package tree currently includes:
 - `veldmuis-multimedia`
 - `veldmuis-branding`
 - `veldmuis-desktop`
+
+## Development
+
+The package tree also includes the Calamares packaging and configuration used to build install media:
+
+- `calamares`
+- `veldmuis-calamares-config`
+- `veldmuis-keyring`
+- `veldmuis-mirrorlist`
 - `veldmuis-devel`
