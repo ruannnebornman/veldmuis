@@ -1,0 +1,9 @@
+post_install() {
+  if [[ -x /usr/lib/veldmuis/veldmuis-kernel-install-sync ]]; then
+    /usr/lib/veldmuis/veldmuis-kernel-install-sync || true
+  fi
+}
+
+post_upgrade() {
+  post_install "$@"
+}
