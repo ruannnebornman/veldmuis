@@ -4,7 +4,6 @@ arch-install-scripts
 calamares
 veldmuis-calamares-config
 intel-ucode
-memtest86+-efi
 mkinitcpio
 mkinitcpio-archiso
 

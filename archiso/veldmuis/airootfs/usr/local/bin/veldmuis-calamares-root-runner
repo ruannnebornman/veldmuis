@@ -41,15 +41,6 @@ write_all_open_source() {
 EOF
 }
 
-write_default_open_source() {
-  cat >>"${graphics_conf_path}" <<'EOF'
-  - id: default-open-source
-    name: "All open-source (default)"
-    description: "Keeps the default open-source graphics stack from the base install. No extra vendor-specific packages are added."
-    screenshot: "logomain.png"
-EOF
-}
-
 write_amd_open_source() {
   cat >>"${graphics_conf_path}" <<'EOF'
   - id: amd-open-source
@@ -111,13 +102,8 @@ main() {
     has_nvidia=1
   fi
 
-  if (( !has_amd && !has_intel && !has_nvidia )); then
-    write_header default-open-source
-    write_default_open_source
-  else
-    write_header all-open-source
-    write_all_open_source
-  fi
+  write_header all-open-source
+  write_all_open_source
 
   if (( has_amd )); then
     write_amd_open_source

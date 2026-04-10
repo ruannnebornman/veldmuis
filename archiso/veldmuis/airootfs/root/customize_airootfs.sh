@@ -21,9 +21,6 @@ passwd -d live
 
 install -d -m 0755 /etc/sddm.conf.d
 cat >/etc/sddm.conf.d/veldmuis-live.conf <<'EOF'
-[General]
-DisplayServer=x11
-
 [Autologin]
 User=live
 Session=plasma.desktop
@@ -44,14 +41,6 @@ cat >/etc/sudoers.d/00-live <<'EOF'
 live ALL=(ALL:ALL) NOPASSWD: ALL
 EOF
 chmod 0440 /etc/sudoers.d/00-live
-
-# The stock mirrorlist package ships fully commented mirrors. A live installer
-# needs at least one active Arch mirror before Calamares can bootstrap the target.
-cat >/etc/pacman.d/mirrorlist <<'EOF'
-Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
-Server = https://europe.mirror.pkgbuild.com/$repo/os/$arch
-Server = https://fastly.mirror.pkgbuild.com/$repo/os/$arch
-EOF
 
 if [[ -x /usr/bin/flatpak && -f /usr/share/flatpak/remotes.d/flathub.flatpakrepo ]]; then
   flatpak remote-add --if-not-exists --system --from \
