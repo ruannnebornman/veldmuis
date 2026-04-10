@@ -35,33 +35,24 @@ cleanup() {
   fi
 }
 
-write_fallback_arch_mirrorlist() {
-  cat >"${tmp_arch_mirrorlist}" <<'EOF'
-Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
-Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch
-Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch
-EOF
-}
-
 write_arch_mirrorlist() {
   tmp_arch_mirrorlist="$(mktemp -t veldmuis-calamares-mirrorlist.XXXXXX)"
 
-  if [[ -f /etc/pacman.d/mirrorlist ]] && \
-      awk '
-        /^[[:space:]]*Server[[:space:]]*=/ {
-          sub(/^[[:space:]]*/, "")
-          print
-          found = 1
-        }
-        END { exit found ? 0 : 1 }
-      ' /etc/pacman.d/mirrorlist >"${tmp_arch_mirrorlist}"; then
-    log "Using active Arch mirrors from the live mirrorlist"
-  else
-    log "Live Arch mirrorlist has no active servers; using installer fallback mirrors"
-    write_fallback_arch_mirrorlist
-  fi
+  [[ -f /etc/pacman.d/mirrorlist ]] || \
+    die "Live Arch mirrorlist is missing at /etc/pacman.d/mirrorlist."
+
+  awk '
+    /^[[:space:]]*Server[[:space:]]*=/ {
+      sub(/^[[:space:]]*/, "")
+      print
+      found = 1
+    }
+    END { exit found ? 0 : 1 }
+  ' /etc/pacman.d/mirrorlist >"${tmp_arch_mirrorlist}" || \
+    die "Live Arch mirrorlist has no active Server entries. The ISO mirror hook likely did not run."
 
   chmod 644 "${tmp_arch_mirrorlist}"
+  log "Using active Arch mirrors from the live mirrorlist"
 }
 
 normalize_graphics_choice() {
@@ -222,6 +213,11 @@ prepare_target_root() {
   fi
 }
 
+install_target_arch_mirrorlist() {
+  log "Installing Arch mirrorlist into target system"
+  install -Dm644 "${tmp_arch_mirrorlist}" "${target_root}/etc/pacman.d/mirrorlist"
+}
+
 normalize_keyring_permissions() {
   local gpgdir="$1"
 
@@ -249,84 +245,100 @@ install_target_packages() {
   arch-chroot "${target_root}" pacman -S --noconfirm --needed "$@"
 }
 
-install_cpu_microcode() {
+cpu_microcode_packages() {
   local vendor_id=""
 
   vendor_id="$(awk -F ': ' '/^vendor_id[[:space:]]*: / { print $2; exit }' /proc/cpuinfo)"
 
   case "${vendor_id}" in
     AuthenticAMD)
-      install_target_packages amd-ucode
+      printf '%s\n' amd-ucode
       ;;
     GenuineIntel)
-      install_target_packages intel-ucode
+      printf '%s\n' intel-ucode
       ;;
     *)
-      log "No CPU microcode package selected for vendor '${vendor_id:-unknown}'"
       ;;
   esac
 }
 
-install_selected_graphics_stack() {
-  local -a packages=()
-
+selected_graphics_packages() {
   case "${graphics_choice}" in
     all-open-source)
-      packages=(
-        mesa
-        xf86-video-amdgpu
-        xf86-video-ati
-        xf86-video-nouveau
-        libva-intel-driver
-        intel-media-driver
-        vulkan-radeon
-        vulkan-intel
-        vulkan-nouveau
-        xorg-server
+      printf '%s\n' \
+        mesa \
+        xf86-video-amdgpu \
+        xf86-video-ati \
+        xf86-video-nouveau \
+        libva-intel-driver \
+        intel-media-driver \
+        vulkan-radeon \
+        lib32-vulkan-radeon \
+        vulkan-intel \
+        lib32-vulkan-intel \
+        vulkan-nouveau \
+        lib32-vulkan-nouveau \
+        xorg-server \
         xorg-xinit
-      )
       ;;
     amd-open-source)
-      packages=(
-        mesa
-        xf86-video-amdgpu
-        xf86-video-ati
-        vulkan-radeon
-        xorg-server
+      printf '%s\n' \
+        mesa \
+        xf86-video-amdgpu \
+        xf86-video-ati \
+        vulkan-radeon \
+        lib32-vulkan-radeon \
+        xorg-server \
         xorg-xinit
-      )
       ;;
     intel-open-source)
-      packages=(
-        mesa
-        libva-intel-driver
-        intel-media-driver
-        vulkan-intel
-        xorg-server
+      printf '%s\n' \
+        mesa \
+        libva-intel-driver \
+        intel-media-driver \
+        vulkan-intel \
+        lib32-vulkan-intel \
+        xorg-server \
         xorg-xinit
-      )
       ;;
     nvidia-open-source)
-      packages=(
-        mesa
-        xf86-video-nouveau
-        vulkan-nouveau
-        xorg-server
+      printf '%s\n' \
+        mesa \
+        xf86-video-nouveau \
+        vulkan-nouveau \
+        lib32-vulkan-nouveau \
+        xorg-server \
         xorg-xinit
-      )
       ;;
     nvidia-580xx-dkms)
-      packages=(
-        base-devel
-        dkms
-        linux-headers
-        xorg-server
+      printf '%s\n' \
+        base-devel \
+        dkms \
+        git \
+        linux-headers \
+        vulkan-swrast \
+        lib32-vulkan-swrast \
+        xorg-server \
         xorg-xinit
-      )
       ;;
   esac
+}
 
-  install_target_packages "${packages[@]}"
+initial_target_packages() {
+  local package
+  local -a packages=(veldmuis-desktop)
+
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(cpu_microcode_packages)
+
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(selected_graphics_packages)
+
+  printf '%s\n' "${packages[@]}"
 }
 
 ensure_target_aur_builder() {
@@ -419,6 +431,7 @@ main() {
   require_cmd gpg
   require_cmd arch-chroot
   local release_key_id=""
+  local -a bootstrap_packages=()
 
   exec > >(tee "${log_file}") 2>&1
 
@@ -437,9 +450,10 @@ main() {
   ensure_keyring_populated /etc/pacman.d/gnupg /usr/share/pacman/keyrings live
   release_key_id="$(release_key_id_from_dir /usr/share/pacman/keyrings)"
 
-  log "Installing Veldmuis package stack into ${target_root}"
-  pacstrap -C "${tmp_pacman_conf}" "${target_root}" veldmuis-desktop
-  install_cpu_microcode
+  mapfile -t bootstrap_packages < <(initial_target_packages)
+  log "Installing Veldmuis package stack into ${target_root}: ${bootstrap_packages[*]}"
+  pacstrap -C "${tmp_pacman_conf}" "${target_root}" "${bootstrap_packages[@]}"
+  install_target_arch_mirrorlist
 
   ensure_target_keyring_populated "${release_key_id}"
   normalize_keyring_permissions "${target_root}/etc/pacman.d/gnupg"
@@ -449,7 +463,6 @@ main() {
   fi
 
   log "Selected graphics choice: ${graphics_choice}"
-  install_selected_graphics_stack
 
   if [[ "${graphics_choice}" == "nvidia-580xx-dkms" ]]; then
     install_nvidia_580xx_stack
