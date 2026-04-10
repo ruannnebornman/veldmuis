@@ -6,6 +6,6 @@ Operation = Remove
 Target = usr/lib/modules/*/vmlinuz
 
 [Action]
-Description = Synchronizing systemd-boot kernel entries...
+Description = Refreshing Veldmuis systemd-boot entries...
 When = PostTransaction
 Exec = /usr/lib/veldmuis/veldmuis-kernel-install-sync

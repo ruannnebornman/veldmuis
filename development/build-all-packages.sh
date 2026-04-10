@@ -20,7 +20,6 @@ package_order=(
   "veldmuis-multimedia"
   "veldmuis-branding"
   "veldmuis-desktop"
-  "veldmuis-devel"
 )
 
 log() {

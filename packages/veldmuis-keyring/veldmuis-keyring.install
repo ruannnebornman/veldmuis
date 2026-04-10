@@ -1,0 +1,17 @@
+#!/bin/sh
+
+populate_veldmuis() {
+  if usr/bin/pacman-key -l >/dev/null 2>&1; then
+    usr/bin/pacman-key --populate veldmuis
+  fi
+}
+
+post_install() {
+  if [ -x usr/bin/pacman-key ]; then
+    populate_veldmuis
+  fi
+}
+
+post_upgrade() {
+  post_install
+}

@@ -62,7 +62,8 @@ verify_backup_bundle() {
     "${backup_root}/repo-files/packages/veldmuis-keyring/PKGBUILD" \
     "${backup_root}/repo-files/packages/veldmuis-keyring/veldmuis.gpg" \
     "${backup_root}/repo-files/packages/veldmuis-keyring/veldmuis-trusted" \
-    "${backup_root}/repo-files/packages/veldmuis-keyring/veldmuis-revoked"
+    "${backup_root}/repo-files/packages/veldmuis-keyring/veldmuis-revoked" \
+    "${backup_root}/repo-files/packages/veldmuis-keyring/veldmuis-keyring.install"
   do
     [[ -f "${required_file}" ]] || {
       printf 'Backup bundle is missing: %s\n' "${required_file}" >&2
@@ -100,6 +101,8 @@ restore_repo_files() {
     "${repo_keyring_dir}/veldmuis-trusted"
   install -Dm644 "${backup_root}/repo-files/packages/veldmuis-keyring/veldmuis-revoked" \
     "${repo_keyring_dir}/veldmuis-revoked"
+  install -Dm644 "${backup_root}/repo-files/packages/veldmuis-keyring/veldmuis-keyring.install" \
+    "${repo_keyring_dir}/veldmuis-keyring.install"
 }
 
 verify_restored_key() {

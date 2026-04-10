@@ -82,12 +82,15 @@ prepare_backup_layout() {
   cp -f "${keyring_dir}/veldmuis.gpg" "${backup_dir}/veldmuis.gpg"
   cp -f "${keyring_dir}/veldmuis-trusted" "${backup_dir}/veldmuis-trusted"
   cp -f "${keyring_dir}/veldmuis-revoked" "${backup_dir}/veldmuis-revoked"
+  cp -f "${keyring_dir}/veldmuis-keyring.install" "${backup_dir}/veldmuis-keyring.install"
   cp -f "${marker_file}" "${backup_dir}/current-signing-key.fpr"
 
   cp -f "${keyring_dir}/PKGBUILD" "${backup_dir}/repo-files/packages/veldmuis-keyring/PKGBUILD"
   cp -f "${keyring_dir}/veldmuis.gpg" "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis.gpg"
   cp -f "${keyring_dir}/veldmuis-trusted" "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis-trusted"
   cp -f "${keyring_dir}/veldmuis-revoked" "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis-revoked"
+  cp -f "${keyring_dir}/veldmuis-keyring.install" \
+    "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis-keyring.install"
   cp -f "${marker_file}" "${backup_dir}/home-files/.local/share/veldmuis/keyring-private/current-signing-key.fpr"
 
   install -Dm755 "${restore_script_path}" "${backup_dir}/restore-key.sh"
@@ -135,6 +138,7 @@ That will:
   - \`packages/veldmuis-keyring/veldmuis.gpg\`
   - \`packages/veldmuis-keyring/veldmuis-trusted\`
   - \`packages/veldmuis-keyring/veldmuis-revoked\`
+  - \`packages/veldmuis-keyring/veldmuis-keyring.install\`
 - Local marker file goes in:
   - \`~/.local/share/veldmuis/keyring-private/current-signing-key.fpr\`
 
@@ -143,6 +147,7 @@ That will:
 - \`veldmuis-private-key.asc\`
 - \`veldmuis-public-key.asc\`
 - \`veldmuis-revocation-cert.rev\`
+- \`veldmuis-keyring.install\`
 - \`current-signing-key.fpr\`
 - \`ownertrust.txt\`
 - \`repo-files/\`

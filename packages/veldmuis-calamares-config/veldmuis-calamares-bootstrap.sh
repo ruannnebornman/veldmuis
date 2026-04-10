@@ -35,7 +35,7 @@ cleanup() {
 
 normalize_graphics_choice() {
   case "${graphics_choice}" in
-    all-open-source|default-open-source|amd-open-source|intel-open-source|nvidia-open-source|nvidia-580xx-dkms)
+    all-open-source|amd-open-source|intel-open-source|nvidia-open-source|nvidia-580xx-dkms)
       ;;
     "")
       graphics_choice="all-open-source"
@@ -214,12 +214,28 @@ install_target_packages() {
   arch-chroot "${target_root}" pacman -S --noconfirm --needed "$@"
 }
 
+install_cpu_microcode() {
+  local vendor_id=""
+
+  vendor_id="$(awk -F ': ' '/^vendor_id[[:space:]]*: / { print $2; exit }' /proc/cpuinfo)"
+
+  case "${vendor_id}" in
+    AuthenticAMD)
+      install_target_packages amd-ucode
+      ;;
+    GenuineIntel)
+      install_target_packages intel-ucode
+      ;;
+    *)
+      log "No CPU microcode package selected for vendor '${vendor_id:-unknown}'"
+      ;;
+  esac
+}
+
 install_selected_graphics_stack() {
   local -a packages=()
 
   case "${graphics_choice}" in
-    default-open-source)
-      ;;
     all-open-source)
       packages=(
         mesa
@@ -388,13 +404,10 @@ main() {
 
   log "Installing Veldmuis package stack into ${target_root}"
   pacstrap -C "${tmp_pacman_conf}" "${target_root}" veldmuis-desktop
+  install_cpu_microcode
 
   ensure_target_keyring_populated "${release_key_id}"
   normalize_keyring_permissions "${target_root}/etc/pacman.d/gnupg"
-
-  if [[ -f /etc/pacman.d/mirrorlist ]]; then
-    install -Dm644 /etc/pacman.d/mirrorlist "${target_root}/etc/pacman.d/mirrorlist"
-  fi
 
   if ! grep -qxF 'Include = /etc/pacman.conf.d/veldmuis.conf' "${target_root}/etc/pacman.conf"; then
     printf '\nInclude = /etc/pacman.conf.d/veldmuis.conf\n' >> "${target_root}/etc/pacman.conf"

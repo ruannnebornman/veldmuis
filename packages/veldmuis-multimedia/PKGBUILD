@@ -1,6 +1,6 @@
 pkgname=veldmuis-multimedia
 pkgver=20260306
-pkgrel=2
+pkgrel=3
 pkgdesc="Default multimedia stack metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -15,7 +15,7 @@ depends=(
   "mpv"
 )
 sha256sums=(
-  "fcb2614085388c6a30e6cb1316f8c285e908b20e32344c248dec5b4f3df8ffb1"
+  "730314678b6617282e78c03a92712c28626f5d6f16d889db3f5af38b2653c102"
 )
 
 package() {

@@ -47,4 +47,3 @@ The package tree also includes the Calamares packaging and configuration used to
 - `veldmuis-calamares-config`
 - `veldmuis-keyring`
 - `veldmuis-mirrorlist`
-- `veldmuis-devel`

@@ -6,6 +6,7 @@ kernel_install_bin="${KERNEL_INSTALL_BIN:-kernel-install}"
 inspect_output=""
 boot_root=""
 entry_token=""
+static_entry_id="veldmuis-linux.conf"
 
 have_bls_layout() {
   if ! inspect_output="$("${kernel_install_bin}" inspect --json=short --no-pager 2>/dev/null)"; then
@@ -28,6 +29,176 @@ load_bls_paths() {
 
   [[ -n "${boot_root}" ]]
   [[ -n "${entry_token}" ]]
+}
+
+kernel_cmdline() {
+  local cmdline=""
+  local machine_id=""
+
+  if [[ -f /etc/kernel/cmdline ]]; then
+    cmdline="$(
+      awk '
+        !/^[[:space:]]*(#|$)/ {
+          gsub(/[[:space:]]+/, " ")
+          sub(/^[[:space:]]+/, "")
+          sub(/[[:space:]]+$/, "")
+          if (length) {
+            printf "%s%s", sep, $0
+            sep=" "
+          }
+        }
+        END { print "" }
+      ' /etc/kernel/cmdline
+    )"
+  fi
+
+  if [[ -z "${cmdline}" ]]; then
+    cmdline="$(existing_loader_cmdline)"
+  fi
+
+  if [[ -z "${cmdline}" && -r /proc/cmdline ]]; then
+    cmdline="$(
+      awk '
+        {
+          for (i = 1; i <= NF; i++) {
+            if ($i ~ /^(BOOT_IMAGE=|initrd=)/) {
+              continue
+            }
+            printf "%s%s", sep, $i
+            sep=" "
+          }
+        }
+        END { print "" }
+      ' /proc/cmdline
+    )"
+
+    if [[ "${cmdline}" == *"archisobasedir="* || "${cmdline}" == *"archisosearchuuid="* ]]; then
+      cmdline=""
+    fi
+  fi
+
+  if [[ -f /etc/machine-id ]]; then
+    read -r machine_id </etc/machine-id || true
+  fi
+
+  if [[ -n "${machine_id}" && "${cmdline}" != *"systemd.machine_id="* ]]; then
+    cmdline="${cmdline:+${cmdline} }systemd.machine_id=${machine_id}"
+  fi
+
+  printf '%s\n' "${cmdline}"
+}
+
+existing_loader_cmdline() {
+  local entry_path=""
+  local cmdline=""
+
+  shopt -s nullglob
+  for entry_path in \
+    "${boot_root}/loader/entries/${static_entry_id}" \
+    "${boot_root}/loader/entries/${entry_token}-"*.conf
+  do
+    [[ -f "${entry_path}" ]] || continue
+
+    cmdline="$(
+      awk '
+        $1 == "options" {
+          $1=""
+          sub(/^[[:space:]]+/, "")
+          print
+          exit
+        }
+      ' "${entry_path}"
+    )"
+
+    if [[ -n "${cmdline}" ]]; then
+      printf '%s\n' "${cmdline}"
+      shopt -u nullglob
+      return 0
+    fi
+  done
+  shopt -u nullglob
+
+  printf '\n'
+}
+
+write_static_loader_entry() {
+  local entries_dir="${boot_root}/loader/entries"
+  local entry_path="${entries_dir}/${static_entry_id}"
+  local tmp_entry=""
+  local options=""
+
+  [[ -f "${boot_root}/vmlinuz-linux" ]]
+  [[ -f "${boot_root}/initramfs-linux.img" ]]
+
+  options="$(kernel_cmdline)"
+  [[ -n "${options}" ]]
+
+  install -d -m755 "${entries_dir}"
+  tmp_entry="$(mktemp "${entries_dir}/.${static_entry_id}.XXXXXX")"
+
+  {
+    printf 'title      Veldmuis Linux\n'
+    printf 'sort-key   veldmuis\n'
+    printf 'linux      /vmlinuz-linux\n'
+    [[ -f "${boot_root}/amd-ucode.img" ]] && printf 'initrd     /amd-ucode.img\n'
+    [[ -f "${boot_root}/intel-ucode.img" ]] && printf 'initrd     /intel-ucode.img\n'
+    printf 'initrd     /initramfs-linux.img\n'
+    printf 'options    %s\n' "${options}"
+  } >"${tmp_entry}"
+
+  mv "${tmp_entry}" "${entry_path}"
+}
+
+set_static_loader_default() {
+  local loader_conf="${boot_root}/loader/loader.conf"
+  local tmp_loader=""
+
+  install -d -m755 "${boot_root}/loader"
+  tmp_loader="$(mktemp "${boot_root}/loader/.loader.conf.XXXXXX")"
+
+  if [[ -f "${loader_conf}" ]]; then
+    if grep -Eq '^default[[:space:]]+' "${loader_conf}"; then
+      sed "s/^default[[:space:]].*/default ${static_entry_id}/" "${loader_conf}" >"${tmp_loader}"
+    else
+      cat "${loader_conf}" >"${tmp_loader}"
+      printf 'default %s\n' "${static_entry_id}" >>"${tmp_loader}"
+    fi
+  else
+    printf 'default %s\n' "${static_entry_id}" >"${tmp_loader}"
+    printf 'timeout 3\n' >>"${tmp_loader}"
+    printf 'console-mode keep\n' >>"${tmp_loader}"
+  fi
+
+  mv "${tmp_loader}" "${loader_conf}"
+}
+
+remove_kernel_install_artifacts() {
+  local entry_path=""
+  local version=""
+  local entry_prefix="${boot_root}/loader/entries/${entry_token}-"
+  local version_dir=""
+
+  shopt -s nullglob
+  for entry_path in "${entry_prefix}"*.conf; do
+    version="${entry_path#${entry_prefix}}"
+    version="${version%.conf}"
+    rm -f "${entry_prefix}${version}"*.conf
+    rm -rf "${boot_root:?}/${entry_token}/${version}"
+  done
+
+  for version_dir in "${boot_root}/${entry_token}"/*; do
+    [[ -d "${version_dir}" ]] || continue
+    rm -rf "${version_dir}"
+  done
+  shopt -u nullglob
+
+  rmdir "${boot_root}/${entry_token}" 2>/dev/null || true
+}
+
+use_static_boot_entry() {
+  [[ "${boot_root}" == "/boot" ]]
+  [[ -f "${boot_root}/vmlinuz-linux" ]]
+  [[ -f "${boot_root}/initramfs-linux.img" ]]
 }
 
 sync_present_kernels() {
@@ -53,9 +224,12 @@ prune_missing_entries() {
     version="${entry_path#${entry_prefix}}"
     version="${version%.conf}"
     [[ -e "/usr/lib/modules/${version}/vmlinuz" ]] && continue
-    "${kernel_install_bin}" remove "${version}"
+    rm -f "${entry_prefix}${version}"*.conf
+    rm -rf "${boot_root:?}/${entry_token}/${version}"
   done
   shopt -u nullglob
+
+  rmdir "${boot_root}/${entry_token}" 2>/dev/null || true
 }
 
 main() {
@@ -63,6 +237,14 @@ main() {
   have_bls_layout || exit 0
   load_bls_paths || exit 0
 
+  if use_static_boot_entry; then
+    write_static_loader_entry
+    set_static_loader_default
+    remove_kernel_install_artifacts
+    exit 0
+  fi
+
+  prune_missing_entries
   sync_present_kernels
   prune_missing_entries
 }

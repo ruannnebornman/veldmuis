@@ -25,7 +25,6 @@ required_packages=(
   "veldmuis-multimedia"
   "veldmuis-branding"
   "veldmuis-desktop"
-  "veldmuis-devel"
 )
 
 require_cmd() {

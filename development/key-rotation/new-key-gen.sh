@@ -15,6 +15,7 @@ Behavior:
   - requires a clean Veldmuis key environment
   - generates a new non-interactive signing key
   - updates packages/veldmuis-keyring to trust the new key
+  - bumps the veldmuis-keyring package release
   - refreshes the local fingerprint marker for repo builds
   - rebuilds the veldmuis-keyring package
 
@@ -159,6 +160,30 @@ update_local_marker() {
   printf '%s\n' "${new_fingerprint}" > "${marker_file}"
 }
 
+bump_keyring_pkgrel() {
+  local tmp_pkgbuild
+
+  tmp_pkgbuild="$(mktemp -t veldmuis-keyring-pkgbuild.XXXXXX)"
+
+  awk '
+    BEGIN { bumped = 0 }
+    /^pkgrel=[0-9]+$/ {
+      sub(/^pkgrel=/, "")
+      print "pkgrel=" ($0 + 1)
+      bumped = 1
+      next
+    }
+    { print }
+    END { if (!bumped) exit 1 }
+  ' "${keyring_dir}/PKGBUILD" > "${tmp_pkgbuild}" || {
+    rm -f "${tmp_pkgbuild}"
+    printf 'Failed to bump pkgrel in %s\n' "${keyring_dir}/PKGBUILD" >&2
+    exit 1
+  }
+
+  mv -f "${tmp_pkgbuild}" "${keyring_dir}/PKGBUILD"
+}
+
 refresh_keyring_pkgbuild_checksums() {
   local gpg_sum
   local trusted_sum
@@ -240,6 +265,7 @@ main() {
   generate_new_key
   resolve_new_fingerprint
   update_repo_keyring_files
+  bump_keyring_pkgrel
   update_local_marker
   refresh_keyring_pkgbuild_checksums
   maybe_build_keyring_package
