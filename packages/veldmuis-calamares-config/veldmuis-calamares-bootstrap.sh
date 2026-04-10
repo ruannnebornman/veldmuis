@@ -6,6 +6,7 @@ target_root="${1:-}"
 graphics_choice="${2:-all-open-source}"
 live_repo_root="/opt/veldmuis/repo"
 tmp_pacman_conf=""
+tmp_arch_mirrorlist=""
 log_file="/tmp/veldmuis-calamares-bootstrap.log"
 aur_builder_user="veldmuisaur"
 
@@ -24,6 +25,7 @@ require_cmd() {
 
 cleanup() {
   [[ -n "${tmp_pacman_conf}" ]] && rm -f "${tmp_pacman_conf}"
+  [[ -n "${tmp_arch_mirrorlist}" ]] && rm -f "${tmp_arch_mirrorlist}"
 
   if [[ -n "${target_root}" && -d "${target_root}" ]]; then
     arch-chroot "${target_root}" /usr/bin/bash -lc "
@@ -31,6 +33,35 @@ cleanup() {
       userdel -r '${aur_builder_user}' >/dev/null 2>&1 || true
     " >/dev/null 2>&1 || true
   fi
+}
+
+write_fallback_arch_mirrorlist() {
+  cat >"${tmp_arch_mirrorlist}" <<'EOF'
+Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+Server = https://mirror.rackspace.com/archlinux/$repo/os/$arch
+Server = https://mirrors.kernel.org/archlinux/$repo/os/$arch
+EOF
+}
+
+write_arch_mirrorlist() {
+  tmp_arch_mirrorlist="$(mktemp -t veldmuis-calamares-mirrorlist.XXXXXX)"
+
+  if [[ -f /etc/pacman.d/mirrorlist ]] && \
+      awk '
+        /^[[:space:]]*Server[[:space:]]*=/ {
+          sub(/^[[:space:]]*/, "")
+          print
+          found = 1
+        }
+        END { exit found ? 0 : 1 }
+      ' /etc/pacman.d/mirrorlist >"${tmp_arch_mirrorlist}"; then
+    log "Using active Arch mirrors from the live mirrorlist"
+  else
+    log "Live Arch mirrorlist has no active servers; using installer fallback mirrors"
+    write_fallback_arch_mirrorlist
+  fi
+
+  chmod 644 "${tmp_arch_mirrorlist}"
 }
 
 normalize_graphics_choice() {
@@ -76,23 +107,27 @@ pick_resolver_source() {
 }
 
 write_pacman_conf() {
+  write_arch_mirrorlist
+
   tmp_pacman_conf="$(mktemp -t veldmuis-calamares-pacman.XXXXXX)"
-  cp /etc/pacman.conf "${tmp_pacman_conf}"
+  cat >"${tmp_pacman_conf}" <<EOF
+[options]
+HoldPkg = pacman glibc
+Architecture = auto
+CheckSpace
+SigLevel = Required DatabaseOptional
+LocalFileSigLevel = Optional
+ParallelDownloads = 1
+DisableDownloadTimeout
 
-  # The installer should favor reliability over throughput on weak Wi-Fi.
-  # Multiple concurrent downloads and pacman's low-speed timeout have caused
-  # large desktop installs to fail on bare metal.
-  if grep -q '^ParallelDownloads' "${tmp_pacman_conf}"; then
-    sed -i 's/^ParallelDownloads.*/ParallelDownloads = 1/' "${tmp_pacman_conf}"
-  else
-    sed -i '/^\[options\]/a ParallelDownloads = 1' "${tmp_pacman_conf}"
-  fi
+[core]
+Include = ${tmp_arch_mirrorlist}
 
-  if ! grep -q '^DisableDownloadTimeout$' "${tmp_pacman_conf}"; then
-    sed -i '/^\[options\]/a DisableDownloadTimeout' "${tmp_pacman_conf}"
-  fi
+[extra]
+Include = ${tmp_arch_mirrorlist}
 
-  cat >>"${tmp_pacman_conf}" <<EOF
+[multilib]
+Include = ${tmp_arch_mirrorlist}
 
 [veldmuis-core]
 SigLevel = Required DatabaseOptional
