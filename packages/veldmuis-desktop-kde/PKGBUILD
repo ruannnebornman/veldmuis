@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=11
+pkgrel=12
 pkgdesc="KDE Plasma desktop metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -30,7 +30,18 @@ depends=(
   "steam"
   "lutris"
   "dolphin"
+  "kio-extras"
   "ffmpegthumbs"
+  "kdegraphics-thumbnailers"
+  "kimageformats"
+  "qt6-imageformats"
+  "libavif"
+  "libheif"
+  "libjxl"
+  "libraw"
+  "openexr"
+  "openjpeg2"
+  "jxrlib"
   "udisks2"
   "kate"
   "gwenview"
