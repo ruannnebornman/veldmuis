@@ -1,16 +1,13 @@
 name: Release ISO
 
 on:
-  push:
-    tags:
-      - "v*"
   schedule:
     # 20:00 Africa/Johannesburg on the 1st of each month.
     - cron: "0 18 1 * *"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing tag to build and publish, for example v1.4.0 or 2026.04
+        description: Existing date tag to build and publish, for example 2026.04.19
         required: true
         type: string
 
@@ -30,7 +27,6 @@ jobs:
       release_ref: ${{ steps.resolve.outputs.release_ref }}
       release_sha: ${{ steps.resolve.outputs.release_sha }}
       release_version: ${{ steps.resolve.outputs.release_version }}
-      is_stable: ${{ steps.resolve.outputs.is_stable }}
     steps:
       - name: Check out repository metadata
         uses: actions/checkout@v4
@@ -48,8 +44,16 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             release_tag="${{ inputs.release_tag }}"
+            [[ "${release_tag}" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])$ ]] || {
+              echo "Manual release tags must use YYYY.MM.DD, got: ${release_tag}" >&2
+              exit 1
+            }
           elif [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
             release_tag="$(date -u +%Y.%m)"
+            [[ "${release_tag}" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])$ ]] || {
+              echo "Scheduled release tags must use YYYY.MM, got: ${release_tag}" >&2
+              exit 1
+            }
             release_ref="refs/tags/${release_tag}"
             if ! git rev-parse --verify "${release_ref}" >/dev/null 2>&1; then
               git config user.name "github-actions[bot]"
@@ -59,13 +63,9 @@ jobs:
               git fetch --force --tags origin
             fi
           else
-            release_tag="${GITHUB_REF_NAME}"
-          fi
-
-          [[ "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "${release_tag}" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])(\.(0[1-9]|[12][0-9]|3[01]))$ ]] || {
-            echo "Release tags must use stable semver like v1.4.0 or monthly snapshots like 2026.04, got: ${release_tag}" >&2
+            echo "Unsupported release event: ${GITHUB_EVENT_NAME}" >&2
             exit 1
-          }
+          fi
 
           release_ref="refs/tags/${release_tag}"
           git rev-parse --verify "${release_ref}" >/dev/null 2>&1 || {
@@ -79,15 +79,13 @@ jobs:
             exit 1
           }
 
-          release_version="${release_tag#v}"
-          is_stable=1
+          release_version="${release_tag}"
 
           {
             echo "release_tag=${release_tag}"
             echo "release_ref=${release_ref}"
             echo "release_sha=${release_sha}"
             echo "release_version=${release_version}"
-            echo "is_stable=${is_stable}"
           } >> "${GITHUB_OUTPUT}"
 
   build-and-publish:
@@ -103,7 +101,6 @@ jobs:
       RELEASE_TAG: ${{ needs.validate-release.outputs.release_tag }}
       RELEASE_SHA: ${{ needs.validate-release.outputs.release_sha }}
       RELEASE_VERSION: ${{ needs.validate-release.outputs.release_version }}
-      RELEASE_IS_STABLE: ${{ needs.validate-release.outputs.is_stable }}
       CF_R2_ACCOUNT_ID: ${{ vars.CF_R2_ACCOUNT_ID }}
       CF_R2_BUCKET: ${{ vars.CF_R2_BUCKET }}
       CF_R2_PREFIX: ${{ vars.CF_R2_PREFIX }}
@@ -472,22 +469,16 @@ jobs:
           else
             release_title="Veldmuis ${RELEASE_TAG}"
           fi
-          prerelease_flag=()
-          if [[ "${RELEASE_IS_STABLE}" != "1" ]]; then
-            prerelease_flag+=(--prerelease)
-          fi
-
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release edit "${RELEASE_TAG}" \
               --title "${release_title}" \
               --notes-file "${body_file}" \
-              "${prerelease_flag[@]}"
+              --prerelease=false
           else
             gh release create "${RELEASE_TAG}" \
               --title "${release_title}" \
               --target "${RELEASE_SHA}" \
-              --notes-file "${body_file}" \
-              "${prerelease_flag[@]}"
+              --notes-file "${body_file}"
           fi
 
           gh release upload "${RELEASE_TAG}" \
