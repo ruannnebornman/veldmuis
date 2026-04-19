@@ -104,14 +104,12 @@ jobs:
       RELEASE_SHA: ${{ needs.validate-release.outputs.release_sha }}
       RELEASE_VERSION: ${{ needs.validate-release.outputs.release_version }}
       RELEASE_IS_STABLE: ${{ needs.validate-release.outputs.is_stable }}
-      VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
-      VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
-      CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
-      CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
       CF_R2_ACCOUNT_ID: ${{ vars.CF_R2_ACCOUNT_ID }}
       CF_R2_BUCKET: ${{ vars.CF_R2_BUCKET }}
       CF_R2_PREFIX: ${{ vars.CF_R2_PREFIX }}
       CF_R2_PUBLIC_BASE_URL: ${{ vars.CF_R2_PUBLIC_BASE_URL }}
+      CF_R2_PACKAGE_BUCKET: ${{ vars.CF_R2_PACKAGE_BUCKET }}
+      PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
       VELDMUIS_DOWNLOAD_URL: ${{ vars.VELDMUIS_DOWNLOAD_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
     steps:
@@ -123,6 +121,13 @@ jobs:
 
       - name: Validate protected environment configuration
         shell: bash
+        env:
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+          CF_R2_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+          CF_R2_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
 
@@ -132,7 +137,9 @@ jobs:
             VELDMUIS_GPG_PRIVATE_KEY \
             VELDMUIS_GPG_FPR \
             CF_R2_ACCESS_KEY_ID \
-            CF_R2_SECRET_ACCESS_KEY
+            CF_R2_SECRET_ACCESS_KEY \
+            CF_R2_PACKAGE_ACCESS_KEY_ID \
+            CF_R2_PACKAGE_SECRET_ACCESS_KEY
           do
             if [[ -z "${!secret_name:-}" ]]; then
               echo "Missing required environment secret: ${secret_name}" >&2
@@ -140,17 +147,35 @@ jobs:
             fi
           done
 
-          for var_name in CF_R2_ACCOUNT_ID CF_R2_BUCKET; do
+          for var_name in \
+            CF_R2_ACCOUNT_ID \
+            CF_R2_BUCKET \
+            CF_R2_PACKAGE_BUCKET \
+            PACKAGE_BASE_URL
+          do
             if [[ -z "${!var_name:-}" ]]; then
               echo "Missing required environment variable: ${var_name}" >&2
               missing=1
             fi
           done
 
+          if [[ -n "${CF_R2_PACKAGE_BUCKET:-}" && "${CF_R2_PACKAGE_BUCKET}" == "${CF_R2_BUCKET:-}" ]]; then
+            echo "Package repo bucket must be separate from ISO release bucket" >&2
+            missing=1
+          fi
+
+          if [[ -n "${PACKAGE_BASE_URL:-}" && ! "${PACKAGE_BASE_URL}" =~ ^https:// ]]; then
+            echo "PACKAGE_BASE_URL must be an HTTPS URL" >&2
+            missing=1
+          fi
+
           (( missing == 0 )) || exit 1
 
       - name: Build packages, repo, and ISO in privileged Arch container
         shell: bash
+        env:
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
         run: |
           set -euo pipefail
 
@@ -246,6 +271,8 @@ jobs:
       - name: Generate checksums and manifest
         id: metadata
         shell: bash
+        env:
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
         run: |
           set -euo pipefail
 
@@ -470,14 +497,14 @@ jobs:
 
           echo "html_url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
 
-      - name: Publish pacman repo to GitHub Pages
+      - name: Publish pacman repo to R2
         shell: bash
         env:
-          PAGES_GIT_AUTHOR_NAME: github-actions[bot]
-          PAGES_GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
-          ./development/publish-github-pages-repo.sh
+          ./development/publish-r2-package-repo.sh
 
       - name: Write release summary
         shell: bash
@@ -496,7 +523,8 @@ jobs:
             echo "- Published SHA256 key: \`${{ steps.metadata.outputs.sha_object_key }}\`"
             echo "- Published manifest key: \`${{ steps.metadata.outputs.manifest_object_key }}\`"
             echo "- GitHub Release: ${{ steps.github_release.outputs.html_url }}"
-            echo "- Package repo: https://packages.veldmuislinux.org"
+            echo "- Package repo: ${PACKAGE_BASE_URL}"
+            echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
 
             public_base="$(printf '%s' "${CF_R2_PUBLIC_BASE_URL:-}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
             if [[ "${public_base}" =~ ^https?:// ]]; then

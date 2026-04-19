@@ -1,0 +1,201 @@
+name: Test R2 Package Repo Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print planned R2 upload commands without uploading objects.
+        required: true
+        type: boolean
+        default: true
+      source_branch:
+        description: Branch that currently contains the package repo tree.
+        required: true
+        type: string
+        default: gh-pages
+      confirm_bucket:
+        description: Type the package bucket name to allow a real upload.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-r2-package-repo
+  cancel-in-progress: false
+
+jobs:
+  test-r2-package-repo:
+    name: Test R2 Package Repo Publish
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      CF_R2_ACCOUNT_ID: ${{ vars.CF_R2_ACCOUNT_ID }}
+      CF_R2_PACKAGE_BUCKET: ${{ vars.CF_R2_PACKAGE_BUCKET }}
+      PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
+      R2_PACKAGE_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+      SOURCE_BRANCH: ${{ inputs.source_branch }}
+      CONFIRM_BUCKET: ${{ inputs.confirm_bucket }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate R2 package test configuration
+        shell: bash
+        env:
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+
+          for secret_name in \
+            CF_R2_PACKAGE_ACCESS_KEY_ID \
+            CF_R2_PACKAGE_SECRET_ACCESS_KEY
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing required environment secret: ${secret_name}" >&2
+              missing=1
+            fi
+          done
+
+          for var_name in \
+            CF_R2_ACCOUNT_ID \
+            CF_R2_PACKAGE_BUCKET \
+            PACKAGE_BASE_URL \
+            SOURCE_BRANCH
+          do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "Missing required environment variable/input: ${var_name}" >&2
+              missing=1
+            fi
+          done
+
+          [[ "${SOURCE_BRANCH}" =~ ^[A-Za-z0-9._/-]+$ ]] || {
+            echo "Invalid source branch name: ${SOURCE_BRANCH}" >&2
+            missing=1
+          }
+          [[ "${SOURCE_BRANCH}" != *..* && "${SOURCE_BRANCH}" != /* ]] || {
+            echo "Unsafe source branch name: ${SOURCE_BRANCH}" >&2
+            missing=1
+          }
+
+          if [[ "${CF_R2_PACKAGE_BUCKET:-}" == "veldmuis-releases" ]]; then
+            echo "Refusing to publish packages to ISO release bucket" >&2
+            missing=1
+          fi
+
+          if [[ -n "${PACKAGE_BASE_URL:-}" && ! "${PACKAGE_BASE_URL}" =~ ^https:// ]]; then
+            echo "PACKAGE_BASE_URL must be an HTTPS URL" >&2
+            missing=1
+          fi
+
+          if [[ "${R2_PACKAGE_DRY_RUN}" != "1" && "${CONFIRM_BUCKET}" != "${CF_R2_PACKAGE_BUCKET}" ]]; then
+            echo "Real upload requires confirm_bucket to equal ${CF_R2_PACKAGE_BUCKET}" >&2
+            missing=1
+          fi
+
+          (( missing == 0 )) || exit 1
+
+      - name: Ensure AWS CLI is available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v aws >/dev/null 2>&1; then
+            python3 -m pip install --user awscli
+            export PATH="${HOME}/.local/bin:${PATH}"
+            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          fi
+
+          aws --version
+
+      - name: Prepare package source tree
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_source="${RUNNER_TEMP}/package-repo-source"
+          git fetch --force origin "+refs/heads/${SOURCE_BRANCH}:refs/remotes/origin/${SOURCE_BRANCH}"
+          git worktree add --detach "${package_source}" "origin/${SOURCE_BRANCH}"
+
+          [[ -d "${package_source}/veldmuis-core/os/x86_64" ]] || {
+            echo "Missing veldmuis-core package repo in ${SOURCE_BRANCH}" >&2
+            exit 1
+          }
+          [[ -d "${package_source}/veldmuis-extra/os/x86_64" ]] || {
+            echo "Missing veldmuis-extra package repo in ${SOURCE_BRANCH}" >&2
+            exit 1
+          }
+
+          {
+            echo "package_source=${package_source}"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "## Package Source"
+            echo
+            echo "- Source branch: \`${SOURCE_BRANCH}\`"
+            echo "- Dry run: \`${R2_PACKAGE_DRY_RUN}\`"
+            echo "- Target bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
+            echo "- Package URL: ${PACKAGE_BASE_URL}"
+            echo
+            echo "### Source Size"
+            echo
+            echo '```text'
+            du -sh "${package_source}/veldmuis-core" "${package_source}/veldmuis-extra"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Publish package repo to R2
+        shell: bash
+        env:
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+          REPOS_ROOT: ${{ steps.source.outputs.package_source }}
+          R2_PACKAGE_BUILD_ROOT: ${{ runner.temp }}/r2-package-build
+        run: |
+          set -euo pipefail
+          ./development/publish-r2-package-repo.sh
+
+      - name: Verify uploaded R2 objects
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          set -euo pipefail
+
+          endpoint="https://${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          aws s3 ls "s3://${CF_R2_PACKAGE_BUCKET}/veldmuis-core/os/x86_64/veldmuis-core.db" \
+            --endpoint-url "${endpoint}"
+          aws s3 ls "s3://${CF_R2_PACKAGE_BUCKET}/veldmuis-core/os/x86_64/veldmuis-core.db.sig" \
+            --endpoint-url "${endpoint}"
+          aws s3 ls "s3://${CF_R2_PACKAGE_BUCKET}/veldmuis-extra/os/x86_64/veldmuis-extra.db" \
+            --endpoint-url "${endpoint}"
+          aws s3 ls "s3://${CF_R2_PACKAGE_BUCKET}/veldmuis-package-repo.manifest.txt" \
+            --endpoint-url "${endpoint}"
+
+      - name: Write result summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## R2 Package Repo Test"
+            echo
+            echo "- Dry run: \`${R2_PACKAGE_DRY_RUN}\`"
+            echo "- Source branch: \`${SOURCE_BRANCH}\`"
+            echo "- Target bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
+            echo "- Package URL: ${PACKAGE_BASE_URL}"
+            echo "- Published prefixes: \`veldmuis-core/\`, \`veldmuis-extra/\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
