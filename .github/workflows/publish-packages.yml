@@ -1,0 +1,180 @@
+name: Publish Packages
+
+on:
+  schedule:
+    # 20:00 Africa/Johannesburg on the 1st of each month.
+    - cron: "0 18 1 * *"
+  workflow_dispatch:
+    inputs:
+      publish_ref:
+        description: Git ref to build and publish, for example main, 2026.04, or 2026.04.21
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-packages
+  cancel-in-progress: false
+
+jobs:
+  validate-publish-ref:
+    name: Validate Publish Ref
+    runs-on: ubuntu-latest
+    outputs:
+      publish_ref: ${{ steps.resolve.outputs.publish_ref }}
+      publish_sha: ${{ steps.resolve.outputs.publish_sha }}
+    steps:
+      - name: Check out repository metadata
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Resolve publish ref
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin '+refs/heads/*:refs/remotes/origin/*'
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            publish_ref="${{ inputs.publish_ref }}"
+          else
+            publish_ref="main"
+          fi
+
+          if git rev-parse --verify "refs/tags/${publish_ref}" >/dev/null 2>&1; then
+            resolved_ref="refs/tags/${publish_ref}"
+          elif git rev-parse --verify "refs/remotes/origin/${publish_ref}" >/dev/null 2>&1; then
+            resolved_ref="refs/remotes/origin/${publish_ref}"
+          elif git rev-parse --verify "${publish_ref}^{commit}" >/dev/null 2>&1; then
+            resolved_ref="${publish_ref}"
+          else
+            echo "Publish ref not found: ${publish_ref}" >&2
+            exit 1
+          fi
+
+          publish_sha="$(git rev-parse "${resolved_ref}^{commit}")"
+          git merge-base --is-ancestor "${publish_sha}" origin/main || {
+            echo "Publish ref ${publish_ref} does not point to a commit on main" >&2
+            exit 1
+          }
+
+          {
+            echo "publish_ref=${publish_ref}"
+            echo "publish_sha=${publish_sha}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build-and-publish:
+    name: Build And Publish Packages
+    needs: validate-publish-ref
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      BUILDER_USER: builder
+      BUILDER_HOME: /home/builder
+      GNUPGHOME: /home/builder/.gnupg
+      VELDMUIS_KEY_FPR_FILE: /home/builder/current-signing-key.fpr
+      PUBLISH_REF: ${{ needs.validate-publish-ref.outputs.publish_ref }}
+      PUBLISH_SHA: ${{ needs.validate-publish-ref.outputs.publish_sha }}
+      CF_R2_ACCOUNT_ID: ${{ vars.CF_R2_ACCOUNT_ID }}
+      CF_R2_PACKAGE_BUCKET: ${{ vars.CF_R2_PACKAGE_BUCKET }}
+      PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
+      VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
+    steps:
+      - name: Check out publish ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.validate-publish-ref.outputs.publish_sha }}
+
+      - name: Validate protected environment configuration
+        shell: bash
+        env:
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+
+          for secret_name in \
+            VELDMUIS_GPG_PRIVATE_KEY \
+            VELDMUIS_GPG_FPR \
+            CF_R2_PACKAGE_ACCESS_KEY_ID \
+            CF_R2_PACKAGE_SECRET_ACCESS_KEY
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing required environment secret: ${secret_name}" >&2
+              missing=1
+            fi
+          done
+
+          for var_name in \
+            CF_R2_ACCOUNT_ID \
+            CF_R2_PACKAGE_BUCKET \
+            PACKAGE_BASE_URL
+          do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "Missing required environment variable: ${var_name}" >&2
+              missing=1
+            fi
+          done
+
+          if [[ -n "${PACKAGE_BASE_URL:-}" && ! "${PACKAGE_BASE_URL}" =~ ^https:// ]]; then
+            echo "PACKAGE_BASE_URL must be an HTTPS URL" >&2
+            missing=1
+          fi
+
+          (( missing == 0 )) || exit 1
+
+      - name: Build packages and repo in Arch container
+        shell: bash
+        env:
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+        run: |
+          set -euo pipefail
+          ./development/run-ci-arch-builder.sh packages
+
+      - name: Ensure AWS CLI is available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v aws >/dev/null 2>&1; then
+            python3 -m pip install --user awscli
+            export PATH="${HOME}/.local/bin:${PATH}"
+            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          fi
+
+          aws --version
+
+      - name: Publish pacman repo to R2
+        shell: bash
+        env:
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          ./development/publish-r2-package-repo.sh
+
+      - name: Write publish summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## Publish Packages"
+            echo
+            echo "- Ref: \`${PUBLISH_REF}\`"
+            echo "- Commit: \`${PUBLISH_SHA}\`"
+            echo "- Package repo: ${PACKAGE_BASE_URL}"
+            echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
