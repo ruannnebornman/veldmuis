@@ -200,6 +200,23 @@ sync_repo_prefix() {
     --only-show-errors
 }
 
+upload_repo_metadata() {
+  local repo_name="$1"
+  local repo_dir="${stage_dir}/${repo_name}/os/${arch}"
+  local file_name
+
+  while IFS= read -r file_name; do
+    upload_file \
+      "${repo_dir}/${file_name}" \
+      "${repo_name}/os/${arch}/${file_name}"
+  done < <(
+    find "${repo_dir}" -maxdepth 1 -type f \
+      \( -name "${repo_name}.db*" -o -name "${repo_name}.files*" \) \
+      -printf '%f\n' \
+      | sort
+  )
+}
+
 upload_file() {
   local source_path="$1"
   local target_key="$2"
@@ -287,6 +304,8 @@ main() {
 
   sync_repo_prefix "${core_repo}"
   sync_repo_prefix "${extra_repo}"
+  upload_repo_metadata "${core_repo}"
+  upload_repo_metadata "${extra_repo}"
   upload_file "${stage_dir}/index.html" "index.html"
   upload_file "${stage_dir}/${manifest_name}" "${manifest_name}"
 
