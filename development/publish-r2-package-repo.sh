@@ -30,6 +30,10 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
 
+trim_trailing_slash() {
+  printf '%s' "${1%/}"
+}
+
 configure_credentials() {
   if [[ -z "${AWS_ACCESS_KEY_ID:-}" && -n "${CF_R2_PACKAGE_ACCESS_KEY_ID:-}" ]]; then
     export AWS_ACCESS_KEY_ID="${CF_R2_PACKAGE_ACCESS_KEY_ID}"
@@ -116,6 +120,17 @@ prepare_stage() {
   materialize_repo_alias "${stage_dir}/${extra_repo}/os/${arch}" "${extra_repo}" "files"
 }
 
+log_repo_metadata() {
+  local repo_name="$1"
+  local repo_dir="${stage_dir}/${repo_name}/os/${arch}"
+
+  log "Prepared metadata for ${repo_name}:"
+  find "${repo_dir}" -maxdepth 1 -type f \
+    \( -name "${repo_name}.db*" -o -name "${repo_name}.files*" \) \
+    -printf '  %f\t%s bytes\n' \
+    | sort
+}
+
 render_index() {
   cat > "${stage_dir}/index.html" <<EOF
 <!doctype html>
@@ -194,8 +209,62 @@ upload_file() {
     --only-show-errors
 }
 
+verify_bucket_object() {
+  local key="$1"
+
+  log "Verifying bucket object: ${key}"
+  aws s3api head-object \
+    --bucket "${bucket}" \
+    --key "${key}" \
+    --endpoint-url "${endpoint}" \
+    >/dev/null
+}
+
+verify_public_url() {
+  local url="$1"
+
+  log "Verifying public URL: ${url}"
+  curl --fail --silent --show-error --location --head "${url}" >/dev/null
+}
+
+verify_repo_metadata() {
+  local repo_name="$1"
+  local public_base
+
+  public_base="$(trim_trailing_slash "${package_base}")/${repo_name}/os/${arch}/${repo_name}"
+
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.db"
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.db.sig"
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.db.tar.gz"
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.db.tar.gz.sig"
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.files"
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.files.sig"
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.files.tar.gz"
+  verify_bucket_object "${repo_name}/os/${arch}/${repo_name}.files.tar.gz.sig"
+
+  verify_public_url "${public_base}.db"
+  verify_public_url "${public_base}.db.sig"
+  verify_public_url "${public_base}.files"
+  verify_public_url "${public_base}.files.sig"
+}
+
+verify_published_repo() {
+  local public_root
+
+  public_root="$(trim_trailing_slash "${package_base}")"
+
+  verify_bucket_object "index.html"
+  verify_bucket_object "${manifest_name}"
+  verify_public_url "${public_root}/index.html"
+  verify_public_url "${public_root}/${manifest_name}"
+
+  verify_repo_metadata "${core_repo}"
+  verify_repo_metadata "${extra_repo}"
+}
+
 main() {
   require_cmd aws
+  require_cmd curl
   require_cmd find
   require_cmd git
 
@@ -208,6 +277,8 @@ main() {
   prepare_stage
   render_index
   render_manifest
+  log_repo_metadata "${core_repo}"
+  log_repo_metadata "${extra_repo}"
 
   log "Publishing package repo to bucket ${bucket}"
   log "Endpoint: ${endpoint}"
@@ -218,6 +289,12 @@ main() {
   sync_repo_prefix "${extra_repo}"
   upload_file "${stage_dir}/index.html" "index.html"
   upload_file "${stage_dir}/${manifest_name}" "${manifest_name}"
+
+  if is_dry_run; then
+    log "Skipping bucket/public verification in dry run mode"
+  else
+    verify_published_repo
+  fi
 
   log "Published package repo prefixes: ${core_repo}/, ${extra_repo}/"
 }
