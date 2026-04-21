@@ -136,6 +136,13 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.validate-release.outputs.release_ref }}
 
+      - name: Check out workflow support scripts
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.sha }}
+          path: .ci-support
+
       - name: Validate protected environment configuration
         shell: bash
         env:
@@ -175,11 +182,12 @@ jobs:
       - name: Build packages, repo, and ISO in Arch container
         shell: bash
         env:
+          CI_REPO_ROOT: ${{ github.workspace }}
           VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
           VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
         run: |
           set -euo pipefail
-          ./development/run-ci-arch-builder.sh iso
+          ./.ci-support/development/run-ci-arch-builder.sh iso
 
       - name: Ensure AWS CLI is available
         shell: bash
