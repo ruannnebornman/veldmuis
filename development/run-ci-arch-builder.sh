@@ -4,7 +4,9 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
+support_root="$(cd "${script_dir}/.." && pwd)"
 container_workspace="/workspace/veldmuis"
+container_support_root="/workspace/ci-support"
 container_runner_temp="/runner-temp"
 
 common_packages=(
@@ -163,9 +165,11 @@ run_build_in_container() {
     -e VELDMUIS_GPG_PRIVATE_KEY
     -e VELDMUIS_GPG_FPR
     -e VELDMUIS_PACKAGER
+    -e CI_REPO_ROOT="${container_workspace}"
     -e HOST_UID="$(id -u)"
     -e HOST_GID="$(id -g)"
     -v "${repo_root}:${container_workspace}"
+    -v "${support_root}:${container_support_root}"
     -v "${runner_temp}:${container_runner_temp}"
     -w "${container_workspace}"
   )
@@ -191,7 +195,7 @@ run_build_in_container() {
   docker_args+=(
     archlinux:base-devel
     bash
-    "${container_workspace}/development/run-ci-arch-builder.sh"
+    "${container_support_root}/development/run-ci-arch-builder.sh"
     --in-container
     "${target}"
   )
