@@ -475,8 +475,8 @@ jobs:
           else
             gh release create "${RELEASE_TAG}" \
               --title "${release_title}" \
-              --target "${RELEASE_SHA}" \
               --notes-file "${body_file}" \
+              --verify-tag \
               "${prerelease_flag[@]}"
           fi
 
