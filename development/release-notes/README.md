@@ -9,15 +9,14 @@ Veldmuis release notes should live in this directory.
 
 Examples:
 
-- `v1.4.0.md`
 - `2026.04.md`
+- `2026.04.22.md`
 
 ## Current Versioning Direction
 
-- Legacy stable releases use semantic-version tags like `v1.4.1`
-- Monthly automated snapshot releases use `YYYY.MM` tags like `2026.04`
-- Keep legacy semver release notes under their exact `v...` tag names
-- Keep monthly snapshot release notes under their exact `YYYY.MM` tag names
+- Scheduled snapshot releases use `YYYY.MM` tags like `2026.04`
+- Manual snapshot releases can use `YYYY.MM.DD` tags like `2026.04.22`
+- Keep snapshot release notes under their exact date-based tag names
 - Do not create new beta or alpha release tags unless the release plan changes deliberately
 
 ## Suggested Structure

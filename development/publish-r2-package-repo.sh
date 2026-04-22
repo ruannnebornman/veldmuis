@@ -16,6 +16,9 @@ endpoint="${CF_R2_ENDPOINT_URL:-}"
 package_base="${PACKAGE_BASE_URL:-https://packages.veldmuislinux.org}"
 manifest_name="${R2_PACKAGE_MANIFEST_NAME:-veldmuis-package-repo.manifest.txt}"
 dry_run="${R2_PACKAGE_DRY_RUN:-0}"
+repo_cache_control="${R2_PACKAGE_REPO_CACHE_CONTROL:-public, max-age=31536000, immutable}"
+metadata_cache_control="${R2_PACKAGE_METADATA_CACHE_CONTROL:-no-store, max-age=0, must-revalidate}"
+root_cache_control="${R2_PACKAGE_ROOT_CACHE_CONTROL:-public, max-age=60, must-revalidate}"
 
 log() {
   printf '[publish-r2-package-repo] %s\n' "$*"
@@ -195,6 +198,9 @@ sync_repo_prefix() {
   local target="s3://${bucket}/${repo_name}"
 
   run_aws s3 sync "${source_dir}" "${target}" \
+    --exclude "${repo_name}.db*" \
+    --exclude "${repo_name}.files*" \
+    --cache-control "${repo_cache_control}" \
     --delete \
     --endpoint-url "${endpoint}" \
     --only-show-errors
@@ -205,10 +211,14 @@ upload_repo_metadata() {
   local repo_dir="${stage_dir}/${repo_name}/os/${arch}"
   local file_name
 
+  # Publish mutable repo metadata only after package payloads finish syncing.
+  # Keeping these objects out of the bulk sync reduces the window where clients
+  # can see a stale database paired with a newer detached signature.
   while IFS= read -r file_name; do
     upload_file \
       "${repo_dir}/${file_name}" \
-      "${repo_name}/os/${arch}/${file_name}"
+      "${repo_name}/os/${arch}/${file_name}" \
+      "${metadata_cache_control}"
   done < <(
     find "${repo_dir}" -maxdepth 1 -type f \
       \( -name "${repo_name}.db*" -o -name "${repo_name}.files*" \) \
@@ -220,10 +230,18 @@ upload_repo_metadata() {
 upload_file() {
   local source_path="$1"
   local target_key="$2"
-
-  run_aws s3 cp "${source_path}" "s3://${bucket}/${target_key}" \
-    --endpoint-url "${endpoint}" \
+  local cache_control="${3:-}"
+  local args=(
+    s3 cp "${source_path}" "s3://${bucket}/${target_key}"
+    --endpoint-url "${endpoint}"
     --only-show-errors
+  )
+
+  if [[ -n "${cache_control}" ]]; then
+    args+=(--cache-control "${cache_control}")
+  fi
+
+  run_aws "${args[@]}"
 }
 
 verify_bucket_object() {
@@ -306,8 +324,8 @@ main() {
   sync_repo_prefix "${extra_repo}"
   upload_repo_metadata "${core_repo}"
   upload_repo_metadata "${extra_repo}"
-  upload_file "${stage_dir}/index.html" "index.html"
-  upload_file "${stage_dir}/${manifest_name}" "${manifest_name}"
+  upload_file "${stage_dir}/index.html" "index.html" "${root_cache_control}"
+  upload_file "${stage_dir}/${manifest_name}" "${manifest_name}" "${root_cache_control}"
 
   if is_dry_run; then
     log "Skipping bucket/public verification in dry run mode"
