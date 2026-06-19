@@ -6,12 +6,13 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 packages_root="${repo_root}/packages"
 repos_root="${repo_root}/repos"
+aur_package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
 arch="${VELDMUIS_ARCH:-x86_64}"
 core_repo="veldmuis-core"
 extra_repo="veldmuis-extra"
 key_fpr_file="${VELDMUIS_KEY_FPR_FILE:-${HOME}/.local/share/veldmuis/keyring-private/current-signing-key.fpr}"
 
-required_packages=(
+core_package_names=(
   "calamares"
   "veldmuis-calamares-config"
   "veldmuis-keyring"
@@ -25,6 +26,10 @@ required_packages=(
   "veldmuis-multimedia"
   "veldmuis-branding"
   "veldmuis-desktop"
+)
+
+extra_package_names=(
+  "veldmuis-nvidia-legacy"
 )
 
 require_cmd() {
@@ -52,6 +57,17 @@ sign_package() {
   gpg --batch --yes --local-user "${key_fpr}" --detach-sign "${package_path}"
 }
 
+copy_signed_package() {
+  local source_path="$1"
+  local dest_dir="$2"
+  local -n package_array="$3"
+  local dest_path="${dest_dir}/$(basename "${source_path}")"
+
+  cp -f "${source_path}" "${dest_path}"
+  sign_package "${dest_path}"
+  package_array+=("${dest_path}")
+}
+
 build_repo_db() {
   local repo_name="$1"
   local repo_dir="$2"
@@ -72,6 +88,8 @@ build_repo_db() {
 
 require_cmd gpg
 require_cmd repo-add
+require_cmd find
+require_cmd sort
 
 if [[ ! -r "${key_fpr_file}" ]]; then
   echo "Signing key marker not found: ${key_fpr_file}" >&2
@@ -86,8 +104,9 @@ rm -rf "${core_dir}" "${extra_dir}"
 mkdir -p "${core_dir}" "${extra_dir}"
 
 declare -a core_packages=()
+declare -a extra_packages=()
 
-for pkg_name in "${required_packages[@]}"; do
+for pkg_name in "${core_package_names[@]}"; do
   pkg_path="$(latest_pkg "${pkg_name}")"
 
   if [[ -z "${pkg_path}" ]]; then
@@ -95,14 +114,42 @@ for pkg_name in "${required_packages[@]}"; do
     exit 1
   fi
 
-  dest_path="${core_dir}/$(basename "${pkg_path}")"
-  cp -f "${pkg_path}" "${dest_path}"
-  sign_package "${dest_path}"
-  core_packages+=("${dest_path}")
+  copy_signed_package "${pkg_path}" "${core_dir}" core_packages
 done
 
+for pkg_name in "${extra_package_names[@]}"; do
+  pkg_path="$(latest_pkg "${pkg_name}")"
+
+  if [[ -z "${pkg_path}" ]]; then
+    echo "Built package not found for ${pkg_name}" >&2
+    exit 1
+  fi
+
+  copy_signed_package "${pkg_path}" "${extra_dir}" extra_packages
+done
+
+if [[ ! -d "${aur_package_dir}" ]]; then
+  echo "AUR package artifact directory not found: ${aur_package_dir}" >&2
+  echo "Run development/build-aur-packages.sh first, preferably inside the disposable Arch builder." >&2
+  exit 1
+fi
+
+while IFS= read -r pkg_path; do
+  copy_signed_package "${pkg_path}" "${extra_dir}" extra_packages
+done < <(
+  find "${aur_package_dir}" -maxdepth 1 -type f \
+    -name '*.pkg.tar.zst' \
+    ! -name '*-debug-*.pkg.tar.zst' \
+    | sort -V
+)
+
+if ((${#extra_packages[@]} == ${#extra_package_names[@]})); then
+  echo "No AUR package artifacts found under: ${aur_package_dir}" >&2
+  exit 1
+fi
+
 build_repo_db "${core_repo}" "${core_dir}" "${core_packages[@]}"
-build_repo_db "${extra_repo}" "${extra_dir}"
+build_repo_db "${extra_repo}" "${extra_dir}" "${extra_packages[@]}"
 
 echo "Built local pacman repos:"
 echo "  ${core_dir}"
