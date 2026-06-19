@@ -33,6 +33,7 @@ common_packages=(
   qt6-svg
   qt6-tools
   qt6-translations
+  sudo
   yaml-cpp
 )
 
@@ -89,6 +90,18 @@ run_as_builder() {
   su "${BUILDER_USER}" -c "cd '${container_workspace}' && ${command}"
 }
 
+enable_multilib_repo() {
+  if grep -q '^\[multilib\]' /etc/pacman.conf; then
+    return 0
+  fi
+
+  if grep -q '^#\[multilib\]' /etc/pacman.conf; then
+    sed -i '/^#\[multilib\]/{s/^#//; n; s/^#//;}' /etc/pacman.conf
+  fi
+
+  grep -q '^\[multilib\]' /etc/pacman.conf || die "Unable to enable multilib repository"
+}
+
 install_dependencies() {
   local target="$1"
   local packages=("${common_packages[@]}")
@@ -97,6 +110,7 @@ install_dependencies() {
     packages+=("${iso_only_packages[@]}")
   fi
 
+  enable_multilib_repo
   pacman -Syu --noconfirm --needed "${packages[@]}"
 }
 
@@ -106,6 +120,10 @@ prepare_builder_user() {
   fi
 
   install -d -m 700 -o "${BUILDER_USER}" -g "${BUILDER_USER}" "${GNUPGHOME}"
+  install -d -m 0750 /etc/sudoers.d
+  printf '%s ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman\n' "${BUILDER_USER}" \
+    > /etc/sudoers.d/veldmuis-builder-pacman
+  chmod 0440 /etc/sudoers.d/veldmuis-builder-pacman
 }
 
 import_signing_key() {
@@ -120,6 +138,22 @@ import_signing_key() {
 
   su "${BUILDER_USER}" -c "GNUPGHOME='${GNUPGHOME}' gpg --batch --list-secret-keys '${VELDMUIS_GPG_FPR}'"
   rm -f "${key_file}"
+}
+
+chown_build_outputs() {
+  local -a output_paths=()
+  local path
+
+  for path in \
+    /workspace/build \
+    "${container_workspace}/repos" \
+    "${container_workspace}/packages" \
+    "${container_workspace}/artifacts"
+  do
+    [[ -e "${path}" ]] && output_paths+=("${path}")
+  done
+
+  ((${#output_paths[@]} == 0)) || chown -R "${HOST_UID}:${HOST_GID}" "${output_paths[@]}"
 }
 
 run_build_inside_container() {
@@ -140,15 +174,15 @@ run_build_inside_container() {
   import_signing_key
 
   run_as_builder "PACKAGER='${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}' GNUPGHOME='${GNUPGHOME}' ./development/build-all-packages.sh"
+  run_as_builder "PACKAGER='${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}' GNUPGHOME='${GNUPGHOME}' ./development/build-aur-packages.sh"
   run_as_builder "GNUPGHOME='${GNUPGHOME}' VELDMUIS_KEY_FPR_FILE='${VELDMUIS_KEY_FPR_FILE}' ./development/build-local-repo.sh"
 
   if [[ "${target}" == "iso" ]]; then
     cd "${container_workspace}"
     GNUPGHOME="${GNUPGHOME}" ./development/build-archiso.sh
-    chown -R "${HOST_UID}:${HOST_GID}" /workspace/build "${container_workspace}/repos" "${container_workspace}/packages"
-  else
-    chown -R "${HOST_UID}:${HOST_GID}" "${container_workspace}/repos" "${container_workspace}/packages"
   fi
+
+  chown_build_outputs
 }
 
 run_build_in_container() {
