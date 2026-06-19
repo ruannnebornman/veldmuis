@@ -99,6 +99,14 @@ enable_multilib_repo() {
     sed -i '/^#\[multilib\]/{s/^#//; n; s/^#//;}' /etc/pacman.conf
   fi
 
+  if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
+    cat >> /etc/pacman.conf <<'EOF'
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+EOF
+  fi
+
   grep -q '^\[multilib\]' /etc/pacman.conf || die "Unable to enable multilib repository"
 }
 
