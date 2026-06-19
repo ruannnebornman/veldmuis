@@ -187,6 +187,94 @@ install_built_dependencies() {
   esac
 }
 
+package_info_value() {
+  local package_path="$1"
+  local key="$2"
+
+  bsdtar -xOf "${package_path}" .PKGINFO \
+    | awk -F ' = ' -v key="${key}" '$1 == key {print $2; exit}'
+}
+
+package_info_has_value() {
+  local package_path="$1"
+  local key="$2"
+  local expected="$3"
+
+  bsdtar -xOf "${package_path}" .PKGINFO \
+    | awk -F ' = ' -v key="${key}" -v expected="${expected}" '
+      $1 == key && $2 == expected {
+        found = 1
+        exit
+      }
+      END {
+        exit !found
+      }
+    '
+}
+
+package_has_license_file() {
+  local package_path="$1"
+
+  bsdtar -tf "${package_path}" \
+    | awk '
+      /^usr\/share\/licenses\// {
+        found = 1
+        exit
+      }
+      END {
+        exit !found
+      }
+    '
+}
+
+expected_license() {
+  local package_name="$1"
+
+  case "${package_name}" in
+    nvidia-580xx-utils|opencl-nvidia-580xx|nvidia-580xx-dkms)
+      printf 'custom'
+      ;;
+    lib32-nvidia-580xx-utils|lib32-opencl-nvidia-580xx)
+      printf 'custom'
+      ;;
+    nvidia-580xx-settings|libxnvctrl-580xx)
+      printf 'GPL-2.0-only'
+      ;;
+    *)
+      die "Unexpected AUR package artifact: ${package_name}"
+      ;;
+  esac
+}
+
+validate_package_artifact() {
+  local package_path="$1"
+  local package_name expected
+
+  package_name="$(package_info_value "${package_path}" "pkgname")"
+  [[ -n "${package_name}" ]] || die "Unable to read package name from: ${package_path}"
+
+  expected="$(expected_license "${package_name}")"
+  package_info_has_value "${package_path}" "license" "${expected}" \
+    || die "Package ${package_name} does not declare expected license: ${expected}"
+
+  if [[ "${expected}" == "custom" ]]; then
+    package_has_license_file "${package_path}" \
+      || die "Package ${package_name} does not include a license path under /usr/share/licenses"
+  fi
+}
+
+validate_package_artifacts() {
+  local package_path
+
+  while IFS= read -r package_path; do
+    validate_package_artifact "${package_path}"
+  done < <(
+    find "${package_dir}" -maxdepth 1 -type f \
+      -name '*.pkg.tar.zst' \
+      | sort -V
+  )
+}
+
 build_package_base() {
   local package_base="$1"
   local ref="$2"
@@ -268,6 +356,7 @@ main() {
   fi
 
   require_cmd cp
+  require_cmd bsdtar
   require_cmd date
   require_cmd find
   require_cmd makepkg
@@ -282,6 +371,7 @@ main() {
     build_package_base "${package_base}" "${resolved_refs[${package_base}]}"
   done
 
+  validate_package_artifacts
   write_manifest
   log "Built AUR package artifacts under: ${package_dir}"
   log "Wrote manifest: ${manifest_path}"
