@@ -112,6 +112,7 @@ jobs:
       PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
       VELDMUIS_DOWNLOAD_URL: ${{ vars.VELDMUIS_DOWNLOAD_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
+      VELDMUIS_AUR_REF_MODE: latest
     steps:
       - name: Check out release ref
         uses: actions/checkout@v4

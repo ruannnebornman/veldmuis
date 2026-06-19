@@ -57,6 +57,7 @@ Environment:
   VELDMUIS_GPG_PRIVATE_KEY
   VELDMUIS_GPG_FPR
   VELDMUIS_PACKAGER
+  VELDMUIS_AUR_REF_MODE
   RUNNER_TEMP
 EOF
 }
@@ -73,6 +74,10 @@ require_cmd() {
 require_env() {
   local name="$1"
   [[ -n "${!name:-}" ]] || die "Missing required environment variable: ${name}"
+}
+
+shell_quote() {
+  printf '%q' "$1"
 }
 
 validate_target() {
@@ -181,8 +186,25 @@ run_build_inside_container() {
   prepare_builder_user
   import_signing_key
 
-  run_as_builder "PACKAGER='${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}' GNUPGHOME='${GNUPGHOME}' ./development/build-all-packages.sh"
-  run_as_builder "PACKAGER='${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}' GNUPGHOME='${GNUPGHOME}' ./development/build-aur-packages.sh"
+  local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
+  local aur_ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+  local build_aur_command
+  local override_name
+
+  run_as_builder "PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") ./development/build-all-packages.sh"
+
+  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}")"
+  for override_name in \
+    VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS \
+    VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS \
+    VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS
+  do
+    if [[ -n "${!override_name:-}" ]]; then
+      build_aur_command+=" ${override_name}=$(shell_quote "${!override_name}")"
+    fi
+  done
+
+  run_as_builder "${build_aur_command} ./development/build-aur-packages.sh"
   run_as_builder "GNUPGHOME='${GNUPGHOME}' VELDMUIS_KEY_FPR_FILE='${VELDMUIS_KEY_FPR_FILE}' ./development/build-local-repo.sh"
 
   if [[ "${target}" == "iso" ]]; then
@@ -207,6 +229,10 @@ run_build_in_container() {
     -e VELDMUIS_GPG_PRIVATE_KEY
     -e VELDMUIS_GPG_FPR
     -e VELDMUIS_PACKAGER
+    -e VELDMUIS_AUR_REF_MODE="${VELDMUIS_AUR_REF_MODE:-}"
+    -e VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS:-}"
+    -e VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS:-}"
+    -e VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS="${VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS:-}"
     -e CI_REPO_ROOT="${container_workspace}"
     -e HOST_UID="$(id -u)"
     -e HOST_GID="$(id -g)"

@@ -1,0 +1,157 @@
+name: Package Repo Refresh
+
+on:
+  schedule:
+    # 12:17 Africa/Johannesburg. GitHub cron uses UTC.
+    - cron: "17 10 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build and publish even if the published AUR refs match
+        required: false
+        type: boolean
+        default: false
+      aur_ref_mode:
+        description: AUR ref mode to build
+        required: false
+        type: choice
+        options:
+          - latest
+          - locked
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-repo-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh Package Repo
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      BUILDER_USER: builder
+      BUILDER_HOME: /home/builder
+      GNUPGHOME: /home/builder/.gnupg
+      VELDMUIS_KEY_FPR_FILE: /home/builder/current-signing-key.fpr
+      CF_R2_ACCOUNT_ID: ${{ vars.CF_R2_ACCOUNT_ID }}
+      CF_R2_PACKAGE_BUCKET: ${{ vars.CF_R2_PACKAGE_BUCKET }}
+      PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
+      VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
+      VELDMUIS_AUR_REF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.aur_ref_mode || 'latest' }}
+      VELDMUIS_PACKAGE_REFRESH_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: main
+
+      - name: Validate protected environment configuration
+        shell: bash
+        env:
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+
+          missing=0
+
+          for secret_name in \
+            VELDMUIS_GPG_PRIVATE_KEY \
+            VELDMUIS_GPG_FPR \
+            CF_R2_PACKAGE_ACCESS_KEY_ID \
+            CF_R2_PACKAGE_SECRET_ACCESS_KEY
+          do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing required environment secret: ${secret_name}" >&2
+              missing=1
+            fi
+          done
+
+          for var_name in \
+            CF_R2_ACCOUNT_ID \
+            CF_R2_PACKAGE_BUCKET \
+            PACKAGE_BASE_URL
+          do
+            if [[ -z "${!var_name:-}" ]]; then
+              echo "Missing required environment variable: ${var_name}" >&2
+              missing=1
+            fi
+          done
+
+          if [[ -n "${PACKAGE_BASE_URL:-}" && ! "${PACKAGE_BASE_URL}" =~ ^https:// ]]; then
+            echo "PACKAGE_BASE_URL must be an HTTPS URL" >&2
+            missing=1
+          fi
+
+          (( missing == 0 )) || exit 1
+
+      - name: Check whether package refresh is needed
+        id: refresh_check
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-aur-package-refresh.sh
+
+      - name: Stop when package repo is current
+        if: steps.refresh_check.outputs.refresh_needed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Package repo is current: ${{ steps.refresh_check.outputs.reason }}"
+
+      - name: Build package repo in Arch container
+        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        shell: bash
+        env:
+          CI_REPO_ROOT: ${{ github.workspace }}
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+        run: |
+          set -euo pipefail
+          ./development/run-ci-arch-builder.sh packages
+
+      - name: Ensure AWS CLI is available
+        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v aws >/dev/null 2>&1; then
+            python3 -m pip install --user awscli
+            export PATH="${HOME}/.local/bin:${PATH}"
+            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          fi
+
+          aws --version
+
+      - name: Publish pacman repo to R2
+        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        shell: bash
+        env:
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          ./development/publish-r2-package-repo.sh
+
+      - name: Write package refresh summary
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          {
+            echo "## Package Repo Refresh Result"
+            echo
+            echo "- Refresh needed: \`${{ steps.refresh_check.outputs.refresh_needed }}\`"
+            echo "- Reason: ${{ steps.refresh_check.outputs.reason }}"
+            echo "- AUR ref mode: \`${{ steps.refresh_check.outputs.ref_mode }}\`"
+            echo "- Package repo: ${PACKAGE_BASE_URL}"
+            echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
