@@ -4,6 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
+repos_root="${REPOS_ROOT:-${repo_root}/repos}"
 package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
 aur_manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
 build_root="${KNOWN_GOOD_BUILD_ROOT:-${RUNNER_TEMP:-/tmp}/veldmuis-known-good-nvidia}"
@@ -11,6 +12,9 @@ stage_dir="${build_root}/stage"
 manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
 aur_manifest_name="${R2_AUR_MANIFEST_NAME:-veldmuis-aur-packages.manifest.txt}"
 prefix="${KNOWN_GOOD_NVIDIA_PREFIX:-_known-good/nvidia-580xx/current}"
+arch="${VELDMUIS_ARCH:-x86_64}"
+extra_repo="${VELDMUIS_EXTRA_REPO:-veldmuis-extra}"
+signed_package_dir="${VELDMUIS_SIGNED_PACKAGE_DIR:-${repos_root}/${extra_repo}/os/${arch}}"
 bucket="${CF_R2_PACKAGE_BUCKET:-}"
 account_id="${CF_R2_ACCOUNT_ID:-}"
 endpoint="${CF_R2_ENDPOINT_URL:-}"
@@ -84,7 +88,7 @@ find_package() {
   local -a matches=()
 
   mapfile -t matches < <(
-    find "${package_dir}" -maxdepth 1 -type f \
+    find "${signed_package_dir}" -maxdepth 1 -type f \
       -name "${package_name}-*.pkg.tar.zst" \
       ! -name '*-debug-*.pkg.tar.zst' \
       | sort -V
@@ -186,6 +190,7 @@ main() {
   require_cmd sort
 
   [[ -d "${package_dir}" ]] || die "Package artifact directory not found: ${package_dir}"
+  [[ -d "${signed_package_dir}" ]] || die "Signed package directory not found: ${signed_package_dir}"
   [[ -r "${aur_manifest_path}" ]] || die "AUR manifest not readable: ${aur_manifest_path}"
 
   if is_fallback_manifest; then
