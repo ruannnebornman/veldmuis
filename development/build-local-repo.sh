@@ -11,6 +11,7 @@ arch="${VELDMUIS_ARCH:-x86_64}"
 core_repo="veldmuis-core"
 extra_repo="veldmuis-extra"
 key_fpr_file="${VELDMUIS_KEY_FPR_FILE:-${HOME}/.local/share/veldmuis/keyring-private/current-signing-key.fpr}"
+repo_package_suffix="${VELDMUIS_REPO_PACKAGE_SUFFIX:-v$(date -u +%Y%m%d%H%M%S)}"
 
 core_package_names=(
   "calamares"
@@ -61,7 +62,13 @@ copy_signed_package() {
   local source_path="$1"
   local dest_dir="$2"
   local -n package_array="$3"
-  local dest_path="${dest_dir}/$(basename "${source_path}")"
+  local source_name
+  local dest_name
+  local dest_path
+
+  source_name="$(basename "${source_path}")"
+  dest_name="${source_name%.pkg.tar.zst}+${repo_package_suffix}.pkg.tar.zst"
+  dest_path="${dest_dir}/${dest_name}"
 
   cp -f "${source_path}" "${dest_path}"
   sign_package "${dest_path}"
@@ -90,6 +97,12 @@ require_cmd gpg
 require_cmd repo-add
 require_cmd find
 require_cmd sort
+require_cmd date
+
+if [[ ! "${repo_package_suffix}" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+  echo "Repository package suffix contains unsafe characters: ${repo_package_suffix}" >&2
+  exit 1
+fi
 
 if [[ ! -r "${key_fpr_file}" ]]; then
   echo "Signing key marker not found: ${key_fpr_file}" >&2
