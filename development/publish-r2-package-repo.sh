@@ -169,9 +169,13 @@ EOF
 render_manifest() {
   local commit="unknown"
   local published_at
+  local aur_fallback_used=""
 
   published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   commit="$(git -C "${repo_root}" rev-parse HEAD 2>/dev/null || printf 'unknown')"
+  if [[ -r "${stage_dir}/${aur_manifest_name}" ]]; then
+    aur_fallback_used="$(awk -F '=' '$1 == "fallback_used" { print $2; found = 1; exit } END { exit !found }' "${stage_dir}/${aur_manifest_name}" 2>/dev/null || true)"
+  fi
 
   {
     printf 'published_at=%s\n' "${published_at}"
@@ -182,6 +186,9 @@ render_manifest() {
     printf 'repositories=%s,%s\n' "${core_repo}" "${extra_repo}"
     if [[ -f "${stage_dir}/${aur_manifest_name}" ]]; then
       printf 'aur_manifest=%s\n' "${aur_manifest_name}"
+      if [[ -n "${aur_fallback_used}" ]]; then
+        printf 'aur_fallback_used=%s\n' "${aur_fallback_used}"
+      fi
     fi
     printf '\n[file_manifest]\n'
     find "${stage_dir}" -type f -printf '%P\t%s\n' | sort

@@ -300,6 +300,8 @@ write_manifest() {
 
   {
     printf 'built_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'source=aur\n'
+    printf 'fallback_used=false\n'
     printf 'ref_mode=%s\n' "${ref_mode}"
     printf 'lock_file=%s\n' "${lock_file}"
     printf 'package_dir=%s\n' "${package_dir}"
@@ -313,7 +315,7 @@ write_manifest() {
 
     printf '\n[package_files]\n'
     while IFS= read -r package_path; do
-      sha256sum "${package_path}" | awk '{print $1 "\t" $2}'
+      sha256sum "${package_path}" | awk -v file_name="${package_path##*/}" '{print $1 "\t" file_name}'
     done < <(
       find "${package_dir}" -maxdepth 1 -type f \
         -name '*.pkg.tar.zst' \

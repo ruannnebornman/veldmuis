@@ -113,6 +113,7 @@ jobs:
       VELDMUIS_DOWNLOAD_URL: ${{ vars.VELDMUIS_DOWNLOAD_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
       VELDMUIS_AUR_REF_MODE: latest
+      VELDMUIS_AUR_ENABLE_FALLBACK: true
     steps:
       - name: Check out release ref
         uses: actions/checkout@v4
@@ -205,6 +206,15 @@ jobs:
         run: |
           set -euo pipefail
           ./development/publish-r2-package-repo.sh
+
+      - name: Update known-good NVIDIA package cache
+        shell: bash
+        env:
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          ./development/publish-known-good-nvidia-packages.sh
 
       - name: Generate checksums and manifest
         id: metadata

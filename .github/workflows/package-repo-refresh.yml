@@ -19,6 +19,11 @@ on:
           - latest
           - locked
         default: latest
+      simulate_aur_failure:
+        description: Simulate an AUR build failure to test known-good fallback
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -43,6 +48,8 @@ jobs:
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
       VELDMUIS_AUR_REF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.aur_ref_mode || 'latest' }}
       VELDMUIS_PACKAGE_REFRESH_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
+      VELDMUIS_AUR_ENABLE_FALLBACK: true
+      VELDMUIS_SIMULATE_AUR_BUILD_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_aur_failure && 'true' || 'false' }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -141,6 +148,16 @@ jobs:
           set -euo pipefail
           ./development/publish-r2-package-repo.sh
 
+      - name: Update known-good NVIDIA package cache
+        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        shell: bash
+        env:
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          ./development/publish-known-good-nvidia-packages.sh
+
       - name: Write package refresh summary
         shell: bash
         run: |
@@ -154,4 +171,6 @@ jobs:
             echo "- AUR ref mode: \`${{ steps.refresh_check.outputs.ref_mode }}\`"
             echo "- Package repo: ${PACKAGE_BASE_URL}"
             echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
+            echo "- Fallback enabled: \`${VELDMUIS_AUR_ENABLE_FALLBACK}\`"
+            echo "- Simulated AUR failure: \`${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE}\`"
           } >> "${GITHUB_STEP_SUMMARY}"

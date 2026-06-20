@@ -15,6 +15,7 @@ common_packages=(
   boost
   boost-libs
   cmake
+  curl
   extra-cmake-modules
   git
   gnupg
@@ -58,6 +59,9 @@ Environment:
   VELDMUIS_GPG_FPR
   VELDMUIS_PACKAGER
   VELDMUIS_AUR_REF_MODE
+  VELDMUIS_AUR_ENABLE_FALLBACK
+  VELDMUIS_SIMULATE_AUR_BUILD_FAILURE
+  PACKAGE_BASE_URL
   RUNNER_TEMP
 EOF
 }
@@ -78,6 +82,10 @@ require_env() {
 
 shell_quote() {
   printf '%q' "$1"
+}
+
+is_true() {
+  [[ "${1:-}" == "1" || "${1:-}" == "true" ]]
 }
 
 validate_target() {
@@ -188,6 +196,7 @@ run_build_inside_container() {
 
   local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
   local aur_ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+  local aur_build_status=0
   local build_aur_command
   local override_name
 
@@ -204,7 +213,24 @@ run_build_inside_container() {
     fi
   done
 
-  run_as_builder "${build_aur_command} ./development/build-aur-packages.sh"
+  if is_true "${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE:-0}"; then
+    echo "[run-ci-arch-builder] Simulating AUR package build failure"
+    aur_build_status=1
+  elif run_as_builder "${build_aur_command} ./development/build-aur-packages.sh"; then
+    aur_build_status=0
+  else
+    aur_build_status=$?
+  fi
+
+  if (( aur_build_status != 0 )); then
+    if ! is_true "${VELDMUIS_AUR_ENABLE_FALLBACK:-0}"; then
+      die "AUR package build failed and fallback is disabled"
+    fi
+
+    echo "[run-ci-arch-builder] AUR package build failed, restoring known-good NVIDIA package set"
+    run_as_builder "PACKAGE_BASE_URL=$(shell_quote "${PACKAGE_BASE_URL:-}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") ./development/restore-known-good-nvidia-packages.sh"
+  fi
+
   run_as_builder "GNUPGHOME='${GNUPGHOME}' VELDMUIS_KEY_FPR_FILE='${VELDMUIS_KEY_FPR_FILE}' ./development/build-local-repo.sh"
 
   if [[ "${target}" == "iso" ]]; then
@@ -233,6 +259,9 @@ run_build_in_container() {
     -e VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS:-}"
     -e VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS:-}"
     -e VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS="${VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS:-}"
+    -e VELDMUIS_AUR_ENABLE_FALLBACK="${VELDMUIS_AUR_ENABLE_FALLBACK:-}"
+    -e VELDMUIS_SIMULATE_AUR_BUILD_FAILURE="${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE:-}"
+    -e PACKAGE_BASE_URL="${PACKAGE_BASE_URL:-}"
     -e CI_REPO_ROOT="${container_workspace}"
     -e HOST_UID="$(id -u)"
     -e HOST_GID="$(id -g)"
