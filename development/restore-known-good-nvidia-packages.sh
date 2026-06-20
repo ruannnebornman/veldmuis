@@ -87,6 +87,24 @@ parse_package_files() {
   ' "${manifest_file}"
 }
 
+parse_signature_files() {
+  local manifest_file="$1"
+
+  awk '
+    /^\[signature_files\]$/ {
+      in_signature_files = 1
+      next
+    }
+    /^\[/ {
+      in_signature_files = 0
+      next
+    }
+    in_signature_files && NF >= 2 && $1 !~ /^#/ {
+      print $1 " " $2
+    }
+  ' "${manifest_file}"
+}
+
 parse_package_bases() {
   local manifest_file="$1"
 
@@ -150,6 +168,18 @@ restore_packages() {
     [[ "${actual_hash}" == "${expected_hash}" ]] \
       || die "Checksum mismatch for ${file_name}: expected ${expected_hash}, got ${actual_hash}"
   done < <(parse_package_files "${known_good_manifest}")
+
+  while read -r expected_hash file_name; do
+    safe_file_name "${file_name}" || die "Unsafe signature file name in known-good manifest: ${file_name}"
+    output_path="${package_dir}/${file_name}"
+
+    log "Downloading known-good signature: ${file_name}"
+    download_file "${known_good_url}/${file_name}" "${output_path}"
+
+    actual_hash="$(sha256sum "${output_path}" | awk '{print $1}')"
+    [[ "${actual_hash}" == "${expected_hash}" ]] \
+      || die "Checksum mismatch for ${file_name}: expected ${expected_hash}, got ${actual_hash}"
+  done < <(parse_signature_files "${known_good_manifest}")
 
   ensure_expected_package_set
   write_fallback_manifest "${known_good_manifest}" "${source_aur_manifest_path}"

@@ -18,7 +18,7 @@ manifest_name="${R2_PACKAGE_MANIFEST_NAME:-veldmuis-package-repo.manifest.txt}"
 aur_manifest_path="${VELDMUIS_AUR_MANIFEST:-${repo_root}/artifacts/aur-packages/current/veldmuis-aur-packages.manifest.txt}"
 aur_manifest_name="${R2_AUR_MANIFEST_NAME:-veldmuis-aur-packages.manifest.txt}"
 dry_run="${R2_PACKAGE_DRY_RUN:-0}"
-repo_cache_control="${R2_PACKAGE_REPO_CACHE_CONTROL:-public, max-age=31536000, immutable}"
+repo_cache_control="${R2_PACKAGE_REPO_CACHE_CONTROL:-public, max-age=60, must-revalidate}"
 metadata_cache_control="${R2_PACKAGE_METADATA_CACHE_CONTROL:-no-store, max-age=0, must-revalidate}"
 root_cache_control="${R2_PACKAGE_ROOT_CACHE_CONTROL:-public, max-age=60, must-revalidate}"
 
@@ -214,6 +214,17 @@ sync_repo_prefix() {
   local repo_name="$1"
   local source_dir="${stage_dir}/${repo_name}"
   local target="s3://${bucket}/${repo_name}"
+
+  # Package filenames can be reused when a signed package is rebuilt with the
+  # same upstream pkgver/pkgrel. Force-copy payloads before syncing deletes so
+  # package blobs and detached signatures cannot drift apart.
+  run_aws s3 cp "${source_dir}" "${target}" \
+    --recursive \
+    --exclude "${repo_name}.db*" \
+    --exclude "${repo_name}.files*" \
+    --cache-control "${repo_cache_control}" \
+    --endpoint-url "${endpoint}" \
+    --only-show-errors
 
   run_aws s3 sync "${source_dir}" "${target}" \
     --exclude "${repo_name}.db*" \

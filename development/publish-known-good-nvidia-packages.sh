@@ -106,6 +106,8 @@ copy_known_good_files() {
   for package_name in "${expected_packages[@]}"; do
     package_path="$(find_package "${package_name}")"
     cp -f "${package_path}" "${stage_dir}/"
+    [[ -f "${package_path}.sig" ]] || die "Missing package signature: ${package_path}.sig"
+    cp -f "${package_path}.sig" "${stage_dir}/"
   done
 }
 
@@ -137,6 +139,14 @@ render_manifest() {
     printf '\n[package_files]\n'
     find "${stage_dir}" -maxdepth 1 -type f \
       -name '*.pkg.tar.zst' \
+      -printf '%f\n' \
+      | sort -V \
+      | while IFS= read -r file_name; do
+          sha256sum "${stage_dir}/${file_name}" | awk -v file_name="${file_name}" '{print $1 "\t" file_name}'
+        done
+    printf '\n[signature_files]\n'
+    find "${stage_dir}" -maxdepth 1 -type f \
+      -name '*.pkg.tar.zst.sig' \
       -printf '%f\n' \
       | sort -V \
       | while IFS= read -r file_name; do
