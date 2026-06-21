@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=26
+pkgrel=27
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -17,7 +17,7 @@ source=(
   "veldmuis-calamares-bootstrap.sh"
 )
 sha256sums=(
-  "08ba7dfc34c8cfb917ad3029eafa89f734a33b5fcbe68b8007bc53d515b89e44"
+  "849cb77002387a4a2fd0eda165ebf093559a19a3345b343aca48f917bf35ad56"
   "ea728d735987bc9325e4562ef143887c74a8a7de833acc8657e7031c8b1859d6"
 )
 _payload_sha256sums=(
@@ -27,7 +27,6 @@ _payload_sha256sums=(
   "db65520edee3dd4191ae149c2d1ddf008e39e625a47907d849c0fd677602bb5a  modules/graphics.conf"
   "d19770bdc577da591d48a0fa98861fe1b87d2788284d69a99ecefc7da453c9c7  modules/initcpiocfg.conf"
   "f806f0a882d022d9e05ac2ad9f807a626abd8c6b205b8dd1c3fc03e7ca720282  modules/locale.conf"
-  "48c51b5b5c160dd2cbb02cee31fd4006b9e072f4638bc41021f50b3cef33af27  modules/packages.conf"
   "5a51db5211a88b7422cc8867422999052d3c560424e575bc985d4a8c49566911  modules/partition.conf"
   "6ea405c8e36217c059f01fb55e5dbb994c9b37a284020ba0d2cca8c5f0b2d09a  modules/services-systemd.conf"
   "4732765b6efe628548371d2682cb411faa2aaa7f2d50452372c6cbb3f76bb853  modules/users.conf"
@@ -59,7 +58,6 @@ package() {
     graphics \
     initcpiocfg \
     locale \
-    packages \
     partition \
     services-systemd \
     users \
