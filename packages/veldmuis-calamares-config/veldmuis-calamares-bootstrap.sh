@@ -8,7 +8,6 @@ live_repo_root="/opt/veldmuis/repo"
 tmp_pacman_conf=""
 tmp_arch_mirrorlist=""
 log_file="/tmp/veldmuis-calamares-bootstrap.log"
-aur_builder_user="veldmuisaur"
 
 log() {
   printf '[veldmuis-calamares-bootstrap] %s\n' "$*"
@@ -26,13 +25,6 @@ require_cmd() {
 cleanup() {
   [[ -n "${tmp_pacman_conf}" ]] && rm -f "${tmp_pacman_conf}"
   [[ -n "${tmp_arch_mirrorlist}" ]] && rm -f "${tmp_arch_mirrorlist}"
-
-  if [[ -n "${target_root}" && -d "${target_root}" ]]; then
-    arch-chroot "${target_root}" /usr/bin/bash -lc "
-      rm -f '/etc/sudoers.d/${aur_builder_user}'
-      userdel -r '${aur_builder_user}' >/dev/null 2>&1 || true
-    " >/dev/null 2>&1 || true
-  fi
 }
 
 write_arch_mirrorlist() {
@@ -312,12 +304,9 @@ selected_graphics_packages() {
       ;;
     nvidia-580xx-dkms)
       printf '%s\n' \
-        base-devel \
-        dkms \
-        git \
-        linux-headers \
-        vulkan-swrast \
-        lib32-vulkan-swrast \
+        veldmuis-nvidia-legacy \
+        opencl-nvidia-580xx \
+        lib32-opencl-nvidia-580xx \
         xorg-server \
         xorg-xinit
       ;;
@@ -339,90 +328,6 @@ initial_target_packages() {
   done < <(selected_graphics_packages)
 
   printf '%s\n' "${packages[@]}"
-}
-
-ensure_target_aur_builder() {
-  log "Preparing temporary AUR build user in the target system"
-  arch-chroot "${target_root}" /usr/bin/bash -lc "
-    if ! id -u '${aur_builder_user}' >/dev/null 2>&1; then
-      useradd -m -U -s /bin/bash '${aur_builder_user}'
-    fi
-    install -d -m 700 -o '${aur_builder_user}' -g '${aur_builder_user}' '/home/${aur_builder_user}/aurbuild'
-    printf '%s\n' \
-      '${aur_builder_user} ALL=(ALL) NOPASSWD: /usr/bin/pacman' \
-      'Defaults:${aur_builder_user} !requiretty' \
-      > '/etc/sudoers.d/${aur_builder_user}'
-    chmod 440 '/etc/sudoers.d/${aur_builder_user}'
-  "
-}
-
-cleanup_target_aur_builder() {
-  log "Cleaning up temporary AUR build user in the target system"
-  arch-chroot "${target_root}" /usr/bin/bash -lc "
-    rm -f '/etc/sudoers.d/${aur_builder_user}'
-    userdel -r '${aur_builder_user}' >/dev/null 2>&1 || true
-  "
-}
-
-remove_conflicting_nvidia_packages() {
-  local candidate
-  local -a installed_packages=()
-
-  # The default desktop install brings in Steam, which in turn pulls the
-  # default vulkan-driver providers on Nvidia hardware. Those official packages
-  # conflict with the 580xx AUR stack we install immediately afterward.
-  for candidate in \
-    nvidia-utils \
-    lib32-nvidia-utils \
-    opencl-nvidia \
-    lib32-opencl-nvidia \
-    nvidia \
-    nvidia-dkms \
-    nvidia-open \
-    nvidia-open-dkms
-  do
-    if arch-chroot "${target_root}" pacman -Q "${candidate}" >/dev/null 2>&1; then
-      installed_packages+=("${candidate}")
-    fi
-  done
-
-  if ((${#installed_packages[@]} == 0)); then
-    return 0
-  fi
-
-  log "Removing conflicting Nvidia packages before installing the 580xx AUR stack: ${installed_packages[*]}"
-  arch-chroot "${target_root}" pacman -Rdd --noconfirm "${installed_packages[@]}"
-}
-
-install_aur_package_base() {
-  local package_base="$1"
-
-  log "Installing AUR package base ${package_base} into the target system"
-  arch-chroot "${target_root}" \
-    /usr/bin/runuser -u "${aur_builder_user}" -- \
-    /usr/bin/env HOME="/home/${aur_builder_user}" \
-    /usr/bin/bash -lc "
-      set -euo pipefail
-      build_root=\"\$HOME/aurbuild\"
-      package_dir=\"\${build_root}/${package_base}\"
-      rm -rf \"\${package_dir}\"
-      mkdir -p \"\${build_root}\"
-      git clone --depth 1 'https://aur.archlinux.org/${package_base}.git' \"\${package_dir}\"
-      cd \"\${package_dir}\"
-      makepkg -si --noconfirm
-    "
-}
-
-install_nvidia_580xx_stack() {
-  remove_conflicting_nvidia_packages
-  ensure_target_aur_builder
-
-  # The nvidia-580xx-utils AUR base produces and installs both the userspace
-  # package and the matching dkms package as split packages.
-  install_aur_package_base "nvidia-580xx-utils"
-  install_aur_package_base "lib32-nvidia-580xx-utils"
-
-  cleanup_target_aur_builder
 }
 
 main() {
@@ -463,10 +368,6 @@ main() {
   fi
 
   log "Selected graphics choice: ${graphics_choice}"
-
-  if [[ "${graphics_choice}" == "nvidia-580xx-dkms" ]]; then
-    install_nvidia_580xx_stack
-  fi
 
   if [[ -x "${target_root}/usr/bin/flatpak" && \
         -f "${target_root}/usr/share/flatpak/remotes.d/flathub.flatpakrepo" ]]; then

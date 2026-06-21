@@ -71,8 +71,8 @@ EOF
 write_nvidia_580xx_dkms() {
   cat >>"${graphics_conf_path}" <<'EOF'
   - id: nvidia-580xx-dkms
-    name: "Nvidia (580xx DKMS from AUR)"
-    description: "Builds and installs nvidia-580xx-utils, nvidia-580xx-dkms, and lib32-nvidia-580xx-utils from the AUR during installation. Internet required."
+    name: "Nvidia (580xx DKMS)"
+    description: "Installs the Veldmuis-packaged NVIDIA 580xx DKMS driver from veldmuis-extra."
     screenshot: "logomain.png"
 EOF
 }
