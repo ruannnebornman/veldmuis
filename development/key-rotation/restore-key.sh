@@ -18,6 +18,7 @@ Behavior:
 
 Environment overrides:
   VELDMUIS_KEY_FPR_FILE          Default: ~/.local/share/veldmuis/keyring-private/current-signing-key.fpr
+  VELDMUIS_REPO_ROOT             Default: current working directory
   VELDMUIS_BUILD_KEYRING_PACKAGE Default: 1
 EOF
 }
@@ -37,14 +38,16 @@ prepare_gpg_home() {
 }
 
 resolve_paths() {
+  local default_repo_root="${VELDMUIS_REPO_ROOT:-${PWD}}"
+
   if [[ -f "${script_dir}/veldmuis-private-key.asc" && -f "${script_dir}/current-signing-key.fpr" ]]; then
     backup_root="${script_dir}"
-    repo_root="${1:-${HOME}/Documents/veldmuis}"
+    repo_root="${1:-${default_repo_root}}"
     return 0
   fi
 
   backup_root="${1:-}"
-  repo_root="${2:-${HOME}/Documents/veldmuis}"
+  repo_root="${2:-${default_repo_root}}"
 
   [[ -n "${backup_root}" ]] || {
     usage >&2

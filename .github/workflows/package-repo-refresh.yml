@@ -57,6 +57,12 @@ jobs:
           fetch-depth: 1
           ref: main
 
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
       - name: Validate protected environment configuration
         shell: bash
         env:
@@ -129,14 +135,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          if ! command -v aws >/dev/null 2>&1; then
-            python3 -m pip install --user awscli
-            export PATH="${HOME}/.local/bin:${PATH}"
-            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
-          fi
-
-          aws --version
+          ./development/ensure-aws-cli.sh
 
       - name: Publish pacman repo to R2
         if: steps.refresh_check.outputs.refresh_needed == 'true'

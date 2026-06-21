@@ -20,8 +20,8 @@ Behavior:
 
 Environment overrides:
   VELDMUIS_KEY_FPR_FILE      Default: ~/.local/share/veldmuis/keyring-private/current-signing-key.fpr
-  VELDMUIS_KEY_BACKUP_DIR    Default: ~/Documents/backup key
-  VELDMUIS_KEY_BACKUP_ZIP    Default: ~/Documents/backup key.zip
+  VELDMUIS_KEY_BACKUP_DIR    Default: ~/.local/share/veldmuis/keyring-backup
+  VELDMUIS_KEY_BACKUP_ZIP    Default: ~/.local/share/veldmuis/keyring-backup.zip
   VELDMUIS_SIGNING_KEY_NAME  Default: Veldmuis Linux Release
   VELDMUIS_SIGNING_KEY_EMAIL Default: veldmuis@veldmuislinux.org
 EOF
@@ -120,8 +120,8 @@ Important:
 3. Run:
 
 \`\`\`bash
-cd /path/to/extracted/backup\ key
-./restore-key.sh ~/Documents/veldmuis
+cd /path/to/extracted/keyring-backup
+./restore-key.sh /path/to/veldmuis
 \`\`\`
 
 That will:
@@ -157,7 +157,7 @@ That will:
 ## Rebuild Command After Restore
 
 \`\`\`bash
-cd ~/Documents/veldmuis
+cd /path/to/veldmuis
 ./development/rebuild-iso-usb.sh veldmuis-keyring veldmuis-calamares-config
 \`\`\`
 EOF
@@ -196,8 +196,8 @@ main() {
   key_email="${VELDMUIS_SIGNING_KEY_EMAIL:-veldmuis@veldmuislinux.org}"
   key_uid="${key_name} <${key_email}>"
   marker_file="${VELDMUIS_KEY_FPR_FILE:-${HOME}/.local/share/veldmuis/keyring-private/current-signing-key.fpr}"
-  backup_dir="${VELDMUIS_KEY_BACKUP_DIR:-${HOME}/Documents/backup key}"
-  backup_zip="${VELDMUIS_KEY_BACKUP_ZIP:-${HOME}/Documents/backup key.zip}"
+  backup_dir="${VELDMUIS_KEY_BACKUP_DIR:-${HOME}/.local/share/veldmuis/keyring-backup}"
+  backup_zip="${VELDMUIS_KEY_BACKUP_ZIP:-${HOME}/.local/share/veldmuis/keyring-backup.zip}"
 
   [[ -d "${keyring_dir}" ]] || {
     printf 'Keyring directory not found: %s\n' "${keyring_dir}" >&2

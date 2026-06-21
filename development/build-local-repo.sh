@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# The extra repo intentionally includes CI-built NVIDIA 580xx artifacts from the
+# active AUR flow. See development/nvidia-580xx-package-flow.md before changing
+# the AUR artifact handling below.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 packages_root="${repo_root}/packages"
@@ -13,26 +16,7 @@ extra_repo="veldmuis-extra"
 key_fpr_file="${VELDMUIS_KEY_FPR_FILE:-${HOME}/.local/share/veldmuis/keyring-private/current-signing-key.fpr}"
 repo_package_suffix="${VELDMUIS_REPO_PACKAGE_SUFFIX:-v$(date -u +%Y%m%d%H%M%S)}"
 
-core_package_names=(
-  "calamares"
-  "veldmuis-calamares-config"
-  "veldmuis-keyring"
-  "veldmuis-mirrorlist"
-  "veldmuis-release"
-  "veldmuis-base"
-  "veldmuis-common"
-  "veldmuis-boot"
-  "veldmuis-displaymanager"
-  "veldmuis-desktop-kde"
-  "veldmuis-gaming"
-  "veldmuis-multimedia"
-  "veldmuis-branding"
-  "veldmuis-desktop"
-)
-
-extra_package_names=(
-  "veldmuis-nvidia-legacy"
-)
+. "${script_dir}/package-manifest.sh"
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -120,7 +104,7 @@ mkdir -p "${core_dir}" "${extra_dir}"
 declare -a core_packages=()
 declare -a extra_packages=()
 
-for pkg_name in "${core_package_names[@]}"; do
+for pkg_name in "${veldmuis_core_package_order[@]}"; do
   pkg_path="$(latest_pkg "${pkg_name}")"
 
   if [[ -z "${pkg_path}" ]]; then
@@ -131,7 +115,7 @@ for pkg_name in "${core_package_names[@]}"; do
   copy_signed_package "${pkg_path}" "${core_dir}" core_packages
 done
 
-for pkg_name in "${extra_package_names[@]}"; do
+for pkg_name in "${veldmuis_extra_package_order[@]}"; do
   pkg_path="$(latest_pkg "${pkg_name}")"
 
   if [[ -z "${pkg_path}" ]]; then
@@ -157,7 +141,7 @@ done < <(
     | sort -V
 )
 
-if ((${#extra_packages[@]} == ${#extra_package_names[@]})); then
+if ((${#extra_packages[@]} == ${#veldmuis_extra_package_order[@]})); then
   echo "No AUR package artifacts found under: ${aur_package_dir}" >&2
   exit 1
 fi

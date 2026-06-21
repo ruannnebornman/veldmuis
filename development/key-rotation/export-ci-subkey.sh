@@ -19,7 +19,7 @@ Behavior:
 
 Environment overrides:
   VELDMUIS_KEY_FPR_FILE          Default: ~/.local/share/veldmuis/keyring-private/current-signing-key.fpr
-  VELDMUIS_CI_SUBKEY_EXPORT_DIR  Default: ~/.local/share/veldmuis/keyring-private/github-release-secrets
+  VELDMUIS_CI_SUBKEY_EXPORT_DIR  Default: ~/.local/share/veldmuis/keyring-private/ci-release-secrets
   VELDMUIS_SIGNING_KEY_NAME      Default: Veldmuis Linux Release
   VELDMUIS_SIGNING_KEY_EMAIL     Default: veldmuis@veldmuislinux.org
 EOF
@@ -80,9 +80,9 @@ export_secret_material() {
   chmod 600 "${private_key_file}" "${fingerprint_file}"
 
   cat > "${notes_file}" <<EOF
-# GitHub Release Secrets
+# Release CI Secrets
 
-Use these files for the GitHub \`release\` environment:
+Use these files for the release CI environment:
 
 - \`VELDMUIS_GPG_PRIVATE_KEY\`: contents of \`VELDMUIS_GPG_PRIVATE_KEY.asc\`
 - \`VELDMUIS_GPG_FPR\`: contents of \`VELDMUIS_GPG_FPR.txt\`
@@ -91,7 +91,7 @@ Important:
 
 - The armored key export contains secret subkeys only.
 - The primary certifying secret key is not included in this export.
-- Delete these local files after the GitHub environment is configured and tested.
+- Delete these local files after the CI environment is configured and tested.
 EOF
 
   chmod 600 "${notes_file}"
@@ -144,14 +144,14 @@ main() {
   key_email="${VELDMUIS_SIGNING_KEY_EMAIL:-veldmuis@veldmuislinux.org}"
   key_uid="${key_name} <${key_email}>"
   marker_file="${VELDMUIS_KEY_FPR_FILE:-${HOME}/.local/share/veldmuis/keyring-private/current-signing-key.fpr}"
-  output_dir="${1:-${VELDMUIS_CI_SUBKEY_EXPORT_DIR:-${HOME}/.local/share/veldmuis/keyring-private/github-release-secrets}}"
+  output_dir="${1:-${VELDMUIS_CI_SUBKEY_EXPORT_DIR:-${HOME}/.local/share/veldmuis/keyring-private/ci-release-secrets}}"
 
   resolve_current_fingerprint
   prepare_output_dir
   export_secret_material
   verify_export
 
-  printf 'Exported GitHub signing material.\n'
+  printf 'Exported CI signing material.\n'
   printf '  Fingerprint: %s\n' "${current_fingerprint}"
   printf '  Private subkeys file: %s\n' "${private_key_file}"
   printf '  Fingerprint file: %s\n' "${fingerprint_file}"

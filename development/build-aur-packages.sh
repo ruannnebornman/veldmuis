@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Active NVIDIA 580xx supply path. Do not remove this AUR build flow unless a
+# replacement binary package source is wired into the repo build first; see
+# development/nvidia-580xx-package-flow.md.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 lock_file="${VELDMUIS_AUR_LOCK_FILE:-${script_dir}/aur-packages.lock}"

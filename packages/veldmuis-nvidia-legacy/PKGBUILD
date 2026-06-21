@@ -7,6 +7,9 @@ url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
 _pkgbuild_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${_pkgbuild_dir}/nvidia-580xx-package-set.sh"
+# This package is intentionally only a metapackage. The actual NVIDIA 580xx
+# binary packages are built by the package automation and published to
+# veldmuis-extra; see development/nvidia-580xx-package-flow.md.
 depends=(
   "dkms"
   "linux-headers"

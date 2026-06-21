@@ -6,23 +6,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 packages_root="${repo_root}/packages"
 
-package_order=(
-  "calamares"
-  "veldmuis-calamares-config"
-  "veldmuis-keyring"
-  "veldmuis-mirrorlist"
-  "veldmuis-release"
-  "veldmuis-base"
-  "veldmuis-common"
-  "veldmuis-boot"
-  "veldmuis-displaymanager"
-  "veldmuis-desktop-kde"
-  "veldmuis-gaming"
-  "veldmuis-multimedia"
-  "veldmuis-nvidia-legacy"
-  "veldmuis-branding"
-  "veldmuis-desktop"
-)
+. "${script_dir}/package-manifest.sh"
 
 log() {
   printf '[build-all-packages] %s\n' "$*"
@@ -79,7 +63,7 @@ main() {
   if (($# > 0)); then
     package_targets=("$@")
   else
-    package_targets=("${package_order[@]}")
+    package_targets=("${veldmuis_package_order[@]}")
   fi
 
   for package_name in "${package_targets[@]}"; do
