@@ -56,8 +56,6 @@ fi
 enable_service_if_present greetd.service
 enable_service_if_present NetworkManager.service
 enable_service_if_present bluetooth.service
-enable_service_if_present udisks2.service
 enable_service_if_present power-profiles-daemon.service
 enable_service_if_present pacman-init.service
-enable_service_if_present spice-vdagentd.service
 systemctl set-default graphical.target
