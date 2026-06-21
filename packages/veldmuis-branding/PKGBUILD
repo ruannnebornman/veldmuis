@@ -1,41 +1,66 @@
 pkgname=veldmuis-branding
 pkgver=20260306
-pkgrel=11
+pkgrel=12
 pkgdesc="Branding assets and default theme configuration for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
-license=("MIT" "CC-BY-SA" "LGPL-2.0-or-later" "GPL-2.0-or-later")
+license=("MIT" "CC-BY-SA")
+_source_root="${PWD}"
 source=(
   "rat1.png"
-  "veldmuis-sddm.conf"
+  "greetd-config.toml"
+  "regreet.toml"
+  "regreet.css"
   "kdeglobals"
   "kwalletrc"
 )
 sha256sums=(
-  "SKIP"
-  "SKIP"
-  "SKIP"
-  "SKIP"
+  "8755243103bbdf5a27cec8196defa4a33a74328c696c1503f72aebce68f0c1b7"
+  "c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46"
+  "cdf0a47332bffbbfa3cd4bdc792b51bd1b67b86e465d0d2631f0da1da58fb6b6"
+  "16230e13d0af06ff634c75b0206e0755163be28eab6ddb8f14f729c6efbd25b2"
+  "8e86bc0c5fbc12db0ccd833466158b68f7dd379fa22ae6898965fee1c3a38942"
+  "10512740e425d40a16d6d3dee52e5b87301b60446649a56c98237be9aeb6bdf7"
 )
+_payload_sha256sums=(
+  "b8ef66c8b922a4ae6b510dc45ab573d5b6fc0d485a80ee1034eab33b03357a5e  veldmuis-wallpaper/metadata.json"
+  "ce59f3622432f8e862dae5532cf52e9cd6e4ed0d0d138e47252bfe0f49d47b36  veldmuis-wallpaper/contents/images/1920x1080.png"
+  "9bceaaf249a947f4d41529902cdaa796b79978cbd4bffa4bcb359f5fb0c9393d  veldmuis-wallpaper/contents/screenshot.png"
+  "a3ef2b240a54e83f3235b5a371dd159324b4a9b7611e3c66511834f98cb1cf7b  org.veldmuis.desktop/metadata.json"
+  "7e049ffc21a57df24b41688286f06ea66de4248f07835c9db921d84bb8bb5834  org.veldmuis.desktop/contents/defaults"
+  "f2b5c24bd8a420f50c0a4c1fd3a66547591bfbf91596784fe5245050dd8b832c  org.veldmuis.desktop/contents/layouts/org.kde.plasma.desktop-layout.js"
+)
+
+verify() {
+  cd "${_source_root}"
+  printf '%s\n' "${_payload_sha256sums[@]}" | sha256sum --check --quiet
+}
 
 package() {
   install -Dm644 "${srcdir}/rat1.png" \
     "${pkgdir}/usr/share/veldmuis/wallpapers/rat1.png"
-  install -Dm644 "${srcdir}/veldmuis-sddm.conf" \
-    "${pkgdir}/etc/sddm.conf.d/veldmuis-sddm.conf"
+  install -Dm644 "${srcdir}/greetd-config.toml" \
+    "${pkgdir}/etc/greetd/config.toml"
+  install -Dm644 "${srcdir}/regreet.toml" \
+    "${pkgdir}/etc/greetd/regreet.toml"
+  install -Dm644 "${srcdir}/regreet.css" \
+    "${pkgdir}/etc/greetd/regreet.css"
   install -Dm644 "${srcdir}/kdeglobals" \
     "${pkgdir}/etc/xdg/kdeglobals"
   install -Dm644 "${srcdir}/kwalletrc" \
     "${pkgdir}/etc/xdg/kwalletrc"
-  install -d "${pkgdir}/usr/share/wallpapers/VeldmuisDawn"
-  cp -a "${startdir}/veldmuis-wallpaper/." \
-    "${pkgdir}/usr/share/wallpapers/VeldmuisDawn/"
-  install -d "${pkgdir}/usr/share/plasma/look-and-feel/org.veldmuis.desktop"
-  cp -a "${startdir}/org.veldmuis.desktop/." \
-    "${pkgdir}/usr/share/plasma/look-and-feel/org.veldmuis.desktop/"
-  install -d "${pkgdir}/usr/share/sddm/themes"
-  cp -a "${startdir}/veldmuis-breeze" \
-    "${pkgdir}/usr/share/sddm/themes/veldmuis-breeze"
+  install -Dm644 "${_source_root}/veldmuis-wallpaper/metadata.json" \
+    "${pkgdir}/usr/share/wallpapers/VeldmuisDawn/metadata.json"
+  install -Dm644 "${_source_root}/veldmuis-wallpaper/contents/images/1920x1080.png" \
+    "${pkgdir}/usr/share/wallpapers/VeldmuisDawn/contents/images/1920x1080.png"
+  install -Dm644 "${_source_root}/veldmuis-wallpaper/contents/screenshot.png" \
+    "${pkgdir}/usr/share/wallpapers/VeldmuisDawn/contents/screenshot.png"
+  install -Dm644 "${_source_root}/org.veldmuis.desktop/metadata.json" \
+    "${pkgdir}/usr/share/plasma/look-and-feel/org.veldmuis.desktop/metadata.json"
+  install -Dm644 "${_source_root}/org.veldmuis.desktop/contents/defaults" \
+    "${pkgdir}/usr/share/plasma/look-and-feel/org.veldmuis.desktop/contents/defaults"
+  install -Dm644 "${_source_root}/org.veldmuis.desktop/contents/layouts/org.kde.plasma.desktop-layout.js" \
+    "${pkgdir}/usr/share/plasma/look-and-feel/org.veldmuis.desktop/contents/layouts/org.kde.plasma.desktop-layout.js"
   install -Dm644 "${srcdir}/kwalletrc" \
     "${pkgdir}/etc/skel/.config/kwalletrc"
 }

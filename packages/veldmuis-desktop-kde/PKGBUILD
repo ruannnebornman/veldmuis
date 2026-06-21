@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=12
+pkgrel=13
 pkgdesc="KDE Plasma desktop metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -27,8 +27,6 @@ depends=(
   "firefox"
   "discover"
   "flatpak"
-  "steam"
-  "lutris"
   "dolphin"
   "kio-extras"
   "ffmpegthumbs"
@@ -54,7 +52,6 @@ depends=(
   "breeze"
   "breeze-gtk"
 )
-sha256sums=()
 
 package() {
   :

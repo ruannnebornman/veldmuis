@@ -19,7 +19,6 @@ depends=(
   "veldmuis-release"
   "xfsprogs"
 )
-sha256sums=()
 
 package() {
   :

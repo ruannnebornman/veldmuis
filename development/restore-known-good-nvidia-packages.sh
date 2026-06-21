@@ -12,16 +12,15 @@ known_good_url="${VELDMUIS_KNOWN_GOOD_NVIDIA_URL:-}"
 known_good_manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
 aur_manifest_name="${R2_AUR_MANIFEST_NAME:-veldmuis-aur-packages.manifest.txt}"
 failed_ref_mode="${VELDMUIS_AUR_REF_MODE:-unknown}"
+nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
-expected_packages=(
-  "nvidia-580xx-dkms"
-  "nvidia-580xx-utils"
-  "opencl-nvidia-580xx"
-  "lib32-nvidia-580xx-utils"
-  "lib32-opencl-nvidia-580xx"
-  "nvidia-580xx-settings"
-  "libxnvctrl-580xx"
-)
+[[ -r "${nvidia_package_set}" ]] || {
+  printf '[restore-known-good-nvidia-packages] ERROR: NVIDIA package set not readable: %s\n' "${nvidia_package_set}" >&2
+  exit 1
+}
+. "${nvidia_package_set}"
+
+expected_packages=("${veldmuis_nvidia_580xx_repository_packages[@]}")
 
 log() {
   printf '[restore-known-good-nvidia-packages] %s\n' "$*"

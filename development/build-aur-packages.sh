@@ -9,12 +9,15 @@ work_root="${VELDMUIS_AUR_WORK_ROOT:-${repo_root}/artifacts/aur-packages/work}"
 package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
 manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
 ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
-package_bases=(
-  "nvidia-580xx-utils"
-  "lib32-nvidia-580xx-utils"
-  "nvidia-580xx-settings"
-)
+[[ -r "${nvidia_package_set}" ]] || {
+  printf '[build-aur-packages] ERROR: NVIDIA package set not readable: %s\n' "${nvidia_package_set}" >&2
+  exit 1
+}
+. "${nvidia_package_set}"
+
+package_bases=("${veldmuis_nvidia_580xx_aur_package_bases[@]}")
 
 declare -A resolved_refs=()
 
@@ -229,21 +232,10 @@ package_has_license_file() {
 
 expected_license() {
   local package_name="$1"
+  local expected="${veldmuis_nvidia_580xx_expected_licenses[${package_name}]:-}"
 
-  case "${package_name}" in
-    nvidia-580xx-utils|opencl-nvidia-580xx|nvidia-580xx-dkms)
-      printf 'custom'
-      ;;
-    lib32-nvidia-580xx-utils|lib32-opencl-nvidia-580xx)
-      printf 'custom'
-      ;;
-    nvidia-580xx-settings|libxnvctrl-580xx)
-      printf 'GPL-2.0-only'
-      ;;
-    *)
-      die "Unexpected AUR package artifact: ${package_name}"
-      ;;
-  esac
+  [[ -n "${expected}" ]] || die "Unexpected AUR package artifact: ${package_name}"
+  printf '%s' "${expected}"
 }
 
 validate_package_artifact() {

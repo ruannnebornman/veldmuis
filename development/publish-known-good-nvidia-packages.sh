@@ -19,16 +19,15 @@ bucket="${CF_R2_PACKAGE_BUCKET:-}"
 account_id="${CF_R2_ACCOUNT_ID:-}"
 endpoint="${CF_R2_ENDPOINT_URL:-}"
 cache_control="${KNOWN_GOOD_CACHE_CONTROL:-no-store, max-age=0, must-revalidate}"
+nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
-expected_packages=(
-  "nvidia-580xx-dkms"
-  "nvidia-580xx-utils"
-  "opencl-nvidia-580xx"
-  "lib32-nvidia-580xx-utils"
-  "lib32-opencl-nvidia-580xx"
-  "nvidia-580xx-settings"
-  "libxnvctrl-580xx"
-)
+[[ -r "${nvidia_package_set}" ]] || {
+  printf '[publish-known-good-nvidia-packages] ERROR: NVIDIA package set not readable: %s\n' "${nvidia_package_set}" >&2
+  exit 1
+}
+. "${nvidia_package_set}"
+
+expected_packages=("${veldmuis_nvidia_580xx_repository_packages[@]}")
 
 log() {
   printf '[publish-known-good-nvidia-packages] %s\n' "$*"

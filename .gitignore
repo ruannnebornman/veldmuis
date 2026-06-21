@@ -3,4 +3,4 @@ packages/*/src/
 packages/*/*.pkg.tar.*
 repos/
 artifacts/
-docs/
+temp/

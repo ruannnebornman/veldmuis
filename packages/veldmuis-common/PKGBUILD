@@ -18,7 +18,6 @@ depends=(
   "noto-fonts"
   "noto-fonts-emoji"
 )
-sha256sums=()
 
 package() {
   :

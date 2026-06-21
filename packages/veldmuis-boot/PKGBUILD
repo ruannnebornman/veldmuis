@@ -17,9 +17,9 @@ source=(
   "${pkgname}.install"
 )
 sha256sums=(
-  "SKIP"
-  "SKIP"
-  "SKIP"
+  "cfbf266dd28a6090c68d555e29e2006f3d62891caf37bb3cbadaf1e396951af3"
+  "19b30265b87b307fd8f8b8662b253d5b264057b13f230864f056839f5b5ce5a0"
+  "b9e9001db7f57e74bf0ae74caccae6954123f9f661199e79f03415b12ff75828"
 )
 
 package() {

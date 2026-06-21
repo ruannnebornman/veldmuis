@@ -17,6 +17,7 @@ package_order=(
   "veldmuis-boot"
   "veldmuis-displaymanager"
   "veldmuis-desktop-kde"
+  "veldmuis-gaming"
   "veldmuis-multimedia"
   "veldmuis-nvidia-legacy"
   "veldmuis-branding"

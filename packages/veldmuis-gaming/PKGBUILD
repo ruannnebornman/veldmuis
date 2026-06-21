@@ -1,0 +1,15 @@
+pkgname=veldmuis-gaming
+pkgver=20260621
+pkgrel=1
+pkgdesc="Gaming application metapackage for Veldmuis Linux"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT")
+depends=(
+  "steam"
+  "lutris"
+)
+
+package() {
+  :
+}

@@ -19,6 +19,12 @@ Examples:
 - Keep snapshot release notes under their exact date-based tag names
 - Do not create new beta or alpha release tags unless the release plan changes deliberately
 
+## Legacy Release Notes
+
+- `v2026.04.1.md` and `v2026.04.2.md` match historical release tags.
+- Keep legacy release-note files only when they match an existing tag exactly.
+- Do not use the old `vYYYY.MM.N` pattern for new snapshot releases.
+
 ## Suggested Structure
 
 ```md

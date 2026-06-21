@@ -4,6 +4,7 @@ set -euo pipefail
 
 target_root="${1:-}"
 graphics_choice="${2:-all-open-source}"
+gaming_choice="${3:-no-gaming}"
 live_repo_root="/opt/veldmuis/repo"
 tmp_pacman_conf=""
 tmp_arch_mirrorlist=""
@@ -57,6 +58,20 @@ normalize_graphics_choice() {
     *)
       log "Unknown graphics choice '${graphics_choice}', defaulting to all-open-source"
       graphics_choice="all-open-source"
+      ;;
+  esac
+}
+
+normalize_gaming_choice() {
+  case "${gaming_choice}" in
+    no-gaming|gaming)
+      ;;
+    "")
+      gaming_choice="no-gaming"
+      ;;
+    *)
+      log "Unknown gaming choice '${gaming_choice}', defaulting to no-gaming"
+      gaming_choice="no-gaming"
       ;;
   esac
 }
@@ -259,9 +274,6 @@ selected_graphics_packages() {
     all-open-source)
       printf '%s\n' \
         mesa \
-        xf86-video-amdgpu \
-        xf86-video-ati \
-        xf86-video-nouveau \
         libva-intel-driver \
         intel-media-driver \
         vulkan-radeon \
@@ -269,19 +281,13 @@ selected_graphics_packages() {
         vulkan-intel \
         lib32-vulkan-intel \
         vulkan-nouveau \
-        lib32-vulkan-nouveau \
-        xorg-server \
-        xorg-xinit
+        lib32-vulkan-nouveau
       ;;
     amd-open-source)
       printf '%s\n' \
         mesa \
-        xf86-video-amdgpu \
-        xf86-video-ati \
         vulkan-radeon \
-        lib32-vulkan-radeon \
-        xorg-server \
-        xorg-xinit
+        lib32-vulkan-radeon
       ;;
     intel-open-source)
       printf '%s\n' \
@@ -289,26 +295,26 @@ selected_graphics_packages() {
         libva-intel-driver \
         intel-media-driver \
         vulkan-intel \
-        lib32-vulkan-intel \
-        xorg-server \
-        xorg-xinit
+        lib32-vulkan-intel
       ;;
     nvidia-open-source)
       printf '%s\n' \
         mesa \
-        xf86-video-nouveau \
         vulkan-nouveau \
-        lib32-vulkan-nouveau \
-        xorg-server \
-        xorg-xinit
+        lib32-vulkan-nouveau
       ;;
     nvidia-580xx-dkms)
       printf '%s\n' \
-        veldmuis-nvidia-legacy \
-        opencl-nvidia-580xx \
-        lib32-opencl-nvidia-580xx \
-        xorg-server \
-        xorg-xinit
+        veldmuis-nvidia-legacy
+      ;;
+  esac
+}
+
+selected_gaming_packages() {
+  case "${gaming_choice}" in
+    gaming)
+      printf '%s\n' \
+        veldmuis-gaming
       ;;
   esac
 }
@@ -326,6 +332,11 @@ initial_target_packages() {
     [[ -n "${package}" ]] || continue
     packages+=("${package}")
   done < <(selected_graphics_packages)
+
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(selected_gaming_packages)
 
   printf '%s\n' "${packages[@]}"
 }
@@ -349,6 +360,7 @@ main() {
 
   trap cleanup EXIT
   normalize_graphics_choice
+  normalize_gaming_choice
   write_pacman_conf
   prepare_target_root
 
@@ -368,6 +380,7 @@ main() {
   fi
 
   log "Selected graphics choice: ${graphics_choice}"
+  log "Selected gaming choice: ${gaming_choice}"
 
   if [[ -x "${target_root}/usr/bin/flatpak" && \
         -f "${target_root}/usr/share/flatpak/remotes.d/flathub.flatpakrepo" ]]; then

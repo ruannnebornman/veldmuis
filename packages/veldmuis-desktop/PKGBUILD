@@ -13,7 +13,6 @@ depends=(
   "veldmuis-multimedia"
   "veldmuis-branding"
 )
-sha256sums=()
 
 package() {
   :

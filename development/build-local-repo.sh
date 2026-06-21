@@ -24,6 +24,7 @@ core_package_names=(
   "veldmuis-boot"
   "veldmuis-displaymanager"
   "veldmuis-desktop-kde"
+  "veldmuis-gaming"
   "veldmuis-multimedia"
   "veldmuis-branding"
   "veldmuis-desktop"

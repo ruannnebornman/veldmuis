@@ -1,23 +1,27 @@
 pkgname=veldmuis-nvidia-legacy
 pkgver=20260619
-pkgrel=1
+pkgrel=2
 pkgdesc="Legacy NVIDIA 580xx support metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
+_pkgbuild_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${_pkgbuild_dir}/nvidia-580xx-package-set.sh"
 depends=(
   "dkms"
   "linux-headers"
-  "nvidia-580xx-dkms"
-  "nvidia-580xx-utils"
-  "lib32-nvidia-580xx-utils"
-  "nvidia-580xx-settings"
+  "${veldmuis_nvidia_580xx_runtime_packages[@]}"
 )
 optdepends=(
   "linux-lts: recovery kernel for legacy NVIDIA systems"
   "linux-lts-headers: headers for DKMS rebuilds on linux-lts"
 )
-sha256sums=()
+source=(
+  "nvidia-580xx-package-set.sh"
+)
+sha256sums=(
+  "dd9a02b2dcb4b2617a81c441ed92d01efc92123b2ef08afc7b10ad4a781843da"
+)
 
 package() {
   :

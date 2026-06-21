@@ -19,12 +19,18 @@ fi
 passwd -l root
 passwd -d live
 
-install -d -m 0755 /etc/sddm.conf.d
-cat >/etc/sddm.conf.d/veldmuis-live.conf <<'EOF'
-[Autologin]
-User=live
-Session=plasma.desktop
-Relogin=false
+install -d -m 0755 /etc/greetd
+cat >/etc/greetd/config.toml <<'EOF'
+[terminal]
+vt = 1
+
+[default_session]
+command = "cage -m last -s -- regreet"
+user = "greeter"
+
+[initial_session]
+command = "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland"
+user = "live"
 EOF
 
 install -d -m 0750 -o live -g live /home/live
@@ -47,7 +53,7 @@ if [[ -x /usr/bin/flatpak && -f /usr/share/flatpak/remotes.d/flathub.flatpakrepo
     flathub /usr/share/flatpak/remotes.d/flathub.flatpakrepo
 fi
 
-enable_service_if_present sddm.service
+enable_service_if_present greetd.service
 enable_service_if_present NetworkManager.service
 enable_service_if_present bluetooth.service
 enable_service_if_present udisks2.service
