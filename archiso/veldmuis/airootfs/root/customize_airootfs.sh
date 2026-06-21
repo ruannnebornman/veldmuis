@@ -14,9 +14,8 @@ if ! id -u live >/dev/null 2>&1; then
   useradd -m -G wheel,audio,video,storage,input -s /usr/bin/bash live
 fi
 
-# Lock direct root login on the live image and allow the live user to log in
-# without a password if the display manager path fails.
-passwd -l root
+# Allow the live user to log in without a password if the display manager path
+# fails. Root starts locked from the airootfs shadow file.
 passwd -d live
 
 install -d -m 0755 /etc/greetd
