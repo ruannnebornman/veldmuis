@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=27
+pkgrel=28
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -68,6 +68,9 @@ package() {
     install -Dm644 "${_source_root}/modules/${module}.conf" \
       "${pkgdir}/etc/calamares/modules/${module}.conf"
   done
+
+  install -Dm644 "${_source_root}/modules/graphics.conf" \
+    "${pkgdir}/usr/share/veldmuis/calamares/graphics.conf"
 
   install -Dm755 "${srcdir}/veldmuis-calamares-bootstrap.sh" \
     "${pkgdir}/usr/lib/veldmuis/veldmuis-calamares-bootstrap.sh"

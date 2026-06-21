@@ -3,6 +3,7 @@
 set -euo pipefail
 
 graphics_conf_path="${VELDMUIS_CALAMARES_GRAPHICS_CONF_PATH:-/etc/calamares/modules/graphics.conf}"
+graphics_template_path="${VELDMUIS_CALAMARES_GRAPHICS_TEMPLATE_PATH:-/usr/share/veldmuis/calamares/graphics.conf}"
 skip_exec="${VELDMUIS_CALAMARES_SKIP_EXEC:-0}"
 calamares_log_path="${VELDMUIS_CALAMARES_LOG_PATH:-/tmp/veldmuis-calamares-debug.log}"
 bootstrap_log_path="${VELDMUIS_CALAMARES_BOOTSTRAP_LOG_PATH:-/tmp/veldmuis-calamares-bootstrap.log}"
@@ -15,66 +16,59 @@ detect_graphics() {
   lspci -nn 2>/dev/null | grep -Ei 'VGA compatible controller|3D controller|Display controller' || true
 }
 
-write_header() {
+render_graphics_conf() {
   local default_id="$1"
+  local template_path="${graphics_template_path}"
+  local tmp_graphics_conf
+  shift
 
-  cat >"${graphics_conf_path}" <<EOF
----
-mode: required
-method: legacy
+  [[ -r "${template_path}" ]] || template_path="${graphics_conf_path}"
+  [[ -r "${template_path}" ]] || {
+    printf 'Graphics config template is not readable: %s\n' "${graphics_template_path}" >&2
+    return 1
+  }
 
-labels:
-  step: "Graphics Driver"
+  tmp_graphics_conf="$(mktemp -t veldmuis-graphics-conf.XXXXXX)"
 
-default: ${default_id}
+  awk -v default_id="${default_id}" -v selected_ids="$*" '
+    BEGIN {
+      split(selected_ids, ids, " ")
+      for (idx in ids) {
+        selected[ids[idx]] = 1
+      }
+      in_items = 0
+      emit_item = 1
+    }
 
-items:
-EOF
-}
+    !in_items {
+      if ($0 ~ /^default:/) {
+        print "default: " default_id
+        next
+      }
 
-write_all_open_source() {
-  cat >>"${graphics_conf_path}" <<'EOF'
-  - id: all-open-source
-    name: "All open-source (default)"
-    description: "Recommended default. Installs the broad open-source graphics stack for AMD, Intel, Nouveau, and general VM use."
-    screenshot: "logomain.png"
-EOF
-}
+      print
 
-write_amd_open_source() {
-  cat >>"${graphics_conf_path}" <<'EOF'
-  - id: amd-open-source
-    name: "AMD / ATI (open-source)"
-    description: "Installs the AMD / ATI open-source graphics stack."
-    screenshot: "logomain.png"
-EOF
-}
+      if ($0 ~ /^items:[[:space:]]*$/) {
+        in_items = 1
+      }
 
-write_intel_open_source() {
-  cat >>"${graphics_conf_path}" <<'EOF'
-  - id: intel-open-source
-    name: "Intel (open-source)"
-    description: "Installs the Intel open-source graphics stack."
-    screenshot: "logomain.png"
-EOF
-}
+      next
+    }
 
-write_nvidia_open_source() {
-  cat >>"${graphics_conf_path}" <<'EOF'
-  - id: nvidia-open-source
-    name: "Nvidia (open-source nouveau driver)"
-    description: "Uses the Nouveau stack for Nvidia hardware."
-    screenshot: "logomain.png"
-EOF
-}
+    /^  - id:[[:space:]]*/ {
+      id = $0
+      sub(/^  - id:[[:space:]]*/, "", id)
+      sub(/[[:space:]]*$/, "", id)
+      emit_item = (id in selected)
+    }
 
-write_nvidia_580xx_dkms() {
-  cat >>"${graphics_conf_path}" <<'EOF'
-  - id: nvidia-580xx-dkms
-    name: "Nvidia (580xx DKMS)"
-    description: "Installs the Veldmuis-packaged NVIDIA 580xx DKMS driver from veldmuis-extra."
-    screenshot: "logomain.png"
-EOF
+    emit_item {
+      print
+    }
+  ' "${template_path}" >"${tmp_graphics_conf}"
+
+  install -Dm644 "${tmp_graphics_conf}" "${graphics_conf_path}"
+  rm -f "${tmp_graphics_conf}"
 }
 
 prepare_logs() {
@@ -87,6 +81,7 @@ main() {
   local has_amd=0
   local has_intel=0
   local has_nvidia=0
+  local -a selected_graphics_ids=(all-open-source)
 
   graphics_lines="$(detect_graphics)"
 
@@ -102,21 +97,19 @@ main() {
     has_nvidia=1
   fi
 
-  write_header all-open-source
-  write_all_open_source
-
   if (( has_amd )); then
-    write_amd_open_source
+    selected_graphics_ids+=(amd-open-source)
   fi
 
   if (( has_intel )); then
-    write_intel_open_source
+    selected_graphics_ids+=(intel-open-source)
   fi
 
   if (( has_nvidia )); then
-    write_nvidia_open_source
-    write_nvidia_580xx_dkms
+    selected_graphics_ids+=(nvidia-open-source nvidia-580xx-dkms)
   fi
+
+  render_graphics_conf all-open-source "${selected_graphics_ids[@]}"
 
   prepare_logs
 
