@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=34
+pkgrel=35
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -18,12 +18,12 @@ source=(
   "veldmuis-calamares-bootstrap.sh"
 )
 sha256sums=(
-  "53c44768f73b772be7bbc8b1fe228b861c6f1218c7969e80091ba2899976c92b"
-  "c5545b29dcc8d56311e0626444c650f263fa87bd7c5e65e2557e2a3df8a8fa07"
+  "a6f1682855d6983f764a7eb3b237b11b59016f93e1d2c7845b821a7d4fe2e281"
+  "67df67c1c1c636317ee695414eb02c59bc8fda3c29d8847ce1d94c96d48b1e62"
 )
 _payload_sha256sums=(
   "2321354727f1d9b98c1db72b5f3548c4398eac80b95b328d2a0fd2beb8008f90  modules/bootloader.conf"
-  "c1c5dbd6668ba4448c80fb02f1c6e442fd4d90cf7abd71bd012808422e52223c  modules/extras.conf"
+  "e11e574cc1851fcb6b4bfef0003d6a92ae097ebc6c9e377e37cfc21a9833acec  modules/extras.conf"
   "4724a10749782c24cb09ec5fc0ef9d14d97ea8bb1d812d72d69e8e1b0568d601  modules/finished.conf"
   "db65520edee3dd4191ae149c2d1ddf008e39e625a47907d849c0fd677602bb5a  modules/graphics.conf"
   "d19770bdc577da591d48a0fa98861fe1b87d2788284d69a99ecefc7da453c9c7  modules/initcpiocfg.conf"
@@ -36,6 +36,7 @@ _payload_sha256sums=(
   "1bb6f23540d98894ee7a55be77754da4faa71a0a4b412dd68f2ece8424ad9603  modules/welcome.conf"
   "5fb0b2996df6dce9dfa46249b6261c81416fb01651322b42d748ce250f695607  branding/veldmuis/branding.desc"
   "35f5c54e35342c985547da09fb25d714a49b6cd37c4982fc4386e42510c3b116  branding/veldmuis/logomain.png"
+  "bbbdb1a5d3f894a51060d18ffe5ae3d11ca8c8e8b2a3c5c4e0334138e54ab0a6  branding/veldmuis/extras.qml"
   "a516733b5892000e3c1dab72f98087009194c184e459a85fb7a32f1baa2f2142  branding/veldmuis/show.qml"
   "a9207a4d87ac8f2ba840373a3ac385d55b2ec26ecd1e566580b0f19ca167b357  branding/veldmuis/stylesheet.qss"
   "8755243103bbdf5a27cec8196defa4a33a74328c696c1503f72aebce68f0c1b7  ../veldmuis-branding/rat1.png"
@@ -80,6 +81,8 @@ package() {
     "${pkgdir}/etc/calamares/branding/veldmuis/branding.desc"
   install -Dm644 "${_source_root}/branding/veldmuis/stylesheet.qss" \
     "${pkgdir}/etc/calamares/branding/veldmuis/stylesheet.qss"
+  install -Dm644 "${_source_root}/branding/veldmuis/extras.qml" \
+    "${pkgdir}/etc/calamares/branding/veldmuis/extras.qml"
   install -Dm644 "${_source_root}/branding/veldmuis/show.qml" \
     "${pkgdir}/etc/calamares/branding/veldmuis/show.qml"
   install -Dm644 "${_branding_root}/rat1.png" \

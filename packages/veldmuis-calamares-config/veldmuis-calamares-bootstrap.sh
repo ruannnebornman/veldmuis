@@ -5,7 +5,8 @@ set -euo pipefail
 target_root="${1:-}"
 graphics_choice="${2:-all-open-source}"
 extras_choice="${3:-}"
-gaming_choice="no-gaming"
+steam_choice="no-steam"
+lutris_choice="no-lutris"
 downloads_choice="no-downloads"
 sync_choice="no-sync"
 live_repo_root="/opt/veldmuis/repo"
@@ -91,16 +92,30 @@ normalize_graphics_choice() {
   esac
 }
 
-normalize_gaming_choice() {
-  case "${gaming_choice}" in
-    no-gaming|gaming)
+normalize_steam_choice() {
+  case "${steam_choice}" in
+    no-steam|steam)
       ;;
     "")
-      gaming_choice="no-gaming"
+      steam_choice="no-steam"
       ;;
     *)
-      log "Unknown gaming choice '${gaming_choice}', defaulting to no-gaming"
-      gaming_choice="no-gaming"
+      log "Unknown Steam choice '${steam_choice}', defaulting to no-steam"
+      steam_choice="no-steam"
+      ;;
+  esac
+}
+
+normalize_lutris_choice() {
+  case "${lutris_choice}" in
+    no-lutris|lutris)
+      ;;
+    "")
+      lutris_choice="no-lutris"
+      ;;
+    *)
+      log "Unknown Lutris choice '${lutris_choice}', defaulting to no-lutris"
+      lutris_choice="no-lutris"
       ;;
   esac
 }
@@ -137,7 +152,8 @@ normalize_extras_choice() {
   local extra
   local -a extras=()
 
-  gaming_choice="no-gaming"
+  steam_choice="no-steam"
+  lutris_choice="no-lutris"
   downloads_choice="no-downloads"
   sync_choice="no-sync"
 
@@ -147,7 +163,14 @@ normalize_extras_choice() {
   for extra in "${extras[@]}"; do
     case "${extra}" in
       gaming)
-        gaming_choice="gaming"
+        steam_choice="steam"
+        lutris_choice="lutris"
+        ;;
+      steam)
+        steam_choice="steam"
+        ;;
+      lutris)
+        lutris_choice="lutris"
         ;;
       qbittorrent)
         downloads_choice="qbittorrent"
@@ -399,12 +422,12 @@ selected_graphics_packages() {
 }
 
 selected_gaming_packages() {
-  case "${gaming_choice}" in
-    gaming)
-      printf '%s\n' \
-        veldmuis-gaming
-      ;;
-  esac
+  if [[ "${steam_choice}" == "steam" ]]; then
+    printf '%s\n' steam
+  fi
+  if [[ "${lutris_choice}" == "lutris" ]]; then
+    printf '%s\n' lutris
+  fi
 }
 
 selected_downloads_packages() {
@@ -477,7 +500,8 @@ main() {
   trap cleanup EXIT
   normalize_graphics_choice
   normalize_extras_choice
-  normalize_gaming_choice
+  normalize_steam_choice
+  normalize_lutris_choice
   normalize_downloads_choice
   normalize_sync_choice
   write_pacman_conf
@@ -500,7 +524,8 @@ main() {
 
   log "Selected graphics choice: ${graphics_choice}"
   log "Selected extras choices: ${extras_choice:-none}"
-  log "Selected gaming choice: ${gaming_choice}"
+  log "Selected Steam choice: ${steam_choice}"
+  log "Selected Lutris choice: ${lutris_choice}"
   log "Selected downloads choice: ${downloads_choice}"
   log "Selected sync choice: ${sync_choice}"
 
