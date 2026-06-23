@@ -1,6 +1,6 @@
 _veldmuis_greetd_template="/usr/share/veldmuis/greetd/config.toml"
 _veldmuis_greetd_target="/etc/greetd/config.toml"
-_veldmuis_greetd_known_hashes="c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46"
+_veldmuis_greetd_known_hashes="c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46 b22a211900b08d9d208d88a8ebfd1c93bbc59c58ebb2c98dc8ea6a5f0e57e3c3"
 
 _veldmuis_file_sha256() {
   sha256sum "$1" | awk '{print $1}'

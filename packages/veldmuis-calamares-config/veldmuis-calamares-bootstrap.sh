@@ -31,7 +31,7 @@ cleanup() {
   [[ -n "${tmp_arch_mirrorlist}" ]] && rm -f "${tmp_arch_mirrorlist}"
 }
 
-write_arch_mirrorlist() {
+write_live_arch_mirrorlist() {
   tmp_arch_mirrorlist="$(mktemp -t veldmuis-calamares-mirrorlist.XXXXXX)"
 
   [[ -f /etc/pacman.d/mirrorlist ]] || \
@@ -49,6 +49,32 @@ write_arch_mirrorlist() {
 
   chmod 644 "${tmp_arch_mirrorlist}"
   log "Using active Arch mirrors from the live mirrorlist"
+}
+
+write_ranked_arch_mirrorlist() {
+  local ranked_mirrorlist=""
+
+  if ! command -v veldmuis-refresh-arch-mirrors >/dev/null 2>&1; then
+    log "Veldmuis mirror refresh helper is unavailable; using live Arch mirrorlist"
+    write_live_arch_mirrorlist
+    return
+  fi
+
+  ranked_mirrorlist="$(mktemp -t veldmuis-calamares-ranked-mirrorlist.XXXXXX)"
+  if veldmuis-refresh-arch-mirrors --output "${ranked_mirrorlist}" --no-backup; then
+    tmp_arch_mirrorlist="${ranked_mirrorlist}"
+    chmod 644 "${tmp_arch_mirrorlist}"
+    log "Using ranked Arch mirrors from reflector"
+    return
+  fi
+
+  log "Reflector mirror ranking failed; using live Arch mirrorlist"
+  rm -f "${ranked_mirrorlist}"
+  write_live_arch_mirrorlist
+}
+
+write_arch_mirrorlist() {
+  write_ranked_arch_mirrorlist
 }
 
 normalize_graphics_choice() {

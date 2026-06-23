@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh ranked Arch Linux mirrorlist weekly
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+RandomizedDelaySec=12h
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target

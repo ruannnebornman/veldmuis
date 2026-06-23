@@ -4,6 +4,7 @@ intel-ucode
 mkinitcpio-archiso
 
 # Installer live-session requirements
+reflector
 veldmuis-calamares-config
 
 # Current Veldmuis install targets
