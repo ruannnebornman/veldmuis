@@ -367,13 +367,13 @@ jobs:
           dated_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])$'
 
           previous_release_tag="$(
-            git tag --merged "${RELEASE_SHA}" --sort=-version:refname \
+            git tag --merged "${RELEASE_SHA}" --sort=-creatordate \
               | grep -E "${stable_tag_pattern}|${snapshot_tag_pattern}" \
               | grep -Fxv "${RELEASE_TAG}" \
               | head -n 1 || true
           )"
           previous_monthly_tag="$(
-            git tag --merged "${RELEASE_SHA}" --sort=-version:refname \
+            git tag --merged "${RELEASE_SHA}" --sort=-creatordate \
               | grep -E "${monthly_pattern}" \
               | grep -Fxv "${RELEASE_TAG}" \
               | head -n 1 || true
@@ -389,15 +389,20 @@ jobs:
               log_args=("-n" "15" "${RELEASE_SHA}")
             fi
 
-            if git log --merges --first-parent --format='%s' "${log_args[@]}" | grep -q .; then
-              git log --merges --first-parent --format='- %s (%h)' "${log_args[@]}"
-            else
-              git log --first-parent --format='- %s (%h)' "${log_args[@]}"
-            fi
+            git log --no-merges --format='- %s (%h)' "${log_args[@]}"
           }
 
           if [[ -f "${note_file}" ]]; then
             cat "${note_file}" > "${body_file}"
+            {
+              echo
+              echo '## Complete Commit List'
+              echo
+            } >> "${body_file}"
+
+            if ! collect_release_changes "${previous_release_tag}" >> "${body_file}"; then
+              echo '- Release change summary could not be generated automatically.' >> "${body_file}"
+            fi
           else
             compare_base="${previous_release_tag}"
             compare_label='Changes'
