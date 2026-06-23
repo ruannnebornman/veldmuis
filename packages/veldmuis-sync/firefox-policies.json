@@ -1,0 +1,13 @@
+{
+  "policies": {
+    "ManagedBookmarks": [
+      {
+        "toplevel_name": "Veldmuis"
+      },
+      {
+        "name": "Syncthing",
+        "url": "http://syncthing.localhost:8384/"
+      }
+    ]
+  }
+}

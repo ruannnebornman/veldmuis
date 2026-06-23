@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034
+
+# Sourced by NVIDIA AUR build, publish, restore, and metapackage helpers.
 
 veldmuis_nvidia_580xx_aur_package_bases=(
   "nvidia-580xx-utils"

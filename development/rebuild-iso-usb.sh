@@ -30,11 +30,17 @@ cleanup() {
 }
 
 setup_askpass_support() {
+  local askpass_path=""
+
   if [[ -z "${SUDO_ASKPASS:-}" ]]; then
     if command -v ksshaskpass >/dev/null 2>&1; then
-      export SUDO_ASKPASS="$(command -v ksshaskpass)"
+      askpass_path="$(command -v ksshaskpass)"
     elif command -v ssh-askpass >/dev/null 2>&1; then
-      export SUDO_ASKPASS="$(command -v ssh-askpass)"
+      askpass_path="$(command -v ssh-askpass)"
+    fi
+
+    if [[ -n "${askpass_path}" ]]; then
+      export SUDO_ASKPASS="${askpass_path}"
     fi
   fi
 

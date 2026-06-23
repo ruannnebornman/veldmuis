@@ -47,11 +47,6 @@ live ALL=(ALL:ALL) NOPASSWD: ALL
 EOF
 chmod 0440 /etc/sudoers.d/00-live
 
-if [[ -x /usr/bin/flatpak && -f /usr/share/flatpak/remotes.d/flathub.flatpakrepo ]]; then
-  flatpak remote-add --if-not-exists --system --from \
-    flathub /usr/share/flatpak/remotes.d/flathub.flatpakrepo
-fi
-
 enable_service_if_present greetd.service
 enable_service_if_present NetworkManager.service
 enable_service_if_present bluetooth.service

@@ -1,0 +1,26 @@
+pkgname=veldmuis-sync
+pkgver=20260621
+pkgrel=1
+pkgdesc="Optional file synchronization metapackage for Veldmuis Linux"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT")
+depends=(
+  "bash"
+  "syncthing"
+)
+source=(
+  "firefox-policies.json"
+  "veldmuis-syncthing-setup"
+)
+sha256sums=(
+  "6f736a0970bc2d80920a860442d5076b5617de10f7b7c5fb95b48597859f64af"
+  "14625ef66c61062820590eef7a7056bada9ce8f8e92211821bbbaaa4d602c5fb"
+)
+
+package() {
+  install -Dm644 "${srcdir}/firefox-policies.json" \
+    "${pkgdir}/usr/lib/firefox/distribution/policies.json"
+  install -Dm755 "${srcdir}/veldmuis-syncthing-setup" \
+    "${pkgdir}/usr/bin/veldmuis-syncthing-setup"
+}

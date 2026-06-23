@@ -1,0 +1,52 @@
+_veldmuis_greetd_template="/usr/share/veldmuis/greetd/config.toml"
+_veldmuis_greetd_target="/etc/greetd/config.toml"
+_veldmuis_greetd_known_hashes="c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46"
+
+_veldmuis_file_sha256() {
+  sha256sum "$1" | awk '{print $1}'
+}
+
+_veldmuis_hash_is_known() {
+  hash="$1"
+
+  case " ${_veldmuis_greetd_known_hashes} " in
+    *" ${hash} "*)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
+_veldmuis_greetd_should_replace() {
+  [ -f "${_veldmuis_greetd_target}" ] || return 0
+
+  current_hash="$(_veldmuis_file_sha256 "${_veldmuis_greetd_target}")"
+  _veldmuis_hash_is_known "${current_hash}" && return 0
+
+  grep -Eq '(^|[[:space:]])agreety([[:space:]]|")' \
+    "${_veldmuis_greetd_target}" && return 0
+
+  return 1
+}
+
+_veldmuis_configure_greetd() {
+  [ -f "${_veldmuis_greetd_template}" ] || return 0
+
+  if _veldmuis_greetd_should_replace; then
+    install -Dm644 "${_veldmuis_greetd_template}" "${_veldmuis_greetd_target}"
+    return 0
+  fi
+
+  install -Dm644 "${_veldmuis_greetd_template}" "${_veldmuis_greetd_target}.veldmuis"
+  printf '%s\n' \
+    "Veldmuis greetd config saved to ${_veldmuis_greetd_target}.veldmuis; existing config was left unchanged."
+}
+
+post_install() {
+  _veldmuis_configure_greetd
+}
+
+post_upgrade() {
+  _veldmuis_configure_greetd
+}

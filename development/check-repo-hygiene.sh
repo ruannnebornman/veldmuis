@@ -21,7 +21,7 @@ tracked_bash_scripts() {
     [[ -f "${repo_root}/${file}" ]] || continue
 
     case "${file}" in
-      *.sh|archiso/veldmuis/profiledef.sh|archiso/veldmuis/airootfs/usr/local/bin/*|packages/veldmuis-boot/veldmuis-kernel-install-sync)
+      *.sh|archiso/veldmuis/airootfs/usr/local/bin/*|packages/veldmuis-boot/veldmuis-kernel-install-sync)
         printf '%s\0' "${file}"
         continue
         ;;
@@ -47,7 +47,10 @@ check_shell_syntax() {
 
   if command -v shellcheck >/dev/null 2>&1; then
     log "Running shellcheck"
-    shellcheck "${scripts[@]/#/${repo_root}/}"
+    (
+      cd "${repo_root}"
+      shellcheck -x "${scripts[@]}"
+    )
   else
     log "shellcheck not installed; skipped optional shell lint"
   fi

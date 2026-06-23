@@ -1,0 +1,14 @@
+pkgname=veldmuis-downloads
+pkgver=20260622
+pkgrel=1
+pkgdesc="Optional download applications metapackage for Veldmuis Linux"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT")
+depends=(
+  "qbittorrent"
+)
+
+package() {
+  :
+}

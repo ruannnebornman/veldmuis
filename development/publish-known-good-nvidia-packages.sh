@@ -25,6 +25,7 @@ nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/v
   printf '[publish-known-good-nvidia-packages] ERROR: NVIDIA package set not readable: %s\n' "${nvidia_package_set}" >&2
   exit 1
 }
+# shellcheck source=packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
 . "${nvidia_package_set}"
 
 expected_packages=("${veldmuis_nvidia_580xx_repository_packages[@]}")

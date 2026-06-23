@@ -180,7 +180,7 @@ remove_kernel_install_artifacts() {
 
   shopt -s nullglob
   for entry_path in "${entry_prefix}"*.conf; do
-    version="${entry_path#${entry_prefix}}"
+    version="${entry_path#"${entry_prefix}"}"
     version="${version%.conf}"
     rm -f "${entry_prefix}${version}"*.conf
     rm -rf "${boot_root:?}/${entry_token}/${version}"
@@ -221,7 +221,7 @@ prune_missing_entries() {
 
   shopt -s nullglob
   for entry_path in "${entry_prefix}"*.conf; do
-    version="${entry_path#${entry_prefix}}"
+    version="${entry_path#"${entry_prefix}"}"
     version="${version%.conf}"
     [[ -e "/usr/lib/modules/${version}/vmlinuz" ]] && continue
     rm -f "${entry_prefix}${version}"*.conf

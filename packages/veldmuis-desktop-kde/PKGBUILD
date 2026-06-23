@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=13
+pkgrel=14
 pkgdesc="KDE Plasma desktop metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -23,11 +23,9 @@ depends=(
   "powerdevil"
   "power-profiles-daemon"
   "konsole"
-  "yakuake"
   "firefox"
-  "discover"
-  "flatpak"
   "dolphin"
+  "ark"
   "kio-extras"
   "ffmpegthumbs"
   "kdegraphics-thumbnailers"
@@ -45,10 +43,10 @@ depends=(
   "gwenview"
   "kcalc"
   "filelight"
+  "plasma-systemmonitor"
   "partitionmanager"
   "spectacle"
   "okular"
-  "spice-vdagent"
   "breeze"
   "breeze-gtk"
 )

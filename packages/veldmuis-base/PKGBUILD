@@ -1,6 +1,6 @@
 pkgname=veldmuis-base
 pkgver=20260305
-pkgrel=4
+pkgrel=5
 pkgdesc="Minimal base metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -14,8 +14,6 @@ depends=(
   "mkinitcpio"
   "networkmanager"
   "sudo"
-  "veldmuis-keyring"
-  "veldmuis-mirrorlist"
   "veldmuis-release"
   "xfsprogs"
 )

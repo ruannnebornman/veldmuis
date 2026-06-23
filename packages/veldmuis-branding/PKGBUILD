@@ -1,6 +1,6 @@
 pkgname=veldmuis-branding
 pkgver=20260306
-pkgrel=13
+pkgrel=14
 pkgdesc="Branding assets and default theme configuration for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -8,7 +8,6 @@ license=("MIT" "CC-BY-SA")
 _source_root="${PWD}"
 source=(
   "rat1.png"
-  "greetd-config.toml"
   "regreet.toml"
   "regreet.css"
   "kdeglobals"
@@ -16,7 +15,6 @@ source=(
 )
 sha256sums=(
   "8755243103bbdf5a27cec8196defa4a33a74328c696c1503f72aebce68f0c1b7"
-  "c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46"
   "cdf0a47332bffbbfa3cd4bdc792b51bd1b67b86e465d0d2631f0da1da58fb6b6"
   "16230e13d0af06ff634c75b0206e0755163be28eab6ddb8f14f729c6efbd25b2"
   "8e86bc0c5fbc12db0ccd833466158b68f7dd379fa22ae6898965fee1c3a38942"
@@ -39,8 +37,6 @@ verify() {
 package() {
   install -Dm644 "${srcdir}/rat1.png" \
     "${pkgdir}/usr/share/veldmuis/wallpapers/rat1.png"
-  install -Dm644 "${srcdir}/greetd-config.toml" \
-    "${pkgdir}/etc/greetd/config.toml"
   install -Dm644 "${srcdir}/regreet.toml" \
     "${pkgdir}/etc/greetd/regreet.toml"
   install -Dm644 "${srcdir}/regreet.css" \

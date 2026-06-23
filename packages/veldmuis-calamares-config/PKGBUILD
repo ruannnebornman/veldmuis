@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=31
+pkgrel=33
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -17,13 +17,13 @@ source=(
   "veldmuis-calamares-bootstrap.sh"
 )
 sha256sums=(
-  "849cb77002387a4a2fd0eda165ebf093559a19a3345b343aca48f917bf35ad56"
-  "ea728d735987bc9325e4562ef143887c74a8a7de833acc8657e7031c8b1859d6"
+  "53c44768f73b772be7bbc8b1fe228b861c6f1218c7969e80091ba2899976c92b"
+  "57c09a1fbf286b7f4628f65b23285a4b74f84ab80d421071a9ef3c5e5517f093"
 )
 _payload_sha256sums=(
   "2321354727f1d9b98c1db72b5f3548c4398eac80b95b328d2a0fd2beb8008f90  modules/bootloader.conf"
+  "c1c5dbd6668ba4448c80fb02f1c6e442fd4d90cf7abd71bd012808422e52223c  modules/extras.conf"
   "4724a10749782c24cb09ec5fc0ef9d14d97ea8bb1d812d72d69e8e1b0568d601  modules/finished.conf"
-  "15983580da50525603434a99c2a55ec0ccf74676d08f23e212a1c05bd6b438ba  modules/gaming.conf"
   "db65520edee3dd4191ae149c2d1ddf008e39e625a47907d849c0fd677602bb5a  modules/graphics.conf"
   "d19770bdc577da591d48a0fa98861fe1b87d2788284d69a99ecefc7da453c9c7  modules/initcpiocfg.conf"
   "f806f0a882d022d9e05ac2ad9f807a626abd8c6b205b8dd1c3fc03e7ca720282  modules/locale.conf"
@@ -31,7 +31,7 @@ _payload_sha256sums=(
   "fe7d917f553b2c1bab548e6af9d89e648c9dc5df077178545a6eed8df50c49df  modules/services-systemd.conf"
   "4732765b6efe628548371d2682cb411faa2aaa7f2d50452372c6cbb3f76bb853  modules/users.conf"
   "b2894e23003e8631071e36ef2c06e47c6f7e55934732eb9aa6496fea4c1ba082  modules/veldmuis-boot-finalize.conf"
-  "433a5f27a80a03d5a3a35f666b40a901f39a3901bba608b067e25b5c69525ef5  modules/veldmuis-bootstrap.conf"
+  "d763bcfba44f4e1ec07180aba26f2c78dcaec31a162017327f8f90061f9d0d5b  modules/veldmuis-bootstrap.conf"
   "1bb6f23540d98894ee7a55be77754da4faa71a0a4b412dd68f2ece8424ad9603  modules/welcome.conf"
   "5fb0b2996df6dce9dfa46249b6261c81416fb01651322b42d748ce250f695607  branding/veldmuis/branding.desc"
   "35f5c54e35342c985547da09fb25d714a49b6cd37c4982fc4386e42510c3b116  branding/veldmuis/logomain.png"
@@ -53,8 +53,8 @@ package() {
 
   for module in \
     bootloader \
+    extras \
     finished \
-    gaming \
     graphics \
     initcpiocfg \
     locale \

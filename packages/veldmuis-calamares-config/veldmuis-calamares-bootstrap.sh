@@ -4,7 +4,10 @@ set -euo pipefail
 
 target_root="${1:-}"
 graphics_choice="${2:-all-open-source}"
-gaming_choice="${3:-no-gaming}"
+extras_choice="${3:-}"
+gaming_choice="no-gaming"
+downloads_choice="no-downloads"
+sync_choice="no-sync"
 live_repo_root="/opt/veldmuis/repo"
 tmp_pacman_conf=""
 tmp_arch_mirrorlist=""
@@ -74,6 +77,65 @@ normalize_gaming_choice() {
       gaming_choice="no-gaming"
       ;;
   esac
+}
+
+normalize_downloads_choice() {
+  case "${downloads_choice}" in
+    no-downloads|qbittorrent)
+      ;;
+    "")
+      downloads_choice="no-downloads"
+      ;;
+    *)
+      log "Unknown downloads choice '${downloads_choice}', defaulting to no-downloads"
+      downloads_choice="no-downloads"
+      ;;
+  esac
+}
+
+normalize_sync_choice() {
+  case "${sync_choice}" in
+    no-sync|syncthing)
+      ;;
+    "")
+      sync_choice="no-sync"
+      ;;
+    *)
+      log "Unknown sync choice '${sync_choice}', defaulting to no-sync"
+      sync_choice="no-sync"
+      ;;
+  esac
+}
+
+normalize_extras_choice() {
+  local extra
+  local -a extras=()
+
+  gaming_choice="no-gaming"
+  downloads_choice="no-downloads"
+  sync_choice="no-sync"
+
+  [[ -n "${extras_choice}" ]] || return 0
+
+  IFS=',' read -r -a extras <<<"${extras_choice}"
+  for extra in "${extras[@]}"; do
+    case "${extra}" in
+      gaming)
+        gaming_choice="gaming"
+        ;;
+      qbittorrent)
+        downloads_choice="qbittorrent"
+        ;;
+      syncthing)
+        sync_choice="syncthing"
+        ;;
+      "")
+        ;;
+      *)
+        log "Unknown extras choice '${extra}', ignoring it"
+        ;;
+    esac
+  done
 }
 
 has_non_loopback_nameserver() {
@@ -319,6 +381,24 @@ selected_gaming_packages() {
   esac
 }
 
+selected_downloads_packages() {
+  case "${downloads_choice}" in
+    qbittorrent)
+      printf '%s\n' \
+        veldmuis-downloads
+      ;;
+  esac
+}
+
+selected_sync_packages() {
+  case "${sync_choice}" in
+    syncthing)
+      printf '%s\n' \
+        veldmuis-sync
+      ;;
+  esac
+}
+
 initial_target_packages() {
   local package
   local -a packages=(veldmuis-desktop)
@@ -337,6 +417,16 @@ initial_target_packages() {
     [[ -n "${package}" ]] || continue
     packages+=("${package}")
   done < <(selected_gaming_packages)
+
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(selected_downloads_packages)
+
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(selected_sync_packages)
 
   printf '%s\n' "${packages[@]}"
 }
@@ -360,7 +450,10 @@ main() {
 
   trap cleanup EXIT
   normalize_graphics_choice
+  normalize_extras_choice
   normalize_gaming_choice
+  normalize_downloads_choice
+  normalize_sync_choice
   write_pacman_conf
   prepare_target_root
 
@@ -380,15 +473,10 @@ main() {
   fi
 
   log "Selected graphics choice: ${graphics_choice}"
+  log "Selected extras choices: ${extras_choice:-none}"
   log "Selected gaming choice: ${gaming_choice}"
-
-  if [[ -x "${target_root}/usr/bin/flatpak" && \
-        -f "${target_root}/usr/share/flatpak/remotes.d/flathub.flatpakrepo" ]]; then
-    log "Configuring Flathub in the target system"
-    arch-chroot "${target_root}" \
-      /usr/bin/flatpak remote-add --if-not-exists --system --from \
-      flathub /usr/share/flatpak/remotes.d/flathub.flatpakrepo
-  fi
+  log "Selected downloads choice: ${downloads_choice}"
+  log "Selected sync choice: ${sync_choice}"
 
   log "Bootstrap complete"
 }

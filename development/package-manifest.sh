@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034
+
+# Sourced by package build and repo publication helpers.
 
 veldmuis_core_package_order=(
   "calamares"
@@ -12,6 +15,8 @@ veldmuis_core_package_order=(
   "veldmuis-displaymanager"
   "veldmuis-desktop-kde"
   "veldmuis-gaming"
+  "veldmuis-downloads"
+  "veldmuis-sync"
   "veldmuis-multimedia"
   "veldmuis-branding"
   "veldmuis-desktop"

@@ -45,11 +45,11 @@ command -v virsh >/dev/null 2>&1 || die "virsh not found"
 case "$CONNECT_URI" in
   qemu:///session)
     DISK_PATH="${POOL_DIR}/${VM_NAME}.qcow2"
-    NETWORK_ARGS=(--network user,model=virtio)
+    NETWORK_ARGS=(--network "user,model=virtio")
     ;;
   qemu:///system)
     DISK_PATH="${POOL_DIR}/${VM_NAME}.qcow2"
-    NETWORK_ARGS=(--network network=default,model=virtio)
+    NETWORK_ARGS=(--network "network=default,model=virtio")
     ;;
   *)
     die "Unsupported CONNECT_URI: $CONNECT_URI"

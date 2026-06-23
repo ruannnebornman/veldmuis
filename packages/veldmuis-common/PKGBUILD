@@ -1,6 +1,6 @@
 pkgname=veldmuis-common
 pkgver=20260305
-pkgrel=1
+pkgrel=2
 pkgdesc="Common user-facing metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -15,6 +15,8 @@ depends=(
   "wget"
   "unzip"
   "zip"
+  "htop"
+  "btop"
   "noto-fonts"
   "noto-fonts-emoji"
 )

@@ -18,6 +18,7 @@ nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/v
   printf '[build-aur-packages] ERROR: NVIDIA package set not readable: %s\n' "${nvidia_package_set}" >&2
   exit 1
 }
+# shellcheck source=packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
 . "${nvidia_package_set}"
 
 package_bases=("${veldmuis_nvidia_580xx_aur_package_bases[@]}")
