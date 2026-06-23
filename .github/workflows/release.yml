@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Tag to create or reuse, for example v1.4.0, 2026.04, or 2026.04.22
+        description: Stable vX.Y.Z or snapshot YYYY.MM[.DD]; do not use vYYYY.MM.N
         required: true
         type: string
 
@@ -43,6 +43,7 @@ jobs:
           git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
           stable_tag_pattern='^v[0-9]+\.[0-9]+\.[0-9]+$'
           snapshot_tag_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])(\.(0[1-9]|[12][0-9]|3[01]))?$'
+          legacy_snapshot_tag_pattern='^v[0-9]{4}\.(0[1-9]|1[0-2])\.[0-9]+$'
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             release_tag="${{ inputs.release_tag }}"
@@ -50,6 +51,11 @@ jobs:
             release_tag="$(date -u +%Y.%m)"
           else
             release_tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ "${release_tag}" =~ ${legacy_snapshot_tag_pattern} ]]; then
+            echo "Legacy snapshot tags like ${release_tag} are no longer supported; use a date snapshot like $(date -u +%Y.%m.%d)." >&2
+            exit 1
           fi
 
           [[ "${release_tag}" =~ ${stable_tag_pattern} || "${release_tag}" =~ ${snapshot_tag_pattern} ]] || {
