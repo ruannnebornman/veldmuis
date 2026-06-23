@@ -7,6 +7,7 @@ graphics_choice="${2:-all-open-source}"
 extras_choice="${3:-}"
 steam_choice="no-steam"
 lutris_choice="no-lutris"
+discord_choice="no-discord"
 downloads_choice="no-downloads"
 sync_choice="no-sync"
 live_repo_root="/opt/veldmuis/repo"
@@ -120,6 +121,20 @@ normalize_lutris_choice() {
   esac
 }
 
+normalize_discord_choice() {
+  case "${discord_choice}" in
+    no-discord|discord)
+      ;;
+    "")
+      discord_choice="no-discord"
+      ;;
+    *)
+      log "Unknown Discord choice '${discord_choice}', defaulting to no-discord"
+      discord_choice="no-discord"
+      ;;
+  esac
+}
+
 normalize_downloads_choice() {
   case "${downloads_choice}" in
     no-downloads|qbittorrent)
@@ -154,6 +169,7 @@ normalize_extras_choice() {
 
   steam_choice="no-steam"
   lutris_choice="no-lutris"
+  discord_choice="no-discord"
   downloads_choice="no-downloads"
   sync_choice="no-sync"
 
@@ -171,6 +187,9 @@ normalize_extras_choice() {
         ;;
       lutris)
         lutris_choice="lutris"
+        ;;
+      discord)
+        discord_choice="discord"
         ;;
       qbittorrent)
         downloads_choice="qbittorrent"
@@ -428,6 +447,9 @@ selected_gaming_packages() {
   if [[ "${lutris_choice}" == "lutris" ]]; then
     printf '%s\n' lutris
   fi
+  if [[ "${discord_choice}" == "discord" ]]; then
+    printf '%s\n' discord
+  fi
 }
 
 selected_downloads_packages() {
@@ -502,6 +524,7 @@ main() {
   normalize_extras_choice
   normalize_steam_choice
   normalize_lutris_choice
+  normalize_discord_choice
   normalize_downloads_choice
   normalize_sync_choice
   write_pacman_conf
@@ -526,6 +549,7 @@ main() {
   log "Selected extras choices: ${extras_choice:-none}"
   log "Selected Steam choice: ${steam_choice}"
   log "Selected Lutris choice: ${lutris_choice}"
+  log "Selected Discord choice: ${discord_choice}"
   log "Selected downloads choice: ${downloads_choice}"
   log "Selected sync choice: ${sync_choice}"
 

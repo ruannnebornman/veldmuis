@@ -29,6 +29,9 @@ Rectangle {
         if (lutris.checked) {
             selected.push("lutris")
         }
+        if (discord.checked) {
+            selected.push("discord")
+        }
         if (qbittorrent.checked) {
             selected.push("qbittorrent")
         }
@@ -46,6 +49,7 @@ Rectangle {
 
         steam.checked = selected.indexOf("steam") >= 0 || selected.indexOf("gaming") >= 0
         lutris.checked = selected.indexOf("lutris") >= 0 || selected.indexOf("gaming") >= 0
+        discord.checked = selected.indexOf("discord") >= 0
         qbittorrent.checked = selected.indexOf("qbittorrent") >= 0
         syncthing.checked = selected.indexOf("syncthing") >= 0
         syncing = false
@@ -120,6 +124,15 @@ Rectangle {
 
                             Layout.fillWidth: true
                             text: qsTr("Lutris")
+                            font.pixelSize: 16
+                            onToggled: root.updateSelection()
+                        }
+
+                        CheckBox {
+                            id: discord
+
+                            Layout.fillWidth: true
+                            text: qsTr("Discord")
                             font.pixelSize: 16
                             onToggled: root.updateSelection()
                         }
