@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Stable vX.Y.Z or snapshot YYYY.MM[.DD]; do not use vYYYY.MM.N
+        description: Daily release tag in YYYY.MM.DD format
         required: true
         type: string
 
@@ -41,27 +41,50 @@ jobs:
           set -euo pipefail
 
           git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
-          stable_tag_pattern='^v[0-9]+\.[0-9]+\.[0-9]+$'
-          snapshot_tag_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])(\.(0[1-9]|[12][0-9]|3[01]))?$'
-          legacy_snapshot_tag_pattern='^v[0-9]{4}\.(0[1-9]|1[0-2])\.[0-9]+$'
+          monthly_tag_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])$'
+          daily_tag_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])$'
+
+          is_valid_monthly_tag() {
+            local tag="$1"
+            local normalized=""
+
+            [[ "${tag}" =~ ${monthly_tag_pattern} ]] || return 1
+            normalized="$(date -u -d "${tag}.01" +%Y.%m 2>/dev/null)" || return 1
+            [[ "${normalized}" == "${tag}" ]]
+          }
+
+          is_valid_daily_tag() {
+            local tag="$1"
+            local normalized=""
+
+            [[ "${tag}" =~ ${daily_tag_pattern} ]] || return 1
+            normalized="$(date -u -d "${tag//./-}" +%Y.%m.%d 2>/dev/null)" || return 1
+            [[ "${normalized}" == "${tag}" ]]
+          }
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             release_tag="${{ inputs.release_tag }}"
+            is_valid_daily_tag "${release_tag}" || {
+              echo "Manual release tags must use YYYY.MM.DD, got: ${release_tag}" >&2
+              exit 1
+            }
           elif [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
             release_tag="$(date -u +%Y.%m)"
+            is_valid_monthly_tag "${release_tag}" || {
+              echo "Scheduled release tag must use YYYY.MM, got: ${release_tag}" >&2
+              exit 1
+            }
           else
-            release_tag="${GITHUB_REF_NAME}"
-          fi
-
-          if [[ "${release_tag}" =~ ${legacy_snapshot_tag_pattern} ]]; then
-            echo "Legacy snapshot tags like ${release_tag} are no longer supported; use a date snapshot like $(date -u +%Y.%m.%d)." >&2
+            echo "Unsupported release event: ${GITHUB_EVENT_NAME}" >&2
             exit 1
           fi
 
-          [[ "${release_tag}" =~ ${stable_tag_pattern} || "${release_tag}" =~ ${snapshot_tag_pattern} ]] || {
-            echo "Release tags must use stable semver like v1.4.0 or date snapshots like 2026.04 or 2026.04.22, got: ${release_tag}" >&2
-            exit 1
-          }
+          while IFS= read -r existing_tag; do
+            is_valid_monthly_tag "${existing_tag}" || is_valid_daily_tag "${existing_tag}" || {
+              echo "Unsupported repository tag found: ${existing_tag}" >&2
+              exit 1
+            }
+          done < <(git tag)
 
           release_ref="refs/tags/${release_tag}"
           if ! git rev-parse --verify "${release_ref}" >/dev/null 2>&1; then
@@ -83,7 +106,7 @@ jobs:
             exit 1
           }
 
-          release_version="${release_tag#v}"
+          release_version="${release_tag}"
 
           {
             echo "release_tag=${release_tag}"
@@ -361,14 +384,12 @@ jobs:
 
           note_file="development/release-notes/${RELEASE_TAG}.md"
           body_file="${RUNNER_TEMP}/release-${RELEASE_TAG}.md"
-          stable_tag_pattern='^v[0-9]+\.[0-9]+\.[0-9]+$'
           monthly_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])$'
-          snapshot_tag_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])(\.(0[1-9]|[12][0-9]|3[01]))?$'
-          dated_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])$'
+          release_tag_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])(\.(0[1-9]|[12][0-9]|3[01]))?$'
 
           previous_release_tag="$(
             git tag --merged "${RELEASE_SHA}" --sort=-creatordate \
-              | grep -E "${stable_tag_pattern}|${snapshot_tag_pattern}" \
+              | grep -E "${release_tag_pattern}" \
               | grep -Fxv "${RELEASE_TAG}" \
               | head -n 1 || true
           )"
@@ -414,14 +435,8 @@ jobs:
 
             if [[ "${RELEASE_TAG}" =~ ${monthly_pattern} ]]; then
               lead_line='- Monthly release.'
-            elif [[ "${RELEASE_TAG}" =~ ${dated_pattern} ]]; then
-              lead_line='- Manual dated release.'
-            elif [[ "${RELEASE_TAG}" =~ ${stable_tag_pattern} ]]; then
-              lead_line='- Tagged release.'
-            elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-              lead_line='- Manual release.'
             else
-              lead_line='- Release built from the tagged commit.'
+              lead_line='- Manual dated release.'
             fi
 
             {
