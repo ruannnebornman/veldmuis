@@ -190,7 +190,7 @@ check_remote_releases() {
   command -v curl >/dev/null 2>&1 || die "curl is required for --remote"
 
   bad_body_tags="$(
-    gh api --paginate repos/{owner}/{repo}/releases \
+    gh api --paginate 'repos/{owner}/{repo}/releases' \
       --jq '.[] | select((.body // "") | test("latest\\.iso|ISO download:|Direct HTTPS ISO:|Direct HTTPS checksum:"; "i")) | .tag_name'
   )"
   [[ -z "${bad_body_tags}" ]] || {
@@ -199,7 +199,7 @@ check_remote_releases() {
   }
 
   retired_body_tags="$(
-    gh api --paginate repos/{owner}/{repo}/releases \
+    gh api --paginate 'repos/{owner}/{repo}/releases' \
       --jq '.[] | select((.body // "") | test("v1\\.|v2026|vYYYY|YYYY\\.MM\\.N|semver|alpha release|beta release"; "i")) | .tag_name'
   )"
   [[ -z "${retired_body_tags}" ]] || {
