@@ -2,5 +2,5 @@
 vt = 1
 
 [default_session]
-command = "cage -m last -s -- regreet --config /usr/share/veldmuis/regreet/regreet.toml --style /usr/share/veldmuis/regreet/regreet.css"
+command = "cage -m last -s -- regreet --config /usr/share/veldmuis/regreet/regreet.toml --style /usr/share/veldmuis/regreet/regreet.css; setterm --clear all --cursor off"
 user = "greeter"

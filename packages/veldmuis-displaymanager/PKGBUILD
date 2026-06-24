@@ -1,6 +1,6 @@
 pkgname=veldmuis-displaymanager
 pkgver=20260305
-pkgrel=4
+pkgrel=5
 pkgdesc="Wayland display manager stack and policy for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -15,7 +15,7 @@ depends=(
   "veldmuis-branding"
 )
 source=("greetd-config.toml")
-sha256sums=("b22a211900b08d9d208d88a8ebfd1c93bbc59c58ebb2c98dc8ea6a5f0e57e3c3")
+sha256sums=("5bd343f444f2cfa8a1cbcdb54038c4887b0156a6f8bf1c39412233e0dca40593")
 
 package() {
   install -Dm644 "${srcdir}/greetd-config.toml" \

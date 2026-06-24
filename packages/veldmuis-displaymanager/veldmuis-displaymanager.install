@@ -1,6 +1,6 @@
 _veldmuis_greetd_template="/usr/share/veldmuis/greetd/config.toml"
 _veldmuis_greetd_target="/etc/greetd/config.toml"
-_veldmuis_greetd_known_hashes="c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46 b22a211900b08d9d208d88a8ebfd1c93bbc59c58ebb2c98dc8ea6a5f0e57e3c3"
+_veldmuis_greetd_known_hashes="c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46 b22a211900b08d9d208d88a8ebfd1c93bbc59c58ebb2c98dc8ea6a5f0e57e3c3 5bd343f444f2cfa8a1cbcdb54038c4887b0156a6f8bf1c39412233e0dca40593"
 
 _veldmuis_file_sha256() {
   sha256sum "$1" | awk '{print $1}'
@@ -24,7 +24,7 @@ _veldmuis_greetd_should_replace() {
   current_hash="$(_veldmuis_file_sha256 "${_veldmuis_greetd_target}")"
   _veldmuis_hash_is_known "${current_hash}" && return 0
 
-  grep -Eq '(^|[[:space:]])agreety([[:space:]]|")' \
+  grep -Eq '^[[:space:]]*command[[:space:]]*=[[:space:]]*"([^"]*/)?agreety([[:space:]]|")' \
     "${_veldmuis_greetd_target}" && return 0
 
   return 1
