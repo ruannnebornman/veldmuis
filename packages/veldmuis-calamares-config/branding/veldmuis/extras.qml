@@ -116,7 +116,14 @@ Rectangle {
                             Layout.fillWidth: true
                             text: qsTr("Steam")
                             font.pixelSize: 16
-                            palette.windowText: "#ffffff"
+                            contentItem: Text {
+                                leftPadding: steam.indicator.width + steam.spacing
+                                text: steam.text
+                                color: "#ffffff"
+                                font: steam.font
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
                             onToggled: root.updateSelection()
                         }
 
@@ -126,7 +133,14 @@ Rectangle {
                             Layout.fillWidth: true
                             text: qsTr("Lutris")
                             font.pixelSize: 16
-                            palette.windowText: "#ffffff"
+                            contentItem: Text {
+                                leftPadding: lutris.indicator.width + lutris.spacing
+                                text: lutris.text
+                                color: "#ffffff"
+                                font: lutris.font
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
                             onToggled: root.updateSelection()
                         }
 
@@ -136,7 +150,14 @@ Rectangle {
                             Layout.fillWidth: true
                             text: qsTr("Discord")
                             font.pixelSize: 16
-                            palette.windowText: "#ffffff"
+                            contentItem: Text {
+                                leftPadding: discord.indicator.width + discord.spacing
+                                text: discord.text
+                                color: "#ffffff"
+                                font: discord.font
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
                             onToggled: root.updateSelection()
                         }
                     }
@@ -165,7 +186,14 @@ Rectangle {
                         Layout.fillWidth: true
                         text: qsTr("qBittorrent")
                         font.pixelSize: 16
-                        palette.windowText: "#ffffff"
+                        contentItem: Text {
+                            leftPadding: qbittorrent.indicator.width + qbittorrent.spacing
+                            text: qbittorrent.text
+                            color: "#ffffff"
+                            font: qbittorrent.font
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
                         onToggled: root.updateSelection()
                     }
                 }
@@ -193,7 +221,14 @@ Rectangle {
                         Layout.fillWidth: true
                         text: qsTr("Syncthing")
                         font.pixelSize: 16
-                        palette.windowText: "#ffffff"
+                        contentItem: Text {
+                            leftPadding: syncthing.indicator.width + syncthing.spacing
+                            text: syncthing.text
+                            color: "#ffffff"
+                            font: syncthing.font
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
                         onToggled: root.updateSelection()
                     }
                 }
