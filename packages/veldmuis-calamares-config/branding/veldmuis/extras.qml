@@ -116,6 +116,7 @@ Rectangle {
                             Layout.fillWidth: true
                             text: qsTr("Steam")
                             font.pixelSize: 16
+                            palette.windowText: "#ffffff"
                             onToggled: root.updateSelection()
                         }
 
@@ -125,6 +126,7 @@ Rectangle {
                             Layout.fillWidth: true
                             text: qsTr("Lutris")
                             font.pixelSize: 16
+                            palette.windowText: "#ffffff"
                             onToggled: root.updateSelection()
                         }
 
@@ -134,6 +136,7 @@ Rectangle {
                             Layout.fillWidth: true
                             text: qsTr("Discord")
                             font.pixelSize: 16
+                            palette.windowText: "#ffffff"
                             onToggled: root.updateSelection()
                         }
                     }
@@ -162,6 +165,7 @@ Rectangle {
                         Layout.fillWidth: true
                         text: qsTr("qBittorrent")
                         font.pixelSize: 16
+                        palette.windowText: "#ffffff"
                         onToggled: root.updateSelection()
                     }
                 }
@@ -189,6 +193,7 @@ Rectangle {
                         Layout.fillWidth: true
                         text: qsTr("Syncthing")
                         font.pixelSize: 16
+                        palette.windowText: "#ffffff"
                         onToggled: root.updateSelection()
                     }
                 }
