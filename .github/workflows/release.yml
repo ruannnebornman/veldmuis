@@ -241,7 +241,7 @@ jobs:
 
           (( missing == 0 )) || exit 1
 
-      - name: Build packages, repo, and ISO in Arch container
+      - name: Build packages, repo, and ISO in isolated Arch containers
         shell: bash
         env:
           CI_REPO_ROOT: ${{ github.workspace }}

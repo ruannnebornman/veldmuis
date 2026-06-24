@@ -6,7 +6,7 @@ set -euo pipefail
 # replacement binary package source is wired into the repo build first; see
 # development/nvidia-580xx-package-flow.md.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "${script_dir}/.." && pwd)"
+repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
 lock_file="${VELDMUIS_AUR_LOCK_FILE:-${script_dir}/aur-packages.lock}"
 work_root="${VELDMUIS_AUR_WORK_ROOT:-${repo_root}/artifacts/aur-packages/work}"
 package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
@@ -39,6 +39,7 @@ usage() {
 Usage:
   build-aur-packages.sh
   build-aur-packages.sh --resolve-only
+  build-aur-packages.sh --validate-only
 
 Environment:
   VELDMUIS_AUR_REF_MODE=locked|latest
@@ -271,6 +272,30 @@ validate_package_artifacts() {
   )
 }
 
+validate_expected_package_set() {
+  local package_path package_name expected_name
+  local -A seen=()
+
+  while IFS= read -r package_path; do
+    package_name="$(package_info_value "${package_path}" "pkgname")"
+    [[ -n "${package_name}" ]] || die "Unable to read package name from: ${package_path}"
+    [[ -z "${seen[${package_name}]:-}" ]] || die "Duplicate AUR package artifact: ${package_name}"
+    seen["${package_name}"]=1
+  done < <(
+    find "${package_dir}" -maxdepth 1 -type f \
+      -name '*.pkg.tar.zst' \
+      | sort -V
+  )
+
+  for expected_name in "${veldmuis_nvidia_580xx_repository_packages[@]}"; do
+    [[ -n "${seen[${expected_name}]:-}" ]] || \
+      die "Expected AUR package artifact is missing: ${expected_name}"
+  done
+
+  ((${#seen[@]} == ${#veldmuis_nvidia_580xx_repository_packages[@]})) || \
+    die "AUR package artifact set contains an unexpected number of packages."
+}
+
 build_package_base() {
   local package_base="$1"
   local ref="$2"
@@ -324,6 +349,7 @@ write_manifest() {
 
 main() {
   local resolve_only=0
+  local validate_only=0
   local package_base
 
   case "${1:-}" in
@@ -334,6 +360,9 @@ main() {
     --resolve-only)
       resolve_only=1
       ;;
+    --validate-only)
+      validate_only=1
+      ;;
     "")
       ;;
     *)
@@ -343,9 +372,20 @@ main() {
   esac
 
   require_cmd awk
-  require_cmd git
   require_cmd tr
 
+  if ((validate_only)); then
+    require_cmd bsdtar
+    require_cmd find
+    require_cmd sort
+    [[ -d "${package_dir}" ]] || die "AUR package artifact directory not found: ${package_dir}"
+    validate_package_artifacts
+    validate_expected_package_set
+    log "Validated AUR package artifact set under: ${package_dir}"
+    exit 0
+  fi
+
+  require_cmd git
   resolve_all_refs
 
   if (( resolve_only )); then
@@ -370,6 +410,7 @@ main() {
   done
 
   validate_package_artifacts
+  validate_expected_package_set
   write_manifest
   log "Built AUR package artifacts under: ${package_dir}"
   log "Wrote manifest: ${manifest_path}"

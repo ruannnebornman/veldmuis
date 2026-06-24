@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: Build and publish even if the published AUR refs match
+        description: Build and publish even if source and AUR refs are current
         required: false
         type: boolean
         default: false
@@ -110,7 +110,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./development/check-aur-package-refresh.sh
+          ./development/check-package-repo-refresh.sh
 
       - name: Stop when package repo is current
         if: steps.refresh_check.outputs.refresh_needed != 'true'
@@ -119,7 +119,7 @@ jobs:
           set -euo pipefail
           echo "Package repo is current: ${{ steps.refresh_check.outputs.reason }}"
 
-      - name: Build package repo in Arch container
+      - name: Build and sign package repo in isolated Arch containers
         if: steps.refresh_check.outputs.refresh_needed == 'true'
         shell: bash
         env:
@@ -167,6 +167,8 @@ jobs:
             echo
             echo "- Refresh needed: \`${{ steps.refresh_check.outputs.refresh_needed }}\`"
             echo "- Reason: ${{ steps.refresh_check.outputs.reason }}"
+            echo "- Current source commit: \`${{ steps.refresh_check.outputs.current_source_commit }}\`"
+            echo "- Published source commit: \`${{ steps.refresh_check.outputs.published_source_commit || 'unavailable' }}\`"
             echo "- AUR ref mode: \`${{ steps.refresh_check.outputs.ref_mode }}\`"
             echo "- Package repo: ${PACKAGE_BASE_URL}"
             echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"

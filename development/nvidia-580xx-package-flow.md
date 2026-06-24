@@ -22,19 +22,28 @@ the package repo build.
 
 ## Build Flow
 
-1. `development/build-aur-packages.sh` builds or resolves the configured AUR
-   package bases and writes artifacts under `artifacts/aur-packages/current`.
-2. `development/run-ci-arch-builder.sh` runs the AUR build before the local repo
-   build. If enabled, it restores the known-good NVIDIA package set when a fresh
-   AUR build fails.
-3. `development/build-local-repo.sh` copies `veldmuis-nvidia-legacy` plus the
-   NVIDIA 580xx artifacts into `veldmuis-extra`.
-4. `development/publish-r2-package-repo.sh` publishes the pacman repositories
+1. `development/run-ci-arch-builder.sh` prepares a disposable Arch builder
+   image and a read-only snapshot of the trusted build tooling.
+2. Veldmuis packages are built without the repository signing key.
+3. `development/build-aur-packages.sh` runs in a separate container with the
+   repository mounted read-only. It can write only to
+   `artifacts/aur-packages`.
+4. If enabled, the AUR stage restores the known-good NVIDIA package set when a
+   fresh AUR build fails.
+5. A network-disabled signing container validates the expected NVIDIA artifact
+   set, imports the signing key, and runs `development/build-local-repo.sh`.
+6. `development/build-local-repo.sh` copies `veldmuis-nvidia-legacy` plus the
+   NVIDIA 580xx artifacts into `veldmuis-extra` and signs the repository.
+7. `development/publish-r2-package-repo.sh` publishes the pacman repositories
    and includes the AUR manifest when present.
-5. `development/publish-known-good-nvidia-packages.sh` updates the known-good
+8. `development/publish-known-good-nvidia-packages.sh` updates the known-good
    NVIDIA package cache after a successful non-fallback build.
-6. `development/restore-known-good-nvidia-packages.sh` restores that cache when
+9. `development/restore-known-good-nvidia-packages.sh` restores that cache when
    the active AUR build path cannot produce a complete package set.
+
+The signing key must never be passed to either package build container. The
+signing stage may read completed package artifacts but must not execute
+PKGBUILDs or have network access.
 
 ## Audit Rule
 

@@ -23,14 +23,8 @@ Rectangle {
         }
 
         var selected = []
-        if (steam.checked) {
-            selected.push("steam")
-        }
-        if (lutris.checked) {
-            selected.push("lutris")
-        }
-        if (discord.checked) {
-            selected.push("discord")
+        if (gaming.checked) {
+            selected.push("gaming")
         }
         if (qbittorrent.checked) {
             selected.push("qbittorrent")
@@ -47,9 +41,10 @@ Rectangle {
             selected = chooserConfig.packageChoice.split(",")
         }
 
-        steam.checked = selected.indexOf("steam") >= 0 || selected.indexOf("gaming") >= 0
-        lutris.checked = selected.indexOf("lutris") >= 0 || selected.indexOf("gaming") >= 0
-        discord.checked = selected.indexOf("discord") >= 0
+        gaming.checked = selected.indexOf("gaming") >= 0
+                         || selected.indexOf("steam") >= 0
+                         || selected.indexOf("lutris") >= 0
+                         || selected.indexOf("discord") >= 0
         qbittorrent.checked = selected.indexOf("qbittorrent") >= 0
         syncthing.checked = selected.indexOf("syncthing") >= 0
         syncing = false
@@ -106,60 +101,21 @@ Rectangle {
                         font.bold: true
                     }
 
-                    RowLayout {
+                    CheckBox {
+                        id: gaming
+
                         Layout.fillWidth: true
-                        spacing: 28
-
-                        CheckBox {
-                            id: steam
-
-                            Layout.fillWidth: true
-                            text: qsTr("Steam")
-                            font.pixelSize: 16
-                            contentItem: Text {
-                                leftPadding: steam.indicator.width + steam.spacing
-                                text: steam.text
-                                color: "#ffffff"
-                                font: steam.font
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            onToggled: root.updateSelection()
+                        text: qsTr("Steam, Lutris, and Discord")
+                        font.pixelSize: 16
+                        contentItem: Text {
+                            leftPadding: gaming.indicator.width + gaming.spacing
+                            text: gaming.text
+                            color: "#ffffff"
+                            font: gaming.font
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
                         }
-
-                        CheckBox {
-                            id: lutris
-
-                            Layout.fillWidth: true
-                            text: qsTr("Lutris")
-                            font.pixelSize: 16
-                            contentItem: Text {
-                                leftPadding: lutris.indicator.width + lutris.spacing
-                                text: lutris.text
-                                color: "#ffffff"
-                                font: lutris.font
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            onToggled: root.updateSelection()
-                        }
-
-                        CheckBox {
-                            id: discord
-
-                            Layout.fillWidth: true
-                            text: qsTr("Discord")
-                            font.pixelSize: 16
-                            contentItem: Text {
-                                leftPadding: discord.indicator.width + discord.spacing
-                                text: discord.text
-                                color: "#ffffff"
-                                font: discord.font
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            onToggled: root.updateSelection()
-                        }
+                        onToggled: root.updateSelection()
                     }
                 }
 

@@ -6,7 +6,7 @@ set -euo pipefail
 # active AUR flow. See development/nvidia-580xx-package-flow.md before changing
 # the AUR artifact handling below.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "${script_dir}/.." && pwd)"
+repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
 packages_root="${repo_root}/packages"
 repos_root="${repo_root}/repos"
 aur_package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "${script_dir}/.." && pwd)"
+repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
 packages_root="${repo_root}/packages"
 
 # shellcheck source=development/package-manifest.sh

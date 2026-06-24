@@ -7,7 +7,8 @@ repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
 support_root="$(cd "${script_dir}/.." && pwd)"
 container_workspace="/workspace/veldmuis"
 container_support_root="/workspace/ci-support"
-container_runner_temp="/runner-temp"
+builder_image=""
+trusted_support_root=""
 
 common_packages=(
   archlinux-keyring
@@ -99,57 +100,42 @@ validate_target() {
   esac
 }
 
+validate_stage() {
+  case "$1" in
+    packages|aur|sign|iso) ;;
+    *)
+      usage >&2
+      die "Unsupported container stage: $1"
+      ;;
+  esac
+}
+
 run_as_builder() {
   local command="$1"
   su "${BUILDER_USER}" -c "cd '${container_workspace}' && ${command}"
 }
 
-enable_multilib_repo() {
-  if grep -q '^\[multilib\]' /etc/pacman.conf; then
-    return 0
-  fi
-
-  if grep -q '^#\[multilib\]' /etc/pacman.conf; then
-    sed -i '/^#\[multilib\]/{s/^#//; n; s/^#//;}' /etc/pacman.conf
-  fi
-
-  if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
-    cat >> /etc/pacman.conf <<'EOF'
-
-[multilib]
-Include = /etc/pacman.d/mirrorlist
-EOF
-  fi
-
-  grep -q '^\[multilib\]' /etc/pacman.conf || die "Unable to enable multilib repository"
-}
-
-install_dependencies() {
-  local target="$1"
-  local packages=("${common_packages[@]}")
-
-  if [[ "${target}" == "iso" ]]; then
-    packages+=("${iso_only_packages[@]}")
-  fi
-
-  enable_multilib_repo
-  pacman -Syu --noconfirm --needed "${packages[@]}"
-}
-
 prepare_builder_user() {
+  local allow_pacman="${1:-0}"
+
   if ! id -u "${BUILDER_USER}" >/dev/null 2>&1; then
     useradd -m -u "${HOST_UID}" -s /bin/bash "${BUILDER_USER}"
   fi
 
   install -d -m 700 -o "${BUILDER_USER}" -g "${BUILDER_USER}" "${GNUPGHOME}"
-  install -d -m 0750 /etc/sudoers.d
-  printf '%s ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman\n' "${BUILDER_USER}" \
-    > /etc/sudoers.d/veldmuis-builder-pacman
-  chmod 0440 /etc/sudoers.d/veldmuis-builder-pacman
+
+  if [[ "${allow_pacman}" == "1" ]]; then
+    install -d -m 0750 /etc/sudoers.d
+    printf '%s ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman\n' "${BUILDER_USER}" \
+      > /etc/sudoers.d/veldmuis-builder-pacman
+    chmod 0440 /etc/sudoers.d/veldmuis-builder-pacman
+  fi
 }
 
 import_signing_key() {
-  local key_file="${container_runner_temp}/veldmuis-ci-signing-subkey.asc"
+  local key_file=""
+
+  key_file="$(mktemp -t veldmuis-ci-signing-subkey.XXXXXX)"
 
   printf '%s\n' "${VELDMUIS_GPG_PRIVATE_KEY}" > "${key_file}"
   chown "${BUILDER_USER}:${BUILDER_USER}" "${key_file}"
@@ -162,46 +148,46 @@ import_signing_key() {
   rm -f "${key_file}"
 }
 
-chown_build_outputs() {
+chown_output_paths() {
   local -a output_paths=()
   local path
 
-  for path in \
-    /workspace/build \
-    "${container_workspace}/repos" \
-    "${container_workspace}/packages" \
-    "${container_workspace}/artifacts"
-  do
+  for path in "$@"; do
     [[ -e "${path}" ]] && output_paths+=("${path}")
   done
 
   ((${#output_paths[@]} == 0)) || chown -R "${HOST_UID}:${HOST_GID}" "${output_paths[@]}"
 }
 
-run_build_inside_container() {
-  local target="$1"
-
-  require_cmd pacman
+run_package_build_stage() {
   require_cmd su
   require_env BUILDER_USER
   require_env GNUPGHOME
-  require_env VELDMUIS_KEY_FPR_FILE
-  require_env VELDMUIS_GPG_PRIVATE_KEY
-  require_env VELDMUIS_GPG_FPR
   require_env HOST_UID
   require_env HOST_GID
 
-  install_dependencies "${target}"
-  prepare_builder_user
-  import_signing_key
+  prepare_builder_user 1
+
+  local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
+
+  run_as_builder "PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") ${container_support_root}/development/build-all-packages.sh"
+  chown_output_paths "${container_workspace}/packages"
+}
+
+run_aur_build_stage() {
+  require_cmd su
+  require_env BUILDER_USER
+  require_env GNUPGHOME
+  require_env HOST_UID
+  require_env HOST_GID
+
+  prepare_builder_user 1
 
   local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
   local aur_ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
   local aur_build_status=0
   local build_aur_command
   local override_name
-
-  run_as_builder "PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") ./development/build-all-packages.sh"
 
   build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}")"
   for override_name in \
@@ -217,7 +203,7 @@ run_build_inside_container() {
   if is_true "${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE:-0}"; then
     echo "[run-ci-arch-builder] Simulating AUR package build failure"
     aur_build_status=1
-  elif run_as_builder "${build_aur_command} ./development/build-aur-packages.sh"; then
+  elif run_as_builder "${build_aur_command} ${container_support_root}/development/build-aur-packages.sh"; then
     aur_build_status=0
   else
     aur_build_status=$?
@@ -229,22 +215,81 @@ run_build_inside_container() {
     fi
 
     echo "[run-ci-arch-builder] AUR package build failed, restoring known-good NVIDIA package set"
-    run_as_builder "PACKAGE_BASE_URL=$(shell_quote "${PACKAGE_BASE_URL:-}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") ./development/restore-known-good-nvidia-packages.sh"
+    run_as_builder "PACKAGE_BASE_URL=$(shell_quote "${PACKAGE_BASE_URL:-}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") ${container_support_root}/development/restore-known-good-nvidia-packages.sh"
   fi
 
-  run_as_builder "GNUPGHOME='${GNUPGHOME}' VELDMUIS_KEY_FPR_FILE='${VELDMUIS_KEY_FPR_FILE}' ./development/build-local-repo.sh"
-
-  if [[ "${target}" == "iso" ]]; then
-    cd "${container_workspace}"
-    GNUPGHOME="${GNUPGHOME}" ./development/build-archiso.sh
-  fi
-
-  chown_build_outputs
+  chown_output_paths "${container_workspace}/artifacts"
 }
 
-run_build_in_container() {
+run_signing_stage() {
+  require_cmd gpg
+  require_cmd repo-add
+  require_cmd su
+  require_env BUILDER_USER
+  require_env GNUPGHOME
+  require_env VELDMUIS_KEY_FPR_FILE
+  require_env VELDMUIS_GPG_PRIVATE_KEY
+  require_env VELDMUIS_GPG_FPR
+  require_env HOST_UID
+  require_env HOST_GID
+
+  prepare_builder_user
+  run_as_builder "${container_support_root}/development/build-aur-packages.sh --validate-only"
+  import_signing_key
+  run_as_builder "GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_KEY_FPR_FILE=$(shell_quote "${VELDMUIS_KEY_FPR_FILE}") ${container_support_root}/development/build-local-repo.sh"
+  chown_output_paths "${container_workspace}/repos"
+}
+
+run_iso_stage() {
+  require_env HOST_UID
+  require_env HOST_GID
+
+  cd "${container_workspace}"
+  "${container_support_root}/development/build-archiso.sh"
+  chown_output_paths /workspace/build
+}
+
+prepare_trusted_support() {
+  trusted_support_root="${RUNNER_TEMP}/veldmuis-ci-support-${GITHUB_RUN_ID:-local}-$$"
+  rm -rf "${trusted_support_root}"
+  mkdir -p "${trusted_support_root}"
+  cp -a "${support_root}/development" "${trusted_support_root}/development"
+}
+
+prepare_builder_image() {
   local target="$1"
-  local runner_temp="${RUNNER_TEMP:-}"
+  local -a packages=("${common_packages[@]}")
+  local package_list=""
+
+  if [[ "${target}" == "iso" ]]; then
+    packages+=("${iso_only_packages[@]}")
+  fi
+
+  package_list="${packages[*]}"
+  builder_image="veldmuis-builder-${GITHUB_RUN_ID:-local}-$$"
+  builder_image="${builder_image//[^A-Za-z0-9_.-]/-}"
+
+  printf '%s\n' \
+    'FROM archlinux:base-devel' \
+    'RUN sed -i '\''/^\#\[multilib\]/{s/^#//; n; s/^#//;}'\'' /etc/pacman.conf' \
+    "RUN pacman -Syu --noconfirm --needed ${package_list} && pacman -Scc --noconfirm" \
+    | docker build --tag "${builder_image}" -
+}
+
+cleanup_outer_resources() {
+  if [[ -n "${builder_image}" ]]; then
+    docker image rm --force "${builder_image}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "${trusted_support_root}" ]]; then
+    rm -rf "${trusted_support_root}"
+  fi
+}
+
+run_container_stage() {
+  local stage="$1"
+  local target="$2"
+  local image="${builder_image}"
+  local mount_mode="rw"
   local -a docker_args=(
     run
     --rm
@@ -252,26 +297,76 @@ run_build_in_container() {
     -e BUILDER_USER
     -e BUILDER_HOME
     -e GNUPGHOME
-    -e VELDMUIS_KEY_FPR_FILE
-    -e VELDMUIS_GPG_PRIVATE_KEY
-    -e VELDMUIS_GPG_FPR
-    -e VELDMUIS_RELEASE_TAG="${VELDMUIS_RELEASE_TAG:-}"
-    -e VELDMUIS_PACKAGER
-    -e VELDMUIS_AUR_REF_MODE="${VELDMUIS_AUR_REF_MODE:-}"
-    -e VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS:-}"
-    -e VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS:-}"
-    -e VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS="${VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS:-}"
-    -e VELDMUIS_AUR_ENABLE_FALLBACK="${VELDMUIS_AUR_ENABLE_FALLBACK:-}"
-    -e VELDMUIS_SIMULATE_AUR_BUILD_FAILURE="${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE:-}"
-    -e PACKAGE_BASE_URL="${PACKAGE_BASE_URL:-}"
     -e CI_REPO_ROOT="${container_workspace}"
     -e HOST_UID="$(id -u)"
     -e HOST_GID="$(id -g)"
-    -v "${repo_root}:${container_workspace}"
-    -v "${support_root}:${container_support_root}"
-    -v "${runner_temp}:${container_runner_temp}"
+  )
+
+  if [[ "${stage}" == "packages" || "${stage}" == "aur" ]]; then
+    docker_args+=(
+      -e VELDMUIS_PACKAGER
+    )
+  fi
+
+  if [[ "${stage}" == "aur" ]]; then
+    mount_mode="ro"
+    docker_args+=(
+      -e VELDMUIS_AUR_REF_MODE="${VELDMUIS_AUR_REF_MODE:-}"
+      -e VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS:-}"
+      -e VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS:-}"
+      -e VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS="${VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS:-}"
+      -e VELDMUIS_AUR_ENABLE_FALLBACK="${VELDMUIS_AUR_ENABLE_FALLBACK:-}"
+      -e VELDMUIS_SIMULATE_AUR_BUILD_FAILURE="${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE:-}"
+      -e PACKAGE_BASE_URL="${PACKAGE_BASE_URL:-}"
+    )
+  elif [[ "${stage}" == "sign" ]]; then
+    mount_mode="ro"
+    docker_args+=(
+      --network none
+      -e VELDMUIS_KEY_FPR_FILE
+      -e VELDMUIS_GPG_PRIVATE_KEY
+      -e VELDMUIS_GPG_FPR
+    )
+  elif [[ "${stage}" == "iso" ]]; then
+    mount_mode="ro"
+    docker_args+=(
+      --privileged
+      -e VELDMUIS_RELEASE_TAG="${VELDMUIS_RELEASE_TAG:-}"
+    )
+  fi
+
+  docker_args+=(
+    -v "${repo_root}:${container_workspace}:${mount_mode}"
+    -v "${trusted_support_root}:${container_support_root}:ro"
     -w "${container_workspace}"
   )
+
+  if [[ "${stage}" == "aur" ]]; then
+    mkdir -p "${repo_root}/artifacts"
+    docker_args+=(-v "${repo_root}/artifacts:${container_workspace}/artifacts:rw")
+  elif [[ "${stage}" == "sign" ]]; then
+    mkdir -p "${repo_root}/repos"
+    docker_args+=(-v "${repo_root}/repos:${container_workspace}/repos:rw")
+  elif [[ "${stage}" == "iso" ]]; then
+    local host_build_root="${RUNNER_TEMP}/veldmuis-build"
+    mkdir -p "${host_build_root}"
+    docker_args+=(-v "${host_build_root}:/workspace/build:rw")
+  fi
+
+  docker_args+=(
+    "${image}"
+    bash
+    "${container_support_root}/development/run-ci-arch-builder.sh"
+    --in-container
+    "${stage}"
+    "${target}"
+  )
+
+  docker "${docker_args[@]}"
+}
+
+run_build_in_containers() {
+  local target="$1"
 
   require_cmd docker
   require_env BUILDER_USER
@@ -282,41 +377,52 @@ run_build_in_container() {
   require_env VELDMUIS_GPG_FPR
   require_env RUNNER_TEMP
 
+  prepare_trusted_support
+  trap cleanup_outer_resources EXIT
+  prepare_builder_image "${target}"
+  run_container_stage packages "${target}"
+  run_container_stage aur "${target}"
+  run_container_stage sign "${target}"
+
   if [[ "${target}" == "iso" ]]; then
-    local host_build_root="${RUNNER_TEMP}/veldmuis-build"
-    mkdir -p "${host_build_root}"
-    docker_args+=(
-      --privileged
-      -v "${host_build_root}:/workspace/build"
-    )
+    run_container_stage iso "${target}"
   fi
 
-  docker_args+=(
-    archlinux:base-devel
-    bash
-    "${container_support_root}/development/run-ci-arch-builder.sh"
-    --in-container
-    "${target}"
-  )
-
-  docker "${docker_args[@]}"
+  cleanup_outer_resources
+  trap - EXIT
 }
 
 main() {
   local in_container=0
+  local stage=""
   local target="${1:-}"
 
   if [[ "${target}" == "--in-container" ]]; then
     in_container=1
-    target="${2:-}"
+    stage="${2:-}"
+    target="${3:-}"
   fi
 
   validate_target "${target}"
 
   if (( in_container )); then
-    run_build_inside_container "${target}"
+    validate_stage "${stage}"
+    case "${stage}" in
+      packages)
+        run_package_build_stage
+        ;;
+      aur)
+        run_aur_build_stage
+        ;;
+      sign)
+        run_signing_stage
+        ;;
+      iso)
+        run_iso_stage
+        ;;
+    esac
   else
-    run_build_in_container "${target}"
+    run_build_in_containers "${target}"
   fi
 }
 
