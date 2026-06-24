@@ -14,7 +14,7 @@ arch="${VELDMUIS_ARCH:-x86_64}"
 core_repo="veldmuis-core"
 extra_repo="veldmuis-extra"
 key_fpr_file="${VELDMUIS_KEY_FPR_FILE:-${HOME}/.local/share/veldmuis/keyring-private/current-signing-key.fpr}"
-repo_package_suffix="${VELDMUIS_REPO_PACKAGE_SUFFIX:-v$(date -u +%Y%m%d%H%M%S)}"
+repo_package_suffix="${VELDMUIS_REPO_PACKAGE_SUFFIX:-build$(date -u +%Y%m%d%H%M%S)}"
 
 # shellcheck source=development/package-manifest.sh
 . "${script_dir}/package-manifest.sh"

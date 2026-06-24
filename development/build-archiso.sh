@@ -19,6 +19,7 @@ archiso_keep_builds="${ARCHISO_KEEP_BUILDS:-3}"
 archiso_keep_isos="${ARCHISO_KEEP_ISOS:-3}"
 owner_uid="${SUDO_UID:-}"
 owner_gid="${SUDO_GID:-}"
+release_tag="${VELDMUIS_RELEASE_TAG:-$(date -u +%Y.%m.%d)}"
 sudo_cmd=(sudo)
 
 require_cmd() {
@@ -61,6 +62,25 @@ require_non_negative_integer() {
     echo "${name} must be a non-negative integer, got: ${value}" >&2
     exit 1
   }
+}
+
+validate_release_tag() {
+  local tag="$1"
+  local monthly_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])$'
+  local daily_pattern='^([0-9]{4})\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])(\.([2-9]|[1-9][0-9]+))?$'
+  local date_part=""
+  local normalized=""
+
+  if [[ "${tag}" =~ ${monthly_pattern} ]]; then
+    normalized="$(date -u -d "${tag//./-}-01" +%Y.%m 2>/dev/null)" || return 1
+    [[ "${normalized}" == "${tag}" ]]
+    return
+  fi
+
+  [[ "${tag}" =~ ${daily_pattern} ]] || return 1
+  date_part="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+  normalized="$(date -u -d "${date_part//./-}" +%Y.%m.%d 2>/dev/null)" || return 1
+  [[ "${normalized}" == "${date_part}" ]]
 }
 
 cleanup_mounts_under() {
@@ -160,7 +180,7 @@ purge_cached_local_packages() {
 setup_askpass_support
 
 if (( EUID != 0 )); then
-  exec "${sudo_cmd[@]}" "$0" "$@"
+  exec "${sudo_cmd[@]}" env VELDMUIS_RELEASE_TAG="${release_tag}" "$0" "$@"
 fi
 
 require_cmd mkarchiso
@@ -171,8 +191,13 @@ require_cmd find
 require_cmd findmnt
 require_cmd umount
 require_cmd gpg
+require_cmd date
 require_non_negative_integer "ARCHISO_KEEP_BUILDS" "${archiso_keep_builds}"
 require_non_negative_integer "ARCHISO_KEEP_ISOS" "${archiso_keep_isos}"
+validate_release_tag "${release_tag}" || {
+  echo "Invalid Veldmuis release tag: ${release_tag}" >&2
+  exit 1
+}
 
 if [[ ! -d "${profile_source}" ]]; then
   echo "Archiso profile not found: ${profile_source}" >&2
@@ -198,6 +223,7 @@ cleanup_mounts_under "${build_root}"
 prune_archiso_history
 
 cp -a "${profile_source}" "${profile_work}"
+sed -i "s|@VELDMUIS_ISO_VERSION@|${release_tag}|g" "${profile_work}/profiledef.sh"
 
 trap restore_build_ownership EXIT
 
@@ -239,6 +265,7 @@ sed -e "s|@VELDMUIS_REPO_ROOT@|${repo_file_root_escaped}|g" \
   "${profile_source}/pacman.conf.template" > "${profile_work}/pacman.conf"
 
 echo "Building Veldmuis ISO with profile: ${profile_work}"
+echo "Release tag: ${release_tag}"
 echo "Output directory: ${out_dir}"
 
 mkarchiso -v \

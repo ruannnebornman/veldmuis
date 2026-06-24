@@ -72,9 +72,15 @@ check_tracked_artifacts() {
   log "No tracked package, ISO, or build artifacts found"
 }
 
+check_release_policy() {
+  log "Checking release and versioning policy"
+  "${repo_root}/development/check-release-policy.sh"
+}
+
 main() {
   check_shell_syntax
   check_tracked_artifacts
+  check_release_policy
 }
 
 main "$@"
