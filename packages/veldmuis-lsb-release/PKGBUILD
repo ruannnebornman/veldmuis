@@ -1,0 +1,17 @@
+pkgname=veldmuis-lsb-release
+pkgver=20260625
+pkgrel=1
+pkgdesc="LSB-compatible distribution identification for Veldmuis Linux"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT")
+depends=("sh")
+provides=("lsb-release")
+conflicts=("lsb-release")
+replaces=("lsb-release")
+source=("lsb_release")
+sha256sums=("c43446619cabb22516eba4e1c9e615d88daf6c365878b3b95ddf95b15ba2298f")
+
+package() {
+  install -Dm755 "${srcdir}/lsb_release" "${pkgdir}/usr/bin/lsb_release"
+}

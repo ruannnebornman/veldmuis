@@ -29,6 +29,7 @@ Veldmuis does not currently have official outside affiliations, community platfo
 
 ## Core Packages
 
+- `veldmuis-lsb-release`
 - `veldmuis-release`
 - `veldmuis-base`
 - `veldmuis-common`

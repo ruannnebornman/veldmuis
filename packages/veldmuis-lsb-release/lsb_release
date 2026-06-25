@@ -1,0 +1,183 @@
+#!/bin/sh
+
+set -u
+
+os_release=""
+for candidate in /etc/os-release /usr/lib/os-release; do
+  if [ -r "${candidate}" ]; then
+    os_release="${candidate}"
+    break
+  fi
+done
+
+if [ -z "${os_release}" ]; then
+  printf '%s\n' "lsb_release: distribution information is unavailable" >&2
+  exit 10
+fi
+
+# os-release is a shell-compatible file managed by the operating system.
+# shellcheck disable=SC1090
+. "${os_release}"
+
+lsb_version="n/a"
+distributor_id="${NAME:-Veldmuis Linux}"
+distributor_id="${distributor_id% Linux}"
+description="${PRETTY_NAME:-${NAME:-Veldmuis Linux}}"
+release="${VERSION_ID:-${BUILD_ID:-rolling}}"
+codename="${VERSION_CODENAME:-n/a}"
+
+show_version=0
+show_id=0
+show_description=0
+show_release=0
+show_codename=0
+short_output=0
+
+usage() {
+  cat <<'EOF'
+Usage: lsb_release [OPTION]...
+
+  -v, --version       show LSB version
+  -i, --id            show distributor identifier
+  -d, --description   show distribution description
+  -r, --release       show release number
+  -c, --codename      show release codename
+  -a, --all           show all information
+  -s, --short         use compact output
+  -h, --help          show this help
+EOF
+}
+
+enable_option() {
+  case "$1" in
+    a)
+      show_version=1
+      show_id=1
+      show_description=1
+      show_release=1
+      show_codename=1
+      ;;
+    c) show_codename=1 ;;
+    d) show_description=1 ;;
+    i) show_id=1 ;;
+    r) show_release=1 ;;
+    s) short_output=1 ;;
+    v) show_version=1 ;;
+    *)
+      printf 'lsb_release: unsupported option: -%s\n' "$1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --all) enable_option a ;;
+    --codename) enable_option c ;;
+    --description) enable_option d ;;
+    --id) enable_option i ;;
+    --release) enable_option r ;;
+    --short) enable_option s ;;
+    --version) enable_option v ;;
+    --help)
+      usage
+      exit 0
+      ;;
+    --program-version)
+      printf '%s\n' "veldmuis-lsb-release ${release}"
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -?*)
+      options="${1#-}"
+      while [ -n "${options}" ]; do
+        option="${options%"${options#?}"}"
+        options="${options#?}"
+        case "${option}" in
+          h)
+            usage
+            exit 0
+            ;;
+          p)
+            printf '%s\n' "veldmuis-lsb-release ${release}"
+            exit 0
+            ;;
+          *) enable_option "${option}" ;;
+        esac
+      done
+      ;;
+    *)
+      printf 'lsb_release: unexpected argument: %s\n' "$1" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ "$#" -gt 0 ]; then
+  printf 'lsb_release: unexpected argument: %s\n' "$1" >&2
+  usage >&2
+  exit 1
+fi
+
+if [ "${show_version}" -eq 0 ] &&
+  [ "${show_id}" -eq 0 ] &&
+  [ "${show_description}" -eq 0 ] &&
+  [ "${show_release}" -eq 0 ] &&
+  [ "${show_codename}" -eq 0 ]; then
+  show_version=1
+fi
+
+short_value() {
+  case "$1" in
+    *[[:space:]]*) printf '"%s"' "$1" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+if [ "${short_output}" -eq 1 ]; then
+  separator=""
+  for field in version id description release codename; do
+    case "${field}" in
+      version)
+        enabled="${show_version}"
+        value="${lsb_version}"
+        ;;
+      id)
+        enabled="${show_id}"
+        value="${distributor_id}"
+        ;;
+      description)
+        enabled="${show_description}"
+        value="${description}"
+        ;;
+      release)
+        enabled="${show_release}"
+        value="${release}"
+        ;;
+      codename)
+        enabled="${show_codename}"
+        value="${codename}"
+        ;;
+    esac
+
+    if [ "${enabled}" -eq 1 ]; then
+      printf '%s' "${separator}"
+      short_value "${value}"
+      separator=" "
+    fi
+  done
+  printf '\n'
+  exit 0
+fi
+
+[ "${show_version}" -eq 1 ] && printf 'LSB Version:\t%s\n' "${lsb_version}"
+[ "${show_id}" -eq 1 ] && printf 'Distributor ID:\t%s\n' "${distributor_id}"
+[ "${show_description}" -eq 1 ] && printf 'Description:\t%s\n' "${description}"
+[ "${show_release}" -eq 1 ] && printf 'Release:\t%s\n' "${release}"
+[ "${show_codename}" -eq 1 ] && printf 'Codename:\t%s\n' "${codename}"

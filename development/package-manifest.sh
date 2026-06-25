@@ -8,6 +8,7 @@ veldmuis_core_package_order=(
   "veldmuis-calamares-config"
   "veldmuis-keyring"
   "veldmuis-mirrorlist"
+  "veldmuis-lsb-release"
   "veldmuis-release"
   "veldmuis-base"
   "veldmuis-common"
