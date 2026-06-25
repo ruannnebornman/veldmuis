@@ -241,6 +241,19 @@ jobs:
 
           (( missing == 0 )) || exit 1
 
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sudo rm -rf \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/local/lib/android \
+            /usr/share/dotnet
+          docker system prune --all --force --volumes
+          df -h /
+
       - name: Build packages, repo, and ISO in isolated Arch containers
         shell: bash
         env:
