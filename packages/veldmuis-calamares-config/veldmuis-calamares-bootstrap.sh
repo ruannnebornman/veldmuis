@@ -313,17 +313,6 @@ install_target_arch_mirrorlist() {
   install -Dm644 "${tmp_arch_mirrorlist}" "${target_root}/etc/pacman.d/mirrorlist"
 }
 
-install_target_greetd_config() {
-  local source_path="${target_root}/usr/share/veldmuis/greetd/config.toml"
-  local target_path="${target_root}/etc/greetd/config.toml"
-
-  [[ -f "${source_path}" ]] || \
-    die "Veldmuis greetd configuration is missing from the installed target."
-
-  log "Installing Veldmuis greetd configuration into target system"
-  install -Dm644 "${source_path}" "${target_path}"
-}
-
 normalize_keyring_permissions() {
   local gpgdir="$1"
 
@@ -499,7 +488,6 @@ main() {
   mapfile -t bootstrap_packages < <(initial_target_packages)
   log "Installing Veldmuis package stack into ${target_root}: ${bootstrap_packages[*]}"
   pacstrap -C "${tmp_pacman_conf}" "${target_root}" "${bootstrap_packages[@]}"
-  install_target_greetd_config
   install_target_arch_mirrorlist
 
   ensure_target_keyring_populated "${release_key_id}"

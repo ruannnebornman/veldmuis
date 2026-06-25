@@ -18,18 +18,11 @@ fi
 # fails. Root starts locked from the airootfs shadow file.
 passwd -d live
 
-install -d -m 0755 /etc/greetd
-cat >/etc/greetd/config.toml <<'EOF'
-[terminal]
-vt = 1
-
-[default_session]
-command = "cage -m last -s -- regreet"
-user = "greeter"
-
-[initial_session]
-command = "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland"
-user = "live"
+cat >/etc/plasmalogin.conf <<'EOF'
+[Autologin]
+User=live
+Session=plasma.desktop
+Relogin=true
 EOF
 
 install -d -m 0750 -o live -g live /home/live
@@ -47,7 +40,7 @@ live ALL=(ALL:ALL) NOPASSWD: ALL
 EOF
 chmod 0440 /etc/sudoers.d/00-live
 
-enable_service_if_present greetd.service
+enable_service_if_present plasmalogin.service
 enable_service_if_present NetworkManager.service
 enable_service_if_present bluetooth.service
 enable_service_if_present power-profiles-daemon.service

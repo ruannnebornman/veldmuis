@@ -1,52 +1,46 @@
-_veldmuis_greetd_template="/usr/share/veldmuis/greetd/config.toml"
-_veldmuis_greetd_target="/etc/greetd/config.toml"
-_veldmuis_greetd_known_hashes="c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46 b22a211900b08d9d208d88a8ebfd1c93bbc59c58ebb2c98dc8ea6a5f0e57e3c3 5bd343f444f2cfa8a1cbcdb54038c4887b0156a6f8bf1c39412233e0dca40593"
+_veldmuis_legacy_greetd_config="/etc/greetd/config.toml"
+_veldmuis_legacy_greetd_hashes="c90785ff8783e68dc9e0d4c9c48461a93d6a781e17da857c02ec8905d80e1b46 b22a211900b08d9d208d88a8ebfd1c93bbc59c58ebb2c98dc8ea6a5f0e57e3c3 5bd343f444f2cfa8a1cbcdb54038c4887b0156a6f8bf1c39412233e0dca40593"
 
-_veldmuis_file_sha256() {
-  sha256sum "$1" | awk '{print $1}'
+_veldmuis_remove_legacy_config() {
+  local current_hash=""
+
+  if [ -f "${_veldmuis_legacy_greetd_config}" ]; then
+    current_hash="$(sha256sum "${_veldmuis_legacy_greetd_config}" | awk '{print $1}')"
+    case " ${_veldmuis_legacy_greetd_hashes} " in
+      *" ${current_hash} "*)
+        rm -f "${_veldmuis_legacy_greetd_config}"
+        ;;
+    esac
+  fi
+
+  rm -f "${_veldmuis_legacy_greetd_config}.veldmuis"
+  rmdir /etc/greetd 2>/dev/null || true
 }
 
-_veldmuis_hash_is_known() {
-  hash="$1"
+_veldmuis_enable_plasma_login() {
+  command -v systemctl >/dev/null 2>&1 || return 0
 
-  case " ${_veldmuis_greetd_known_hashes} " in
-    *" ${hash} "*)
-      return 0
-      ;;
-  esac
+  for legacy_unit in greetd.service sddm.service; do
+    systemctl disable "${legacy_unit}" >/dev/null 2>&1 || true
+  done
 
-  return 1
-}
-
-_veldmuis_greetd_should_replace() {
-  [ -f "${_veldmuis_greetd_target}" ] || return 0
-
-  current_hash="$(_veldmuis_file_sha256 "${_veldmuis_greetd_target}")"
-  _veldmuis_hash_is_known "${current_hash}" && return 0
-
-  grep -Eq '^[[:space:]]*command[[:space:]]*=[[:space:]]*"([^"]*/)?agreety([[:space:]]|")' \
-    "${_veldmuis_greetd_target}" && return 0
-
-  return 1
-}
-
-_veldmuis_configure_greetd() {
-  [ -f "${_veldmuis_greetd_template}" ] || return 0
-
-  if _veldmuis_greetd_should_replace; then
-    install -Dm644 "${_veldmuis_greetd_template}" "${_veldmuis_greetd_target}"
+  if systemctl enable --force plasmalogin.service >/dev/null 2>&1; then
     return 0
   fi
 
-  install -Dm644 "${_veldmuis_greetd_template}" "${_veldmuis_greetd_target}.veldmuis"
   printf '%s\n' \
-    "Veldmuis greetd config saved to ${_veldmuis_greetd_target}.veldmuis; existing config was left unchanged."
+    "Could not enable plasmalogin.service automatically; enable it before rebooting."
+}
+
+_veldmuis_configure_display_manager() {
+  _veldmuis_remove_legacy_config
+  _veldmuis_enable_plasma_login
 }
 
 post_install() {
-  _veldmuis_configure_greetd
+  _veldmuis_configure_display_manager
 }
 
 post_upgrade() {
-  _veldmuis_configure_greetd
+  _veldmuis_configure_display_manager
 }
