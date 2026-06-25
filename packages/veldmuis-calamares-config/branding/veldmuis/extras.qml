@@ -77,121 +77,208 @@ Rectangle {
             }
         }
 
-        Rectangle {
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: "#2a1b17"
-            border.color: "#5a3a2a"
-            border.width: 1
-            radius: 6
+            spacing: 10
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 14
+            CheckBox {
+                id: gaming
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                hoverEnabled: true
+                text: ""
 
-                    Label {
+                indicator: Rectangle {
+                    width: 28
+                    height: 28
+                    x: 18
+                    y: (gaming.height - height) / 2
+                    radius: 5
+                    color: gaming.checked ? "#e59c3f" : "#201411"
+                    border.color: gaming.checked ? "#f5b85f" : "#80604d"
+                    border.width: 2
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 12
+                        height: 12
+                        radius: 3
+                        color: "#201411"
+                        visible: gaming.checked
+                    }
+                }
+
+                background: Rectangle {
+                    radius: 6
+                    color: gaming.checked ? "#3a271d"
+                                            : (gaming.hovered ? "#32211c" : "#2a1b17")
+                    border.color: gaming.checked ? "#e59c3f" : "#5a3a2a"
+                    border.width: gaming.checked ? 2 : 1
+                }
+
+                Column {
+                    anchors.left: gaming.indicator.right
+                    anchors.leftMargin: 16
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+
+                    Text {
+                        width: parent.width
                         text: qsTr("Gaming apps")
-                        color: "#e59c3f"
+                        color: "#fff6ed"
                         font.pixelSize: 17
                         font.bold: true
+                        elide: Text.ElideRight
                     }
 
-                    CheckBox {
-                        id: gaming
-
-                        Layout.fillWidth: true
+                    Text {
+                        width: parent.width
                         text: qsTr("Steam, Lutris, and Discord")
-                        font.pixelSize: 16
-                        contentItem: Text {
-                            leftPadding: gaming.indicator.width + gaming.spacing
-                            text: gaming.text
-                            color: "#ffffff"
-                            font: gaming.font
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-                        onToggled: root.updateSelection()
+                        color: "#c9b8aa"
+                        font.pixelSize: 14
+                        elide: Text.ElideRight
                     }
                 }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: "#4a3025"
+                onToggled: root.updateSelection()
+            }
+
+            CheckBox {
+                id: qbittorrent
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                hoverEnabled: true
+                text: ""
+
+                indicator: Rectangle {
+                    width: 28
+                    height: 28
+                    x: 18
+                    y: (qbittorrent.height - height) / 2
+                    radius: 5
+                    color: qbittorrent.checked ? "#e59c3f" : "#201411"
+                    border.color: qbittorrent.checked ? "#f5b85f" : "#80604d"
+                    border.width: 2
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 12
+                        height: 12
+                        radius: 3
+                        color: "#201411"
+                        visible: qbittorrent.checked
+                    }
                 }
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
+                background: Rectangle {
+                    radius: 6
+                    color: qbittorrent.checked ? "#3a271d"
+                                                : (qbittorrent.hovered ? "#32211c" : "#2a1b17")
+                    border.color: qbittorrent.checked ? "#e59c3f" : "#5a3a2a"
+                    border.width: qbittorrent.checked ? 2 : 1
+                }
 
-                    Label {
+                Column {
+                    anchors.left: qbittorrent.indicator.right
+                    anchors.leftMargin: 16
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+
+                    Text {
+                        width: parent.width
                         text: qsTr("Download tools")
-                        color: "#e59c3f"
+                        color: "#fff6ed"
                         font.pixelSize: 17
                         font.bold: true
+                        elide: Text.ElideRight
                     }
 
-                    CheckBox {
-                        id: qbittorrent
-
-                        Layout.fillWidth: true
+                    Text {
+                        width: parent.width
                         text: qsTr("qBittorrent")
-                        font.pixelSize: 16
-                        contentItem: Text {
-                            leftPadding: qbittorrent.indicator.width + qbittorrent.spacing
-                            text: qbittorrent.text
-                            color: "#ffffff"
-                            font: qbittorrent.font
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-                        onToggled: root.updateSelection()
+                        color: "#c9b8aa"
+                        font.pixelSize: 14
+                        elide: Text.ElideRight
                     }
                 }
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: "#4a3025"
+                onToggled: root.updateSelection()
+            }
+
+            CheckBox {
+                id: syncthing
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                hoverEnabled: true
+                text: ""
+
+                indicator: Rectangle {
+                    width: 28
+                    height: 28
+                    x: 18
+                    y: (syncthing.height - height) / 2
+                    radius: 5
+                    color: syncthing.checked ? "#e59c3f" : "#201411"
+                    border.color: syncthing.checked ? "#f5b85f" : "#80604d"
+                    border.width: 2
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 12
+                        height: 12
+                        radius: 3
+                        color: "#201411"
+                        visible: syncthing.checked
+                    }
                 }
 
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
+                background: Rectangle {
+                    radius: 6
+                    color: syncthing.checked ? "#3a271d"
+                                             : (syncthing.hovered ? "#32211c" : "#2a1b17")
+                    border.color: syncthing.checked ? "#e59c3f" : "#5a3a2a"
+                    border.width: syncthing.checked ? 2 : 1
+                }
 
-                    Label {
+                Column {
+                    anchors.left: syncthing.indicator.right
+                    anchors.leftMargin: 16
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+
+                    Text {
+                        width: parent.width
                         text: qsTr("Sync tools")
-                        color: "#e59c3f"
+                        color: "#fff6ed"
                         font.pixelSize: 17
                         font.bold: true
+                        elide: Text.ElideRight
                     }
 
-                    CheckBox {
-                        id: syncthing
-
-                        Layout.fillWidth: true
+                    Text {
+                        width: parent.width
                         text: qsTr("Syncthing")
-                        font.pixelSize: 16
-                        contentItem: Text {
-                            leftPadding: syncthing.indicator.width + syncthing.spacing
-                            text: syncthing.text
-                            color: "#ffffff"
-                            font: syncthing.font
-                            verticalAlignment: Text.AlignVCenter
-                            elide: Text.ElideRight
-                        }
-                        onToggled: root.updateSelection()
+                        color: "#c9b8aa"
+                        font.pixelSize: 14
+                        elide: Text.ElideRight
                     }
                 }
 
-                Item {
-                    Layout.fillHeight: true
-                }
+                onToggled: root.updateSelection()
+            }
+
+            Item {
+                Layout.fillHeight: true
             }
         }
     }
