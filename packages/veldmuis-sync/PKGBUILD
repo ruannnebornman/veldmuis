@@ -1,6 +1,6 @@
 pkgname=veldmuis-sync
 pkgver=20260628
-pkgrel=1
+pkgrel=2
 pkgdesc="Optional file synchronization metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -11,10 +11,12 @@ depends=(
 )
 source=(
   "firefox-policies.json"
+  "veldmuis-syncthing.conf"
   "veldmuis-syncthing-setup"
 )
 sha256sums=(
   "6f736a0970bc2d80920a860442d5076b5617de10f7b7c5fb95b48597859f64af"
+  "e8dcf129c5b1a87eefbf97b70d95ac917dd5af9a3ba775ae6bef8a05c258cce4"
   "14625ef66c61062820590eef7a7056bada9ce8f8e92211821bbbaaa4d602c5fb"
 )
 
@@ -23,6 +25,8 @@ package() {
     "${pkgdir}/usr/lib/firefox/distribution/policies.json"
   install -Dm755 "${srcdir}/veldmuis-syncthing-setup" \
     "${pkgdir}/usr/bin/veldmuis-syncthing-setup"
+  install -Dm644 "${srcdir}/veldmuis-syncthing.conf" \
+    "${pkgdir}/usr/lib/systemd/user/syncthing.service.d/veldmuis.conf"
 
   install -dm755 "${pkgdir}/usr/lib/systemd/user/default.target.wants"
   ln -s ../syncthing.service \
