@@ -20,3 +20,6 @@
   status checks and explicit human review when available.
 - Do not commit, push, create releases, publish packages, or change protected
   settings unless explicitly asked.
+- After starting a pipeline or workflow, do not monitor, poll, wait for, or
+  report its progress unless explicitly asked in the current task. A request to
+  start a pipeline or workflow authorizes only its dispatch.
