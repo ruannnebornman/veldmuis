@@ -1,12 +1,13 @@
 pkgname=veldmuis-development
 pkgver=20260628
-pkgrel=1
+pkgrel=2
 pkgdesc="Optional development applications metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
 depends=(
   "code"
+  "github-cli"
 )
 
 package() {
