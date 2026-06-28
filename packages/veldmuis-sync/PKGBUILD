@@ -1,5 +1,5 @@
 pkgname=veldmuis-sync
-pkgver=20260621
+pkgver=20260628
 pkgrel=1
 pkgdesc="Optional file synchronization metapackage for Veldmuis Linux"
 arch=("any")
@@ -23,4 +23,8 @@ package() {
     "${pkgdir}/usr/lib/firefox/distribution/policies.json"
   install -Dm755 "${srcdir}/veldmuis-syncthing-setup" \
     "${pkgdir}/usr/bin/veldmuis-syncthing-setup"
+
+  install -dm755 "${pkgdir}/usr/lib/systemd/user/default.target.wants"
+  ln -s ../syncthing.service \
+    "${pkgdir}/usr/lib/systemd/user/default.target.wants/syncthing.service"
 }
