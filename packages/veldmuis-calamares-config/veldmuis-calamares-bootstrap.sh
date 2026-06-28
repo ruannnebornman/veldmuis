@@ -8,6 +8,7 @@ extras_choice="${3:-}"
 gaming_choice="no-gaming"
 downloads_choice="no-downloads"
 sync_choice="no-sync"
+development_choice="no-development"
 live_repo_root="/opt/veldmuis/repo"
 tmp_pacman_conf=""
 tmp_arch_mirrorlist=""
@@ -133,6 +134,20 @@ normalize_sync_choice() {
   esac
 }
 
+normalize_development_choice() {
+  case "${development_choice}" in
+    no-development|code)
+      ;;
+    "")
+      development_choice="no-development"
+      ;;
+    *)
+      log "Unknown development choice '${development_choice}', defaulting to no-development"
+      development_choice="no-development"
+      ;;
+  esac
+}
+
 normalize_extras_choice() {
   local extra
   local -a extras=()
@@ -140,6 +155,7 @@ normalize_extras_choice() {
   gaming_choice="no-gaming"
   downloads_choice="no-downloads"
   sync_choice="no-sync"
+  development_choice="no-development"
 
   [[ -n "${extras_choice}" ]] || return 0
 
@@ -154,6 +170,9 @@ normalize_extras_choice() {
         ;;
       syncthing)
         sync_choice="syncthing"
+        ;;
+      code)
+        development_choice="code"
         ;;
       "")
         ;;
@@ -424,6 +443,15 @@ selected_sync_packages() {
   esac
 }
 
+selected_development_packages() {
+  case "${development_choice}" in
+    code)
+      printf '%s\n' \
+        veldmuis-development
+      ;;
+  esac
+}
+
 initial_target_packages() {
   local package
   local -a packages=(veldmuis-desktop)
@@ -453,6 +481,11 @@ initial_target_packages() {
     packages+=("${package}")
   done < <(selected_sync_packages)
 
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(selected_development_packages)
+
   printf '%s\n' "${packages[@]}"
 }
 
@@ -479,6 +512,7 @@ main() {
   normalize_gaming_choice
   normalize_downloads_choice
   normalize_sync_choice
+  normalize_development_choice
   write_pacman_conf
   prepare_target_root
 
@@ -502,6 +536,7 @@ main() {
   log "Selected gaming choice: ${gaming_choice}"
   log "Selected downloads choice: ${downloads_choice}"
   log "Selected sync choice: ${sync_choice}"
+  log "Selected development choice: ${development_choice}"
 
   log "Bootstrap complete"
 }

@@ -32,6 +32,9 @@ Rectangle {
         if (syncthing.checked) {
             selected.push("syncthing")
         }
+        if (code.checked) {
+            selected.push("code")
+        }
         chooserConfig.packageChoice = selected.join(",")
     }
 
@@ -47,6 +50,7 @@ Rectangle {
                          || selected.indexOf("discord") >= 0
         qbittorrent.checked = selected.indexOf("qbittorrent") >= 0
         syncthing.checked = selected.indexOf("syncthing") >= 0
+        code.checked = selected.indexOf("code") >= 0
         syncing = false
     }
 
@@ -268,6 +272,71 @@ Rectangle {
                     Text {
                         width: parent.width
                         text: qsTr("Syncthing")
+                        color: "#c9b8aa"
+                        font.pixelSize: 14
+                        elide: Text.ElideRight
+                    }
+                }
+
+                onToggled: root.updateSelection()
+            }
+
+            CheckBox {
+                id: code
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                hoverEnabled: true
+                text: ""
+
+                indicator: Rectangle {
+                    width: 28
+                    height: 28
+                    x: 18
+                    y: (code.height - height) / 2
+                    radius: 5
+                    color: code.checked ? "#e59c3f" : "#201411"
+                    border.color: code.checked ? "#f5b85f" : "#80604d"
+                    border.width: 2
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 12
+                        height: 12
+                        radius: 3
+                        color: "#201411"
+                        visible: code.checked
+                    }
+                }
+
+                background: Rectangle {
+                    radius: 6
+                    color: code.checked ? "#3a271d"
+                                        : (code.hovered ? "#32211c" : "#2a1b17")
+                    border.color: code.checked ? "#e59c3f" : "#5a3a2a"
+                    border.width: code.checked ? 2 : 1
+                }
+
+                Column {
+                    anchors.left: code.indicator.right
+                    anchors.leftMargin: 16
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+
+                    Text {
+                        width: parent.width
+                        text: qsTr("Development tools")
+                        color: "#fff6ed"
+                        font.pixelSize: 17
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: qsTr("Code - OSS")
                         color: "#c9b8aa"
                         font.pixelSize: 14
                         elide: Text.ElideRight
