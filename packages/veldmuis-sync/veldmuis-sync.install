@@ -1,0 +1,33 @@
+#!/bin/sh
+
+hosts_path="etc/hosts"
+hosts_alias="syncthing.localhost"
+hosts_line="127.0.0.1 ${hosts_alias}"
+
+ensure_hosts_alias() {
+  [ -r "${hosts_path}" ] || return 0
+
+  if awk -v alias="${hosts_alias}" '
+    $1 == "127.0.0.1" {
+      for (idx = 2; idx <= NF; idx++) {
+        if ($idx == alias) {
+          found = 1
+          exit
+        }
+      }
+    }
+    END { exit found ? 0 : 1 }
+  ' "${hosts_path}"; then
+    return 0
+  fi
+
+  printf '\n%s\n' "${hosts_line}" >> "${hosts_path}"
+}
+
+post_install() {
+  ensure_hosts_alias
+}
+
+post_upgrade() {
+  post_install
+}

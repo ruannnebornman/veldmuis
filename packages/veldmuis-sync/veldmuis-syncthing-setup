@@ -104,6 +104,7 @@ configure_user_service() {
     return
   }
 
+  systemctl --user reset-failed syncthing.service 2>/dev/null || true
   systemctl --user enable --now syncthing.service
   log "Syncthing user service is enabled and started"
 }
