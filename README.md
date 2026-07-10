@@ -59,6 +59,22 @@ GitHub repository above. Veldmuis does not currently have official outside
 affiliations, community platforms, or fundraising pages. If that changes, it
 will be announced through those official links.
 
+## Before Installing
+
+The current supported install target requires:
+
+- An x86_64 computer with UEFI firmware.
+- At least 2 GiB of RAM and 12 GiB of available storage.
+- A working internet connection throughout installation.
+- Secure Boot disabled.
+- A backup of data that could be affected by partitioning.
+
+BIOS and legacy boot are not supported. The listed RAM and storage values are
+installer minimums, not recommended capacity for normal desktop use.
+
+Read [Installing Veldmuis](docs/installing.md) before writing the ISO or
+changing disk partitions.
+
 ## Download And Verify
 
 Current public ISO files:
@@ -77,14 +93,22 @@ current signing-key details.
 
 ## Documentation
 
-- [Documentation index](docs/index.md)
-- [Security and verification](SECURITY.md)
-- [Support scope](SUPPORT.md)
-- [Release process](docs/release.md)
-- [Building packages and ISOs](docs/building.md)
-- [NVIDIA 580xx support](docs/nvidia.md)
+### Install And Use
+
+- [Installing Veldmuis](docs/installing.md)
+- [Updating Veldmuis](docs/updating.md)
 - [Package composition](docs/packages.md)
+- [NVIDIA 580xx support](docs/nvidia.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Support scope](SUPPORT.md)
+- [Security and verification](SECURITY.md)
+
+### Understand And Maintain
+
+- [Documentation index](docs/index.md)
+- [Architecture](docs/architecture.md)
+- [Building packages and ISOs](docs/building.md)
+- [Release process](docs/release.md)
 - [Contributing and issue triage](CONTRIBUTING.md)
 
 ## Repository Layout
