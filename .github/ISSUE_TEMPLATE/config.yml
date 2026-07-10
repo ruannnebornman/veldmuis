@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Veldmuis documentation
+    url: https://github.com/ruannnebornman/veldmuis/blob/main/docs/index.md
+    about: Read the project documentation before opening an issue.
+  - name: Security policy
+    url: https://github.com/ruannnebornman/veldmuis/blob/main/SECURITY.md
+    about: Read this before reporting a security-sensitive issue.

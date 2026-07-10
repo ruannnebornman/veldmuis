@@ -1,0 +1,78 @@
+name: Installer Issue
+description: Report a Calamares or install-time issue.
+title: "[Installer]: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed during installation?
+    validations:
+      required: true
+  - type: input
+    id: release
+    attributes:
+      label: Veldmuis release tag or ISO name
+      placeholder: "2026.06.24 or veldmuis-2026.06.24-x86_64.iso"
+    validations:
+      required: true
+  - type: dropdown
+    id: boot-entry
+    attributes:
+      label: Live boot entry
+      options:
+        - Normal
+        - Safe graphics
+        - Both tested
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware or VM
+      placeholder: |
+        CPU:
+        GPU:
+        RAM:
+        Disk:
+        VM platform:
+    validations:
+      required: true
+  - type: textarea
+    id: selections
+    attributes:
+      label: Installer selections
+      placeholder: |
+        Partitioning:
+        Filesystem:
+        Encryption:
+        Graphics:
+        Extras:
+    validations:
+      required: true
+  - type: textarea
+    id: network
+    attributes:
+      label: Network state
+      description: The current installer uses Arch mirrors for Arch packages.
+      placeholder: "Connected, disconnected, captive portal, DNS issue, proxy, etc."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Installer logs
+      description: Include `/tmp/veldmuis-calamares-debug.log` and `/tmp/veldmuis-calamares-bootstrap.log` if available.
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I verified the ISO checksum or noted why I could not.
+          required: true
+        - label: I removed secrets, tokens, and private data from this report.
+          required: true

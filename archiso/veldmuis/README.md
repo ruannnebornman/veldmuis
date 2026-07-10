@@ -15,4 +15,8 @@ live/install ISO.
 ## Design Notes
 
 - The live session uses a passwordless `live` user for installer convenience.
-  This is live-media-only
+  This is live-media-only behavior.
+- The ISO embeds the signed Veldmuis package repositories, but the current
+  installer still resolves Arch packages from Arch mirrors.
+- Broader project architecture and support boundaries are documented in
+  `../../docs/architecture.md` and `../../SUPPORT.md`.

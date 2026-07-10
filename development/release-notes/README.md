@@ -36,7 +36,7 @@ not link to an ISO.
 
 1. Confirm `main` contains every intended change and is pushed.
 2. Choose the next unused tag for the UTC date.
-3. Add an optional release-note file matching the exact tag.
+3. Add a release-note file matching the exact tag for any meaningful release.
 4. Dispatch the release workflow once.
 5. Confirm the tag, manifest commit, ISO filename, and checksum filename match.
 6. Confirm the latest download URL serves the newly published ISO.
@@ -61,3 +61,19 @@ sequence when a correction is needed.
 
 The release workflow prepends matching content to its generated GitHub release
 notes.
+
+## Quality Bar
+
+For meaningful releases, write human-authored notes instead of relying only on
+the generated commit list.
+
+Release notes should:
+
+- Summarize user-visible changes first.
+- Group technical changes by area.
+- Call out known issues, upgrade notes, and support caveats.
+- Avoid empty changelog sections.
+- Avoid stale comparison bases and retired release terminology.
+
+The workflow can generate a minimal fallback body when no matching release-note
+file exists, but that fallback should be treated as a last resort.

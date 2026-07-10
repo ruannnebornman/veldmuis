@@ -1,0 +1,81 @@
+name: NVIDIA 580xx Issue
+description: Report an issue with the optional NVIDIA 580xx DKMS path.
+title: "[NVIDIA 580xx]: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed?
+    validations:
+      required: true
+  - type: input
+    id: release
+    attributes:
+      label: Veldmuis release tag or ISO name
+    validations:
+      required: true
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU model
+      placeholder: "Output from lspci is useful."
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Failure stage
+      options:
+        - Installer
+        - First boot
+        - After package update
+        - After kernel update
+        - After changing graphics packages
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Relevant package versions
+      placeholder: |
+        pacman -Q linux linux-headers veldmuis-nvidia-legacy nvidia-580xx-dkms nvidia-580xx-utils
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: dkms
+    attributes:
+      label: DKMS status
+      placeholder: "dkms status"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Recovery state
+      placeholder: |
+        Can reach TTY:
+        Safe graphics live entry boots:
+        LTS kernel available:
+        Open-source NVIDIA path tested:
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or command output
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I read the NVIDIA 580xx support document.
+          required: true
+        - label: I removed secrets, tokens, and private data from this report.
+          required: true
