@@ -151,6 +151,25 @@ sudo systemctl start veldmuis-refresh-arch-mirrors.service
 sudo pacman -Syu
 ```
 
+## AppImage Reports Missing libfuse.so.2
+
+Veldmuis installs the FUSE 2 compatibility runtime through `veldmuis-common`.
+Systems installed before that dependency was added can install it with a full
+system upgrade:
+
+```sh
+sudo pacman -Syu fuse2
+```
+
+Verify that the package and compatibility library are available:
+
+```sh
+pacman -Q fuse2
+ldconfig -p | grep 'libfuse\.so\.2'
+```
+
+Then run the AppImage again.
+
 ## Optional Extras Are Missing
 
 Optional application groups are not part of the default desktop install.

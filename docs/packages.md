@@ -60,6 +60,7 @@ xfsprogs
 `veldmuis-common` adds common CLI and user-facing basics:
 
 ```text
+fuse2
 bash-completion
 nano
 git
@@ -73,6 +74,8 @@ btop
 noto-fonts
 noto-fonts-emoji
 ```
+
+`fuse2` provides the legacy `libfuse.so.2` runtime required by many AppImages.
 
 ## Boot Policy
 
