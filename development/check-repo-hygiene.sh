@@ -72,6 +72,31 @@ check_tracked_artifacts() {
   log "No tracked package, ISO, or build artifacts found"
 }
 
+check_tracked_signing_secrets() {
+  local -a secret_content_files=()
+  local -a secret_path_files=()
+  local armor_pattern='BEGIN PGP '
+
+  armor_pattern+='(PRIVATE|SECRET) KEY BLOCK'
+
+  mapfile -t secret_content_files < <(
+    git -C "${repo_root}" grep -Il -E \
+      "${armor_pattern}" -- 2>/dev/null || true
+  )
+  mapfile -t secret_path_files < <(
+    git -C "${repo_root}" ls-files | grep -E \
+      '(^|/)(VELDMUIS_GPG_PRIVATE_KEY\.asc|veldmuis-private-key\.asc|veldmuis-revocation-cert\.rev|ownertrust\.txt|current-signing-key\.fpr|keyring-backup[^/]*\.(gpg|zip))$' || true
+  )
+
+  if ((${#secret_content_files[@]} > 0 || ${#secret_path_files[@]} > 0)); then
+    printf '%s\n' "${secret_content_files[@]}" "${secret_path_files[@]}" | \
+      awk 'NF && !seen[$0]++' >&2
+    die "Private signing-key or recovery material is tracked."
+  fi
+
+  log "No private signing-key or recovery material is tracked"
+}
+
 check_release_policy() {
   log "Checking release and versioning policy"
   "${repo_root}/development/check-release-policy.sh"
@@ -80,6 +105,7 @@ check_release_policy() {
 main() {
   check_shell_syntax
   check_tracked_artifacts
+  check_tracked_signing_secrets
   check_release_policy
 }
 

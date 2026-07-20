@@ -4,3 +4,13 @@ packages/*/*.pkg.tar.*
 repos/
 artifacts/
 temp/
+
+# Local signing-key exports, recovery files, and encrypted backup bundles.
+**/VELDMUIS_GPG_PRIVATE_KEY.asc
+**/veldmuis-private-key.asc
+**/veldmuis-revocation-cert.rev
+**/ownertrust.txt
+**/current-signing-key.fpr
+**/keyring-backup*.gpg
+**/keyring-backup*.zip
+**/ci-release-secrets/

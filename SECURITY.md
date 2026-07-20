@@ -22,8 +22,11 @@ The current Veldmuis package signing key is packaged in
 `packages/veldmuis-keyring`.
 
 ```text
-UID:         Veldmuis Linux Release <veldmuis@veldmuislinux.org>
-Fingerprint: 022A 2A63 9A21 666F 1F48  BD5E BD3E AF48 5786 AAEF
+UID:                    Veldmuis Linux Release <veldmuis@veldmuislinux.org>
+Primary fingerprint:    022A 2A63 9A21 666F 1F48  BD5E BD3E AF48 5786 AAEF
+Signing subkey:          E76D 738D 74AA 940D 429B  D9F5 BC27 E50C B16F 2302
+Created:                 2026-03-21
+Expires:                 2031-03-20
 ```
 
 The packaged keyring files are:
@@ -139,17 +142,21 @@ later in a network-disabled signing stage after artifact validation. See
 
 ## Key Rotation
 
-The repository includes key-rotation helpers under `development/key-rotation/`.
-The intended rotation model is:
+The current primary key is not replaced for routine package or image releases.
+Normal signing uses its signing subkey. The helpers under
+`development/key-rotation/` are limited to encrypted backup, verify/restore,
+and signing-subkey export; they do not generate, delete, revoke, or replace
+keys.
 
-1. Generate a new Veldmuis release key.
-2. Update `packages/veldmuis-keyring`.
-3. Add old trusted fingerprints to `veldmuis-revoked`.
-4. Rebuild and publish the keyring package.
-5. Publish future packages and repository databases with the new key.
+A routine signing-subkey rotation keeps the primary fingerprint and distributes
+the new public subkey before repository signatures switch to it. Replacing the
+primary key is a separate staged operation: existing systems must first receive
+a transition keyring authenticated by the old trusted key, then be tested
+through the full update path before the repository changes signing authority.
 
-Users should treat key changes as security-sensitive. A future key rotation
-should be visible in the keyring package, release notes, and this file.
+Users should treat any key change as security-sensitive. A future rotation
+must be visible in the keyring package, release notes, and this file. See the
+[signing-key operations runbook](development/key-rotation/README.md).
 
 ## Report A Vulnerability
 

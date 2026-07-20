@@ -46,6 +46,9 @@ Veldmuis is already installed, use the updating and troubleshooting guides.
 - [Release process](release.md)
   Tag formats, release workflow behavior, published artifacts, and release-note
   expectations.
+- [Signing-key operations](../development/key-rotation/README.md)
+  Current key set, encrypted backup and recovery, signing-subkey export, and
+  future rotation boundaries.
 
 ## Documentation Policy
 

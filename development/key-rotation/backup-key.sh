@@ -1,224 +1,353 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+umask 077
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
-keyring_dir="${repo_root}/packages/veldmuis-keyring"
+keyring_dir="${VELDMUIS_KEYRING_DIR:-${repo_root}/packages/veldmuis-keyring}"
 restore_script_path="${script_dir}/restore-key.sh"
+
+archive_path=""
+archive_tmp=""
+bundle_root=""
+current_fingerprint=""
+force=0
+passphrase_file=""
+stage_parent=""
 
 usage() {
   cat <<'EOF'
 Usage:
-  backup-key.sh
+  backup-key.sh [--output PATH] [--passphrase-file PATH] [--force]
 
 Behavior:
-  - exports the current Veldmuis signing key and ownertrust
-  - copies the repo keyring files and local marker file
-  - writes restore instructions
-  - creates a backup folder and zip
+  - verifies the current secret key against the committed trusted fingerprint
+  - stages secret material in a mode-0700 temporary directory
+  - creates an AES-256 encrypted OpenPGP archive
+  - verifies the encrypted archive before publishing it atomically
+  - removes plaintext staging files on exit
+
+The command prompts for the archive passphrase during encryption and again
+during verification. --passphrase-file is intended for controlled recovery
+testing; the file must not be accessible by group or other users.
 
 Environment overrides:
-  VELDMUIS_KEY_FPR_FILE      Default: ~/.local/share/veldmuis/keyring-private/current-signing-key.fpr
-  VELDMUIS_KEY_BACKUP_DIR    Default: ~/.local/share/veldmuis/keyring-backup
-  VELDMUIS_KEY_BACKUP_ZIP    Default: ~/.local/share/veldmuis/keyring-backup.zip
-  VELDMUIS_SIGNING_KEY_NAME  Default: Veldmuis Linux Release
-  VELDMUIS_SIGNING_KEY_EMAIL Default: veldmuis@veldmuislinux.org
+  VELDMUIS_KEY_FPR_FILE        Default: ~/.local/share/veldmuis/keyring-private/current-signing-key.fpr
+  VELDMUIS_KEY_BACKUP_ARCHIVE  Default: ~/.local/share/veldmuis/keyring-backup.tar.gpg
+  VELDMUIS_KEY_BACKUP_TMPDIR   Default: /dev/shm when writable, otherwise ${TMPDIR:-/tmp}
+  VELDMUIS_KEYRING_DIR         Test/recovery override for the public keyring directory
 EOF
+}
+
+die() {
+  printf '[backup-key] ERROR: %s\n' "$*" >&2
+  exit 1
 }
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || {
-    printf 'Missing required command: %s\n' "$1" >&2
-    exit 1
-  }
+  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
 
-key_uid_fingerprints() {
-  gpg --list-secret-keys --with-colons --fingerprint 2>/dev/null | \
-    awk -F: -v wanted_uid="${key_uid}" '
-      /^sec:/ { primary="" }
-      /^fpr:/ && primary == "" { primary = $10 }
-      /^uid:/ && $10 == wanted_uid && primary != "" {
-        print primary
-        primary = ""
-      }
-    '
+cleanup() {
+  if [[ -n "${archive_tmp}" && -f "${archive_tmp}" ]]; then
+    rm -f -- "${archive_tmp}"
+  fi
+
+  if [[ -n "${stage_parent}" && -d "${stage_parent}" ]]; then
+    rm -rf -- "${stage_parent}"
+  fi
+}
+
+normalize_fingerprint() {
+  tr -d '[:space:]' | tr '[:lower:]' '[:upper:]'
+}
+
+validate_fingerprint() {
+  [[ "$1" =~ ^[0-9A-F]{40}$ ]] || die "Invalid OpenPGP fingerprint: $1"
+}
+
+trusted_fingerprint() {
+  local trusted_file="${keyring_dir}/veldmuis-trusted"
+
+  [[ -r "${trusted_file}" ]] || die "Trusted fingerprint file is missing: ${trusted_file}"
+  awk -F: 'NF && $1 !~ /^#/ { print $1; exit }' "${trusted_file}" | normalize_fingerprint
+}
+
+public_key_fingerprint() {
+  local public_key_file="${keyring_dir}/veldmuis.gpg"
+
+  [[ -r "${public_key_file}" ]] || die "Public keyring is missing: ${public_key_file}"
+  gpg --batch --show-keys --with-colons "${public_key_file}" 2>/dev/null | \
+    awk -F: '$1 == "fpr" { print $10; exit }' | normalize_fingerprint
 }
 
 resolve_current_fingerprint() {
+  local marker_fingerprint=""
+  local public_fingerprint=""
+  local trusted=""
+
+  trusted="$(trusted_fingerprint)"
+  validate_fingerprint "${trusted}"
+
+  public_fingerprint="$(public_key_fingerprint)"
+  validate_fingerprint "${public_fingerprint}"
+  [[ "${public_fingerprint}" == "${trusted}" ]] || \
+    die "Committed public key does not match the trusted fingerprint."
+
   if [[ -f "${marker_file}" ]]; then
-    current_fingerprint="$(tr -d '[:space:]' < "${marker_file}")"
-  elif [[ -f "${keyring_dir}/veldmuis-trusted" ]]; then
-    current_fingerprint="$(awk -F: 'NF { print $1; exit }' "${keyring_dir}/veldmuis-trusted")"
-  else
-    current_fingerprint="$(key_uid_fingerprints | tail -n 1)"
+    marker_fingerprint="$(normalize_fingerprint < "${marker_file}")"
+    validate_fingerprint "${marker_fingerprint}"
+    [[ "${marker_fingerprint}" == "${trusted}" ]] || \
+      die "Local signing marker does not match the committed trusted fingerprint."
   fi
 
-  [[ -n "${current_fingerprint}" ]] || {
-    printf 'Could not resolve a current Veldmuis signing fingerprint.\n' >&2
-    exit 1
-  }
+  gpg --batch --list-secret-keys "${trusted}" >/dev/null 2>&1 || \
+    die "Current secret key is not available in GnuPG: ${trusted}"
 
-  gpg --list-secret-keys "${current_fingerprint}" >/dev/null 2>&1 || {
-    printf 'Current signing key not found in GPG: %s\n' "${current_fingerprint}" >&2
-    exit 1
-  }
+  current_fingerprint="${trusted}"
 }
 
-prepare_backup_layout() {
-  mkdir -p "${backup_dir}"
-  rm -rf "${backup_dir:?}/"*
+validate_passphrase_file() {
+  local permissions=""
 
-  mkdir -p "${backup_dir}/repo-files/packages/veldmuis-keyring"
-  mkdir -p "${backup_dir}/home-files/.local/share/veldmuis/keyring-private"
+  [[ -n "${passphrase_file}" ]] || return 0
+  [[ -f "${passphrase_file}" && ! -L "${passphrase_file}" ]] || \
+    die "Passphrase file must be a regular, non-symlink file: ${passphrase_file}"
+  [[ -s "${passphrase_file}" ]] || die "Passphrase file is empty: ${passphrase_file}"
 
-  gpg --batch --yes --armor --export "${current_fingerprint}" > "${backup_dir}/veldmuis-public-key.asc"
-  gpg --batch --yes --armor --export-secret-keys "${current_fingerprint}" > "${backup_dir}/veldmuis-private-key.asc"
-  gpg --export-ownertrust > "${backup_dir}/ownertrust.txt"
-  cp -f "${GNUPGHOME:-${HOME}/.gnupg}/openpgp-revocs.d/${current_fingerprint}.rev" \
-    "${backup_dir}/veldmuis-revocation-cert.rev"
-
-  cp -f "${keyring_dir}/veldmuis.gpg" "${backup_dir}/veldmuis.gpg"
-  cp -f "${keyring_dir}/veldmuis-trusted" "${backup_dir}/veldmuis-trusted"
-  cp -f "${keyring_dir}/veldmuis-revoked" "${backup_dir}/veldmuis-revoked"
-  cp -f "${keyring_dir}/veldmuis-keyring.install" "${backup_dir}/veldmuis-keyring.install"
-  cp -f "${marker_file}" "${backup_dir}/current-signing-key.fpr"
-
-  cp -f "${keyring_dir}/PKGBUILD" "${backup_dir}/repo-files/packages/veldmuis-keyring/PKGBUILD"
-  cp -f "${keyring_dir}/veldmuis.gpg" "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis.gpg"
-  cp -f "${keyring_dir}/veldmuis-trusted" "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis-trusted"
-  cp -f "${keyring_dir}/veldmuis-revoked" "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis-revoked"
-  cp -f "${keyring_dir}/veldmuis-keyring.install" \
-    "${backup_dir}/repo-files/packages/veldmuis-keyring/veldmuis-keyring.install"
-  cp -f "${marker_file}" "${backup_dir}/home-files/.local/share/veldmuis/keyring-private/current-signing-key.fpr"
-
-  install -Dm755 "${restore_script_path}" "${backup_dir}/restore-key.sh"
-  write_restore_instructions
+  permissions="$(stat -c '%a' "${passphrase_file}")"
+  (( (8#${permissions} & 077) == 0 )) || \
+    die "Passphrase file must not be accessible by group or other users: ${passphrase_file}"
 }
 
-write_restore_instructions() {
-  cat >"${backup_dir}/RESTORE-INSTRUCTIONS.md" <<EOF
-# Veldmuis Signing Key Backup
+validate_output_path() {
+  local resolved_archive=""
+  local resolved_passphrase=""
+  local resolved_repo=""
 
-This backup bundle contains the current Veldmuis release signing key and everything needed to restore it on another machine.
+  [[ ! -d "${archive_path}" ]] || die "Backup output is a directory: ${archive_path}"
+  [[ ! -L "${archive_path}" ]] || die "Backup output must not be a symlink: ${archive_path}"
 
-Current signing fingerprint:
-
-\`${current_fingerprint}\`
-
-Important:
-
-- \`veldmuis-private-key.asc\` is the private signing key.
-- The key is intentionally unencrypted so local build scripts can sign packages non-interactively.
-- Store this backup on an encrypted disk or another secure location.
-
-## Fast Restore
-
-1. Clone the Veldmuis repo on the new machine.
-2. Extract this zip somewhere.
-3. Run:
-
-\`\`\`bash
-cd /path/to/extracted/keyring-backup
-./restore-key.sh /path/to/veldmuis
-\`\`\`
-
-That will:
-
-- import the private and public keys into GnuPG
-- restore the local fingerprint marker file
-- copy the repo keyring files into \`packages/veldmuis-keyring\`
-- rebuild the \`veldmuis-keyring\` package
-
-## Manual Restore Paths
-
-- Repo files go in:
-  - \`packages/veldmuis-keyring/PKGBUILD\`
-  - \`packages/veldmuis-keyring/veldmuis.gpg\`
-  - \`packages/veldmuis-keyring/veldmuis-trusted\`
-  - \`packages/veldmuis-keyring/veldmuis-revoked\`
-  - \`packages/veldmuis-keyring/veldmuis-keyring.install\`
-- Local marker file goes in:
-  - \`~/.local/share/veldmuis/keyring-private/current-signing-key.fpr\`
-
-## Files In This Bundle
-
-- \`veldmuis-private-key.asc\`
-- \`veldmuis-public-key.asc\`
-- \`veldmuis-revocation-cert.rev\`
-- \`veldmuis-keyring.install\`
-- \`current-signing-key.fpr\`
-- \`ownertrust.txt\`
-- \`repo-files/\`
-- \`home-files/\`
-- \`restore-key.sh\`
-
-## Rebuild Command After Restore
-
-\`\`\`bash
-cd /path/to/veldmuis
-./development/rebuild-iso-usb.sh veldmuis-keyring veldmuis-calamares-config
-\`\`\`
-EOF
-}
-
-write_backup_zip() {
-  local backup_parent
-  local backup_name
-
-  backup_parent="$(dirname "${backup_dir}")"
-  backup_name="$(basename "${backup_dir}")"
-
-  mkdir -p "${backup_parent}"
-  rm -f "${backup_zip}"
-  (
-    cd "${backup_parent}"
-    zip -r "${backup_zip}" "${backup_name}"
-  )
-}
-
-main() {
-  current_fingerprint=""
-
-  case "${1:-}" in
-    -h|--help)
-      usage
-      exit 0
+  resolved_archive="$(realpath -m -- "${archive_path}")"
+  resolved_repo="$(realpath -e -- "${repo_root}")"
+  case "${resolved_archive}" in
+    "${resolved_repo}"|"${resolved_repo}"/*)
+      die "Refusing to write secret-key backup material inside the repository."
       ;;
   esac
 
+  if [[ -n "${passphrase_file}" ]]; then
+    resolved_passphrase="$(realpath -e -- "${passphrase_file}")"
+    [[ "${resolved_archive}" != "${resolved_passphrase}" ]] || \
+      die "Backup output and passphrase file must be different paths."
+  fi
+}
+
+gpg_passphrase_args() {
+  if [[ -n "${passphrase_file}" ]]; then
+    printf '%s\n' \
+      --batch \
+      --pinentry-mode loopback \
+      --passphrase-file "${passphrase_file}"
+  fi
+}
+
+select_temp_root() {
+  local candidate="${VELDMUIS_KEY_BACKUP_TMPDIR:-}"
+
+  if [[ -z "${candidate}" && -d /dev/shm && -w /dev/shm ]]; then
+    candidate=/dev/shm
+  fi
+  if [[ -z "${candidate}" ]]; then
+    candidate="${TMPDIR:-/tmp}"
+  fi
+
+  [[ -d "${candidate}" && -w "${candidate}" ]] || \
+    die "Backup temporary directory is not writable: ${candidate}"
+  printf '%s\n' "${candidate}"
+}
+
+write_restore_instructions() {
+  cat > "${bundle_root}/RESTORE-INSTRUCTIONS.md" <<EOF
+# Veldmuis Signing-Key Backup
+
+This encrypted archive contains the complete secret key for:
+
+\`${current_fingerprint}\`
+
+Treat every extracted file as secret. Do not extract the archive into a source
+checkout, synced folder, or ordinary long-lived directory.
+
+Verify without restoring:
+
+\`\`\`sh
+./development/key-rotation/restore-key.sh --verify /path/to/keyring-backup.tar.gpg
+\`\`\`
+
+Restore only after verification, on the intended trusted machine:
+
+\`\`\`sh
+./development/key-rotation/restore-key.sh --restore /path/to/keyring-backup.tar.gpg
+\`\`\`
+
+The restore command imports the key and writes the local fingerprint marker. It
+does not overwrite repository files, build packages, publish artifacts, or
+rotate trust.
+EOF
+}
+
+prepare_backup_layout() {
+  local gpg_home="${GNUPGHOME:-${HOME}/.gnupg}"
+  local revocation_cert="${gpg_home}/openpgp-revocs.d/${current_fingerprint}.rev"
+  local temp_root=""
+
+  temp_root="$(select_temp_root)"
+  stage_parent="$(mktemp -d -p "${temp_root}" veldmuis-key-backup.XXXXXX)"
+  chmod 700 "${stage_parent}"
+  bundle_root="${stage_parent}/veldmuis-key-backup"
+  install -d -m700 "${bundle_root}/repo-files/packages/veldmuis-keyring"
+
+  [[ -r "${revocation_cert}" ]] || \
+    die "Revocation certificate is missing: ${revocation_cert}"
+
+  gpg --batch --yes --armor --export "${current_fingerprint}" \
+    > "${bundle_root}/veldmuis-public-key.asc"
+  gpg --batch --yes --armor --export-secret-keys "${current_fingerprint}" \
+    > "${bundle_root}/veldmuis-private-key.asc"
+  [[ -s "${bundle_root}/veldmuis-public-key.asc" ]] || \
+    die "Public-key export produced an empty file."
+  [[ -s "${bundle_root}/veldmuis-private-key.asc" ]] || \
+    die "Secret-key export produced an empty file."
+  gpg --batch --export-ownertrust | \
+    awk -F: -v wanted="${current_fingerprint}" '$1 == wanted { print }' \
+    > "${bundle_root}/ownertrust.txt"
+  install -m600 "${revocation_cert}" "${bundle_root}/veldmuis-revocation-cert.rev"
+  printf '1\n' > "${bundle_root}/BACKUP-FORMAT"
+  printf '%s\n' "${current_fingerprint}" > "${bundle_root}/current-signing-key.fpr"
+
+  for file_name in PKGBUILD veldmuis.gpg veldmuis-trusted veldmuis-revoked \
+    veldmuis-keyring.install
+  do
+    [[ -f "${keyring_dir}/${file_name}" ]] || \
+      die "Required keyring file is missing: ${keyring_dir}/${file_name}"
+    install -m600 "${keyring_dir}/${file_name}" \
+      "${bundle_root}/repo-files/packages/veldmuis-keyring/${file_name}"
+  done
+
+  install -m700 "${restore_script_path}" "${bundle_root}/restore-key.sh"
+  write_restore_instructions
+
+  (
+    cd "${bundle_root}"
+    find . -type f ! -name BACKUP-MANIFEST.sha256 -print0 | \
+      LC_ALL=C sort -z | xargs -0 sha256sum > BACKUP-MANIFEST.sha256
+  )
+}
+
+encrypt_archive() {
+  local -a passphrase_args=()
+  local archive_parent=""
+
+  mapfile -t passphrase_args < <(gpg_passphrase_args)
+  archive_parent="$(dirname "${archive_path}")"
+  mkdir -p "${archive_parent}"
+
+  [[ ! -e "${archive_path}" || "${force}" == "1" ]] || \
+    die "Backup archive already exists; use --force to replace it: ${archive_path}"
+
+  archive_tmp="$(mktemp "${archive_path}.tmp.XXXXXX")"
+  chmod 600 "${archive_tmp}"
+
+  tar -C "${stage_parent}" -cf - veldmuis-key-backup | \
+    gpg --quiet --no-symkey-cache --cipher-algo AES256 \
+      --s2k-digest-algo SHA512 "${passphrase_args[@]}" \
+      --symmetric --output - > "${archive_tmp}"
+}
+
+verify_encrypted_archive() {
+  local -a passphrase_args=()
+
+  mapfile -t passphrase_args < <(gpg_passphrase_args)
+  gpg --quiet --no-symkey-cache "${passphrase_args[@]}" \
+    --decrypt "${archive_tmp}" | \
+    tar -tf - | grep -qx 'veldmuis-key-backup/BACKUP-MANIFEST.sha256'
+}
+
+publish_archive() {
+  if [[ "${force}" == "1" ]]; then
+    mv -f -- "${archive_tmp}" "${archive_path}"
+  else
+    mv -- "${archive_tmp}" "${archive_path}"
+  fi
+  archive_tmp=""
+  chmod 600 "${archive_path}"
+}
+
+parse_args() {
+  archive_path="${VELDMUIS_KEY_BACKUP_ARCHIVE:-${HOME}/.local/share/veldmuis/keyring-backup.tar.gpg}"
+
+  while (($# > 0)); do
+    case "$1" in
+      --output)
+        (($# >= 2)) || die "--output requires a path"
+        archive_path="$2"
+        shift 2
+        ;;
+      --passphrase-file)
+        (($# >= 2)) || die "--passphrase-file requires a path"
+        passphrase_file="$2"
+        shift 2
+        ;;
+      --force)
+        force=1
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "Unknown argument: $1"
+        ;;
+    esac
+  done
+}
+
+main() {
+  parse_args "$@"
+  trap cleanup EXIT
+
+  require_cmd awk
+  require_cmd find
   require_cmd gpg
+  require_cmd grep
   require_cmd install
-  require_cmd zip
+  require_cmd realpath
+  require_cmd sha256sum
+  require_cmd sort
+  require_cmd stat
+  require_cmd tar
+  require_cmd xargs
 
-  key_name="${VELDMUIS_SIGNING_KEY_NAME:-Veldmuis Linux Release}"
-  key_email="${VELDMUIS_SIGNING_KEY_EMAIL:-veldmuis@veldmuislinux.org}"
-  key_uid="${key_name} <${key_email}>"
   marker_file="${VELDMUIS_KEY_FPR_FILE:-${HOME}/.local/share/veldmuis/keyring-private/current-signing-key.fpr}"
-  backup_dir="${VELDMUIS_KEY_BACKUP_DIR:-${HOME}/.local/share/veldmuis/keyring-backup}"
-  backup_zip="${VELDMUIS_KEY_BACKUP_ZIP:-${HOME}/.local/share/veldmuis/keyring-backup.zip}"
 
-  [[ -d "${keyring_dir}" ]] || {
-    printf 'Keyring directory not found: %s\n' "${keyring_dir}" >&2
-    exit 1
-  }
-  [[ -x "${restore_script_path}" ]] || {
-    printf 'Restore script not found or not executable: %s\n' "${restore_script_path}" >&2
-    exit 1
-  }
-  [[ -f "${marker_file}" ]] || {
-    printf 'Current signing marker not found: %s\n' "${marker_file}" >&2
-    exit 1
-  }
+  [[ -d "${keyring_dir}" ]] || die "Keyring directory not found: ${keyring_dir}"
+  [[ -x "${restore_script_path}" ]] || \
+    die "Restore script not found or not executable: ${restore_script_path}"
 
+  validate_passphrase_file
+  validate_output_path
   resolve_current_fingerprint
   prepare_backup_layout
-  write_backup_zip
+  encrypt_archive
+  verify_encrypted_archive
+  publish_archive
 
-  printf 'Backed up signing fingerprint: %s\n' "${current_fingerprint}"
-  printf 'Backup directory: %s\n' "${backup_dir}"
-  printf 'Backup zip: %s\n' "${backup_zip}"
+  printf '[backup-key] Encrypted backup verified and written.\n'
+  printf '  Fingerprint: %s\n' "${current_fingerprint}"
+  printf '  Archive: %s\n' "${archive_path}"
+  printf '  Mode: %s\n' "$(stat -c '%a' "${archive_path}")"
 }
 
 main "$@"
