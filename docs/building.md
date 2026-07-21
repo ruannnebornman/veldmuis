@@ -11,7 +11,8 @@ Veldmuis builds in these stages:
 2. Build NVIDIA 580xx artifacts from configured AUR package bases.
 3. Sign packages and repository databases into local pacman repositories.
 4. Build an archiso image using the signed local repositories.
-5. Publish package and ISO artifacts from CI workflows.
+5. Generate and sign release metadata for release builds.
+6. Publish package and ISO artifacts from CI workflows.
 
 The package order is defined in:
 
@@ -185,7 +186,9 @@ Targets:
 ```
 
 The outer script requires Docker and release environment variables, including
-the signing key material used only by the signing stage.
+the signing key material used only by network-disabled signing stages. The
+`iso` target additionally requires `VELDMUIS_RELEASE_TAG` and the exact
+`VELDMUIS_RELEASE_SHA`.
 
 The container flow separates stages:
 
@@ -193,6 +196,32 @@ The container flow separates stages:
 - AUR package build stage: no signing key.
 - Signing stage: receives signing key, validates AUR artifacts, has no network.
 - ISO stage: no signing key, repository mounted read-only.
+- Release-metadata stage: receives signing key, has no network, and creates the
+  signed manifest, checksum, package inventory, SPDX SBOM, build-input record,
+  and release-specific AUR-input manifest.
+
+The outer builder pulls its configured base image, resolves the immutable
+repository digest, and uses that digest in the generated Dockerfile. Release
+metadata records the requested image, resolved base digest, resulting image ID,
+Docker version, relevant build-tool versions, release source commit, and exact
+AUR refs.
+
+Release metadata can be generated inside an appropriately prepared Arch build
+environment with:
+
+```sh
+./development/generate-release-metadata.sh
+```
+
+The object-storage publisher is:
+
+```sh
+./development/publish-r2-release.sh
+```
+
+It uploads and verifies release-specific objects before copying them to the
+`latest` aliases. The signed manifest is updated last and no release prefix is
+deleted or overwritten.
 
 ## Publish The Package Repository
 

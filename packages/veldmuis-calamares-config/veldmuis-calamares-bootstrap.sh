@@ -235,11 +235,11 @@ Include = ${tmp_arch_mirrorlist}
 Include = ${tmp_arch_mirrorlist}
 
 [veldmuis-core]
-SigLevel = Required DatabaseOptional
+SigLevel = Required DatabaseRequired
 Server = file://${live_repo_root}/veldmuis-core/os/\$arch
 
 [veldmuis-extra]
-SigLevel = Required DatabaseOptional
+SigLevel = Required DatabaseRequired
 Server = file://${live_repo_root}/veldmuis-extra/os/\$arch
 EOF
 }

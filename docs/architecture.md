@@ -5,7 +5,8 @@ Veldmuis is organized around four build outputs:
 - Native Veldmuis packages from `packages/`.
 - Signed pacman repositories under `repos/`.
 - A live/install ISO from `archiso/veldmuis/`.
-- GitHub releases with checksum and manifest assets.
+- Immutable ISO releases with signed metadata, package inventories, and SPDX
+  SBOMs.
 
 ## Package Layer
 
@@ -40,7 +41,8 @@ https://packages.veldmuislinux.org/
 ```
 
 Installed systems receive Veldmuis repository configuration from the
-`veldmuis-release` package.
+`veldmuis-release` package. The Veldmuis repository sections require trusted
+signatures on both packages and repository databases.
 
 ## ISO Layer
 
@@ -74,15 +76,20 @@ groups such as gaming, downloads, sync, and development.
 
 ## Release Layer
 
-The release workflow validates the release tag, builds packages and the ISO in
-isolated Arch containers, publishes the package repository, uploads the current
-ISO files to object storage, and creates a GitHub release.
+The release workflow resolves an exact `main` commit, builds packages and the
+ISO in isolated Arch containers, and creates authenticated release metadata in
+a network-disabled signing stage. It publishes the package repository and
+release-specific ISO objects before advancing the `latest` aliases.
 
-GitHub releases keep release notes, a checksum asset, and a manifest asset.
-Veldmuis retains only one public ISO download path for the current image:
+GitHub releases keep release notes, the signed manifest and signature,
+checksum, package inventory, SPDX SBOM, build inputs, and resolved AUR inputs.
+The current convenience path is:
 
 ```text
 https://downloads.veldmuislinux.org/iso/latest.iso
 ```
+
+The signed `latest.manifest.txt` points users to immutable artifacts under
+`iso/releases/TAG/`. Release-specific paths are never reused.
 
 See [Release Process](release.md) for the full public release policy.

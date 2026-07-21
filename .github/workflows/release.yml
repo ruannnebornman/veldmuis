@@ -12,26 +12,29 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release
+  group: veldmuis-publication
   cancel-in-progress: false
 
 jobs:
   validate-release:
     name: Validate Release Ref
-    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       release_tag: ${{ steps.resolve.outputs.release_tag }}
-      release_ref: ${{ steps.resolve.outputs.release_ref }}
       release_sha: ${{ steps.resolve.outputs.release_sha }}
     steps:
       - name: Check out repository metadata
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-          ref: main
+          persist-credentials: false
+          ref: refs/heads/main
 
       - name: Check release policy
         shell: bash
@@ -72,6 +75,10 @@ jobs:
           }
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            [[ "${GITHUB_REF}" == "refs/heads/main" ]] || {
+              echo "Manual releases must be dispatched from main, got: ${GITHUB_REF}" >&2
+              exit 1
+            }
             release_date=""
             expected_tag=""
             max_sequence=0
@@ -119,8 +126,7 @@ jobs:
             }
           done < <(git tag)
 
-          release_ref="refs/tags/${release_tag}"
-          if git rev-parse --verify "${release_ref}" >/dev/null 2>&1; then
+          if git rev-parse --verify "refs/tags/${release_tag}" >/dev/null 2>&1; then
             echo "Release tag already exists and cannot be reused: ${release_tag}" >&2
             exit 1
           fi
@@ -129,30 +135,24 @@ jobs:
             exit 1
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${release_tag}" origin/main -m "Release ${release_tag}"
-          git push origin "refs/tags/${release_tag}"
-          git fetch --force --tags origin
-
-          git rev-parse --verify "${release_ref}" >/dev/null 2>&1 || {
-            echo "Release tag was not created: ${release_tag}" >&2
+          release_sha="$(git rev-parse origin/main)"
+          [[ "${release_sha}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Unable to resolve the main release commit" >&2
             exit 1
           }
 
-          release_sha="$(git rev-list -n 1 "${release_ref}")"
-
           {
             echo "release_tag=${release_tag}"
-            echo "release_ref=${release_ref}"
             echo "release_sha=${release_sha}"
           } >> "${GITHUB_OUTPUT}"
 
   build-and-publish:
     name: Build And Release
     needs: validate-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: release
+    permissions:
+      contents: write
     env:
       BUILDER_USER: builder
       BUILDER_HOME: /home/builder
@@ -171,23 +171,17 @@ jobs:
       VELDMUIS_AUR_ENABLE_FALLBACK: true
     steps:
       - name: Check out release ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-          ref: ${{ needs.validate-release.outputs.release_ref }}
-
-      - name: Check out workflow support scripts
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          ref: ${{ github.sha }}
-          path: .ci-support
+          persist-credentials: false
+          ref: ${{ needs.validate-release.outputs.release_sha }}
 
       - name: Check repository hygiene
         shell: bash
         run: |
           set -euo pipefail
-          ./.ci-support/development/check-repo-hygiene.sh
+          ./development/check-repo-hygiene.sh
 
       - name: Validate protected environment configuration
         shell: bash
@@ -259,17 +253,61 @@ jobs:
         env:
           CI_REPO_ROOT: ${{ github.workspace }}
           VELDMUIS_RELEASE_TAG: ${{ needs.validate-release.outputs.release_tag }}
+          VELDMUIS_RELEASE_SHA: ${{ needs.validate-release.outputs.release_sha }}
           VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
           VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
         run: |
           set -euo pipefail
-          ./.ci-support/development/run-ci-arch-builder.sh iso
+          ./development/run-ci-arch-builder.sh iso
+
+      - name: Create immutable release tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          [[ "$(git rev-parse HEAD)" == "${RELEASE_SHA}" ]] || {
+            echo "Checked-out source does not match the resolved release commit" >&2
+            exit 1
+          }
+          git fetch --force --tags origin
+          if git rev-parse --verify "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release tag appeared during the build and cannot be reused: ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release appeared during the build and cannot be reused: ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+
+          tag_object_sha="$(
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/tags" \
+              -f tag="${RELEASE_TAG}" \
+              -f message="Release ${RELEASE_TAG}" \
+              -f object="${RELEASE_SHA}" \
+              -f type=commit \
+              --jq '.sha'
+          )"
+          [[ "${tag_object_sha}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Release tag object was not created" >&2
+            exit 1
+          }
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/tags/${RELEASE_TAG}" \
+            -f sha="${tag_object_sha}" >/dev/null
+
+          git fetch --force --tags origin
+          [[ "$(git rev-list -n 1 "refs/tags/${RELEASE_TAG}")" == "${RELEASE_SHA}" ]] || {
+            echo "Created release tag does not resolve to the release commit" >&2
+            exit 1
+          }
 
       - name: Ensure AWS CLI is available
         shell: bash
         run: |
           set -euo pipefail
-          ./.ci-support/development/ensure-aws-cli.sh
+          ./development/ensure-aws-cli.sh
 
       - name: Publish pacman repo to R2
         shell: bash
@@ -289,46 +327,87 @@ jobs:
           set -euo pipefail
           ./development/publish-known-good-nvidia-packages.sh
 
-      - name: Generate checksums and manifest
+      - name: Validate signed release metadata
         id: metadata
         shell: bash
-        env:
-          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
         run: |
           set -euo pipefail
 
           output_root="${RUNNER_TEMP}/veldmuis-build/archiso/out"
-          iso_path="$(find "${output_root}" -maxdepth 1 -type f -name 'veldmuis-*.iso' -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
-          [[ -n "${iso_path}" ]] || {
-            echo "No ISO found under ${output_root}" >&2
-            exit 1
-          }
-
-          iso_name="$(basename "${iso_path}")"
-          expected_iso_name="veldmuis-${RELEASE_TAG}-x86_64.iso"
-          [[ "${iso_name}" == "${expected_iso_name}" ]] || {
-            echo "Built ISO name does not match release tag: expected ${expected_iso_name}, got ${iso_name}" >&2
-            exit 1
-          }
-          sha256="$(sha256sum "${iso_path}" | awk '{print $1}')"
+          artifact_stem="veldmuis-${RELEASE_TAG}-x86_64"
+          iso_name="${artifact_stem}.iso"
+          manifest_name="${artifact_stem}.manifest.txt"
+          iso_path="${output_root}/${iso_name}"
           sha_path="${iso_path}.sha256"
-          printf '%s  %s\n' "${sha256}" "${iso_name}" > "${sha_path}"
-
-          manifest_name="${iso_name%.iso}.manifest.txt"
           manifest_path="${output_root}/${manifest_name}"
-          download_iso_name="${iso_name}"
-          download_sha_name="${download_iso_name}.sha256"
-          download_manifest_name="${manifest_name}"
-          short_sha="${RELEASE_SHA:0:8}"
-          {
-            echo "release_tag=${RELEASE_TAG}"
-            echo "release_sha=${RELEASE_SHA}"
-            echo "iso_name=${iso_name}"
-            echo "sha256=${sha256}"
-            echo "signing_fingerprint=${VELDMUIS_GPG_FPR}"
-            echo "built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          } > "${manifest_path}"
+          signature_path="${manifest_path}.sig"
+          package_inventory_path="${output_root}/${artifact_stem}.packages.tsv"
+          sbom_path="${output_root}/${artifact_stem}.spdx"
+          build_inputs_path="${output_root}/${artifact_stem}.build-inputs.txt"
+          aur_manifest_path="${output_root}/${artifact_stem}.aur-packages.manifest.txt"
 
+          for artifact_path in \
+            "${iso_path}" \
+            "${sha_path}" \
+            "${manifest_path}" \
+            "${signature_path}" \
+            "${package_inventory_path}" \
+            "${sbom_path}" \
+            "${build_inputs_path}" \
+            "${aur_manifest_path}"
+          do
+            [[ -s "${artifact_path}" ]] || {
+              echo "Release artifact is missing or empty: ${artifact_path}" >&2
+              exit 1
+            }
+          done
+
+          manifest_value() {
+            local key="$1"
+            awk -F= -v wanted="${key}" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }' "${manifest_path}"
+          }
+          verify_manifest_hash() {
+            local key="$1"
+            local path="$2"
+            local expected=""
+            local actual=""
+            expected="$(manifest_value "${key}")"
+            actual="$(sha256sum "${path}" | awk '{ print $1 }')"
+            [[ "${actual}" == "${expected}" ]] || {
+              echo "Manifest hash mismatch for ${path}" >&2
+              exit 1
+            }
+          }
+
+          [[ "$(manifest_value release_tag)" == "${RELEASE_TAG}" ]] || {
+            echo "Manifest release tag does not match ${RELEASE_TAG}" >&2
+            exit 1
+          }
+          [[ "$(manifest_value release_sha)" == "${RELEASE_SHA}" ]] || {
+            echo "Manifest release commit does not match ${RELEASE_SHA}" >&2
+            exit 1
+          }
+          [[ "$(manifest_value iso_name)" == "${iso_name}" ]] || {
+            echo "Manifest ISO name does not match ${iso_name}" >&2
+            exit 1
+          }
+          sha256="$(sha256sum "${iso_path}" | awk '{ print $1 }')"
+          [[ "$(manifest_value sha256)" == "${sha256}" ]] || {
+            echo "Manifest ISO checksum does not match the built ISO" >&2
+            exit 1
+          }
+          [[ "$(awk '{ print $1; exit }' "${sha_path}")" == "${sha256}" ]] || {
+            echo "Checksum file does not match the built ISO" >&2
+            exit 1
+          }
+          verify_manifest_hash package_inventory_sha256 "${package_inventory_path}"
+          verify_manifest_hash sbom_sha256 "${sbom_path}"
+          verify_manifest_hash build_inputs_sha256 "${build_inputs_path}"
+          verify_manifest_hash aur_manifest_sha256 "${aur_manifest_path}"
+          gpgv --keyring ./packages/veldmuis-keyring/veldmuis.gpg \
+            "${signature_path}" "${manifest_path}"
+
+          short_sha="${RELEASE_SHA:0:8}"
           r2_prefix="${CF_R2_PREFIX:-iso}"
           r2_prefix="${r2_prefix#/}"
           r2_prefix="${r2_prefix%/}"
@@ -337,81 +416,63 @@ jobs:
             exit 1
           }
 
-          iso_object_key="${r2_prefix}/latest.iso"
-          sha_object_key="${r2_prefix}/latest.iso.sha256"
-          manifest_object_key="${r2_prefix}/latest.manifest.txt"
+          public_base="${CF_R2_PUBLIC_BASE_URL%/}"
+          immutable_base="${public_base}/releases/${RELEASE_TAG}"
 
           {
+            echo "output_root=${output_root}"
             echo "iso_path=${iso_path}"
             echo "sha_path=${sha_path}"
             echo "manifest_path=${manifest_path}"
+            echo "signature_path=${signature_path}"
+            echo "package_inventory_path=${package_inventory_path}"
+            echo "sbom_path=${sbom_path}"
+            echo "build_inputs_path=${build_inputs_path}"
+            echo "aur_manifest_path=${aur_manifest_path}"
             echo "iso_name=${iso_name}"
             echo "manifest_name=${manifest_name}"
-            echo "download_iso_name=${download_iso_name}"
-            echo "download_sha_name=${download_sha_name}"
-            echo "download_manifest_name=${download_manifest_name}"
+            echo "signature_name=$(basename "${signature_path}")"
+            echo "package_inventory_name=$(basename "${package_inventory_path}")"
+            echo "sbom_name=$(basename "${sbom_path}")"
+            echo "build_inputs_name=$(basename "${build_inputs_path}")"
+            echo "aur_manifest_name=$(basename "${aur_manifest_path}")"
             echo "sha256=${sha256}"
             echo "artifact_name=veldmuis-iso-${RELEASE_TAG}-${short_sha}"
-            echo "iso_object_key=${iso_object_key}"
-            echo "sha_object_key=${sha_object_key}"
-            echo "manifest_object_key=${manifest_object_key}"
+            echo "release_object_prefix=${r2_prefix}/releases/${RELEASE_TAG}"
+            echo "latest_iso_object_key=${r2_prefix}/latest.iso"
+            echo "latest_manifest_object_key=${r2_prefix}/latest.manifest.txt"
+            echo "immutable_iso_url=${immutable_base}/${iso_name}"
+            echo "immutable_manifest_url=${immutable_base}/${manifest_name}"
+            echo "immutable_signature_url=${immutable_base}/$(basename "${signature_path}")"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Upload debug artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
           path: |
             ${{ steps.metadata.outputs.iso_path }}
             ${{ steps.metadata.outputs.sha_path }}
             ${{ steps.metadata.outputs.manifest_path }}
+            ${{ steps.metadata.outputs.signature_path }}
+            ${{ steps.metadata.outputs.package_inventory_path }}
+            ${{ steps.metadata.outputs.sbom_path }}
+            ${{ steps.metadata.outputs.build_inputs_path }}
+            ${{ steps.metadata.outputs.aur_manifest_path }}
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload release artifacts to R2
+      - name: Publish immutable release and update latest aliases
         shell: bash
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
+          VELDMUIS_RELEASE_OUTPUT_DIR: ${{ steps.metadata.outputs.output_root }}
+          VELDMUIS_RELEASE_TAG: ${{ needs.validate-release.outputs.release_tag }}
         run: |
           set -euo pipefail
-
-          endpoint="https://${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          bucket="${CF_R2_BUCKET}"
-          prefix="${CF_R2_PREFIX:-iso}"
-          prefix="${prefix#/}"
-          prefix="${prefix%/}"
-          [[ -n "${prefix}" ]] || {
-            echo "CF_R2_PREFIX resolves to an empty path" >&2
-            exit 1
-          }
-
-          aws s3 rm "s3://${bucket}/${prefix}" \
-            --recursive \
-            --endpoint-url "${endpoint}" \
-            --only-show-errors
-
-          aws s3 cp "${{ steps.metadata.outputs.iso_path }}" \
-            "s3://${bucket}/${{ steps.metadata.outputs.iso_object_key }}" \
-            --endpoint-url "${endpoint}" \
-            --only-show-errors \
-            --content-disposition "attachment; filename=\"${{ steps.metadata.outputs.download_iso_name }}\"" \
-            --content-type application/octet-stream
-
-          aws s3 cp "${{ steps.metadata.outputs.sha_path }}" \
-            "s3://${bucket}/${{ steps.metadata.outputs.sha_object_key }}" \
-            --endpoint-url "${endpoint}" \
-            --only-show-errors \
-            --content-disposition "attachment; filename=\"${{ steps.metadata.outputs.download_sha_name }}\"" \
-            --content-type text/plain
-
-          aws s3 cp "${{ steps.metadata.outputs.manifest_path }}" \
-            "s3://${bucket}/${{ steps.metadata.outputs.manifest_object_key }}" \
-            --endpoint-url "${endpoint}" \
-            --only-show-errors \
-            --content-disposition "attachment; filename=\"${{ steps.metadata.outputs.download_manifest_name }}\"" \
-            --content-type text/plain
+          ./development/publish-r2-release.sh
 
       - name: Ensure GitHub CLI is available
         shell: bash
@@ -427,13 +488,21 @@ jobs:
           sudo apt-get install -y gh
           gh --version
 
-      - name: Create or update GitHub release
+      - name: Create GitHub release
         id: github_release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           SHA_ASSET_PATH: ${{ steps.metadata.outputs.sha_path }}
           MANIFEST_ASSET_PATH: ${{ steps.metadata.outputs.manifest_path }}
+          SIGNATURE_ASSET_PATH: ${{ steps.metadata.outputs.signature_path }}
+          PACKAGE_INVENTORY_ASSET_PATH: ${{ steps.metadata.outputs.package_inventory_path }}
+          SBOM_ASSET_PATH: ${{ steps.metadata.outputs.sbom_path }}
+          BUILD_INPUTS_ASSET_PATH: ${{ steps.metadata.outputs.build_inputs_path }}
+          AUR_MANIFEST_ASSET_PATH: ${{ steps.metadata.outputs.aur_manifest_path }}
+          IMMUTABLE_ISO_URL: ${{ steps.metadata.outputs.immutable_iso_url }}
+          IMMUTABLE_MANIFEST_URL: ${{ steps.metadata.outputs.immutable_manifest_url }}
+          IMMUTABLE_SIGNATURE_URL: ${{ steps.metadata.outputs.immutable_signature_url }}
         run: |
           set -euo pipefail
 
@@ -521,16 +590,20 @@ jobs:
             echo
             echo "## Release Metadata"
             echo
-            echo "Veldmuis retains only the current ISO; release-specific ISO downloads are not archived."
-            echo "Checksum asset: \`$(basename "${SHA_ASSET_PATH}")\`"
-            echo "Manifest asset: \`$(basename "${MANIFEST_ASSET_PATH}")\`"
-            echo "SHA256: \`$(cat "${SHA_ASSET_PATH}")\`"
+            echo "- Immutable ISO: ${IMMUTABLE_ISO_URL}"
+            echo "- Signed manifest: ${IMMUTABLE_MANIFEST_URL}"
+            echo "- Detached signature: ${IMMUTABLE_SIGNATURE_URL}"
+            echo "- SHA256: \`${{ steps.metadata.outputs.sha256 }}\`"
             echo
             echo "## Build Metadata"
             echo
             echo "- ISO file: \`${{ steps.metadata.outputs.iso_name }}\`"
             echo "- Commit: \`${RELEASE_SHA}\`"
             echo "- Package repo: ${PACKAGE_BASE_URL}"
+            echo "- Package inventory: \`$(basename "${PACKAGE_INVENTORY_ASSET_PATH}")\`"
+            echo "- SPDX SBOM: \`$(basename "${SBOM_ASSET_PATH}")\`"
+            echo "- Build inputs: \`$(basename "${BUILD_INPUTS_ASSET_PATH}")\`"
+            echo "- AUR inputs: \`$(basename "${AUR_MANIFEST_ASSET_PATH}")\`"
           } >> "${body_file}"
 
           if [[ "${RELEASE_TAG}" =~ ${monthly_pattern} ]]; then
@@ -546,7 +619,12 @@ jobs:
 
           gh release upload "${RELEASE_TAG}" \
             "${SHA_ASSET_PATH}" \
-            "${MANIFEST_ASSET_PATH}"
+            "${MANIFEST_ASSET_PATH}" \
+            "${SIGNATURE_ASSET_PATH}" \
+            "${PACKAGE_INVENTORY_ASSET_PATH}" \
+            "${SBOM_ASSET_PATH}" \
+            "${BUILD_INPUTS_ASSET_PATH}" \
+            "${AUR_MANIFEST_ASSET_PATH}"
 
           echo "html_url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
 
@@ -564,7 +642,11 @@ jobs:
           }
 
           VELDMUIS_LATEST_ISO_URL="${public_base%/}/latest.iso" \
-            ./development/check-release-policy.sh --remote
+          VELDMUIS_LATEST_MANIFEST_URL="${public_base%/}/latest.manifest.txt" \
+          VELDMUIS_LATEST_MANIFEST_SIGNATURE_URL="${public_base%/}/latest.manifest.txt.sig" \
+          VELDMUIS_RELEASE_KEYRING="./packages/veldmuis-keyring/veldmuis.gpg" \
+          VELDMUIS_REQUIRED_SIGNED_RELEASE_TAG="${RELEASE_TAG}" \
+          ./development/check-release-policy.sh --remote
 
       - name: Write release summary
         shell: bash
@@ -580,9 +662,9 @@ jobs:
             echo "- SHA256: \`${{ steps.metadata.outputs.sha256 }}\`"
             echo "- Bucket: \`${CF_R2_BUCKET}\`"
             echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
-            echo "- Published ISO key: \`${{ steps.metadata.outputs.iso_object_key }}\`"
-            echo "- Published SHA256 key: \`${{ steps.metadata.outputs.sha_object_key }}\`"
-            echo "- Published manifest key: \`${{ steps.metadata.outputs.manifest_object_key }}\`"
+            echo "- Immutable object prefix: \`${{ steps.metadata.outputs.release_object_prefix }}/\`"
+            echo "- Latest ISO key: \`${{ steps.metadata.outputs.latest_iso_object_key }}\`"
+            echo "- Latest manifest key: \`${{ steps.metadata.outputs.latest_manifest_object_key }}\`"
             echo "- GitHub Release: ${{ steps.github_release.outputs.html_url }}"
             echo "- Package repo: ${PACKAGE_BASE_URL}"
 
@@ -591,5 +673,8 @@ jobs:
               public_base="${public_base%/}"
               echo "- Public ISO URL: ${public_base}/latest.iso"
               echo "- Public SHA256 URL: ${public_base}/latest.iso.sha256"
+              echo "- Public signed manifest: ${public_base}/latest.manifest.txt"
+              echo "- Public manifest signature: ${public_base}/latest.manifest.txt.sig"
+              echo "- Immutable ISO URL: ${{ steps.metadata.outputs.immutable_iso_url }}"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"

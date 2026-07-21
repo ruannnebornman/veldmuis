@@ -23,25 +23,37 @@ the system firmware before booting the installer.
 
 ## 1. Download And Verify The ISO
 
-Download the current ISO, checksum, and manifest:
+Download the public key, signed manifest, and detached signature:
 
 ```sh
-curl -fL -o veldmuis.iso https://downloads.veldmuislinux.org/iso/latest.iso
-curl -fL -o latest.iso.sha256 https://downloads.veldmuislinux.org/iso/latest.iso.sha256
+curl -fL -o veldmuis.gpg \
+  https://raw.githubusercontent.com/ruannnebornman/veldmuis/main/packages/veldmuis-keyring/veldmuis.gpg
 curl -fL -o latest.manifest.txt https://downloads.veldmuislinux.org/iso/latest.manifest.txt
+curl -fL -o latest.manifest.txt.sig https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
+gpg --show-keys --with-fingerprint veldmuis.gpg
+gpgv --keyring ./veldmuis.gpg latest.manifest.txt.sig latest.manifest.txt
 ```
 
-Verify the checksum:
+Confirm the fingerprint shown in [Security and verification](../SECURITY.md).
+After the signature succeeds, download the immutable ISO named by the manifest
+and verify its authenticated checksum:
 
 ```sh
-expected_sha256="$(awk '{ print $1; exit }' latest.iso.sha256)"
-actual_sha256="$(sha256sum veldmuis.iso | awk '{ print $1; exit }')"
+release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' latest.manifest.txt)"
+iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' latest.manifest.txt)"
+expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' latest.manifest.txt)"
+case "${release_path}/${iso_name}" in
+  releases/*/veldmuis-*.iso) ;;
+  *) echo 'Unsafe artifact path in manifest' >&2; exit 1 ;;
+esac
+curl -fL -o "${iso_name}" \
+  "https://downloads.veldmuislinux.org/iso/${release_path}/${iso_name}"
+actual_sha256="$(sha256sum "${iso_name}" | awk '{ print $1; exit }')"
 test "${actual_sha256}" = "${expected_sha256}"
 ```
 
-A successful `test` command produces no output and exits with status zero.
-Follow [Security and verification](../SECURITY.md) to inspect the manifest and
-current signing-key details before installing.
+A successful signature check and `test` command authenticate the release
+metadata and verify the ISO bytes. Do not continue if either command fails.
 
 ## 2. Create The Bootable Medium
 
@@ -57,7 +69,7 @@ lsblk --paths --output NAME,SIZE,TYPE,MOUNTPOINTS,MODEL
 Unmount any mounted partitions from that device, then write the ISO:
 
 ```sh
-sudo dd if=veldmuis.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if="${iso_name}" of=/dev/sdX bs=4M status=progress oflag=sync
 ```
 
 Replace `/dev/sdX` with the whole USB device, not a partition such as

@@ -1,8 +1,9 @@
 # Release Process
 
 Veldmuis releases are date-tagged builds from `main`. The release workflow
-builds packages, publishes the package repository, builds the ISO, publishes
-the current ISO files, and creates a GitHub release.
+builds packages and an ISO, authenticates the resulting metadata, publishes
+release-specific artifacts, advances the `latest` aliases, and creates a
+GitHub release.
 
 ## Tag Formats
 
@@ -25,12 +26,9 @@ supported.
 
 ## Scheduled And Manual Releases
 
-The release workflow is defined in `.github/workflows/release.yml`.
-
-It can run in two ways:
-
-- Scheduled monthly release on the first day of each month.
-- Manual workflow dispatch with an explicit daily release tag.
+The release workflow is defined in `.github/workflows/release.yml`. It runs as
+a monthly schedule or by manual dispatch with an explicit daily tag. Manual
+dispatch is accepted only from `main`.
 
 Manual release tags must be the next valid tag for that UTC date. For example,
 if `2026.04.22` exists, the next release on that date must be
@@ -38,77 +36,147 @@ if `2026.04.22` exists, the next release on that date must be
 
 ## Immutability Policy
 
-Release tags are treated as immutable.
-
-Do not move, delete, or reuse a published release tag. If a published release is
-wrong, fix the source and publish the next valid release tag.
+Release tags and release-specific object paths are immutable. Do not move,
+delete, overwrite, or reuse them. If a published release is wrong, fix the
+source and publish the next valid release tag.
 
 The workflow rejects a release if:
 
 - The tag format is unsupported.
 - A same-day manual release sequence is skipped.
-- The tag already exists.
-- A GitHub release already exists for the tag.
+- The tag or GitHub release already exists.
+- The source no longer matches the `main` commit resolved during validation.
+- Signed metadata is absent, invalid, or inconsistent with the build.
+
+The release tag is created only after packages, repositories, the ISO, and its
+signed metadata have built successfully. A later external publication failure
+can still consume a tag; recovery uses the next valid tag rather than moving or
+reusing the failed one.
 
 ## Current Workflow Shape
 
 At a high level, the workflow:
 
-1. Checks repository release policy.
-2. Resolves the release tag.
-3. Creates an annotated release tag from `origin/main`.
-4. Checks out the release tag.
-5. Checks repository hygiene.
-6. Validates required release secrets and environment variables.
-7. Builds Veldmuis packages, AUR-derived NVIDIA artifacts, signed pacman
-   repositories, and the ISO in isolated Arch containers.
-8. Publishes the package repository.
-9. Updates the known-good NVIDIA package cache.
-10. Generates the ISO SHA-256 checksum and manifest.
-11. Uploads the current ISO, checksum, and manifest to object storage.
-12. Creates the GitHub release and uploads checksum and manifest assets.
-13. Verifies published release policy.
+1. Resolves a valid tag and exact `main` commit.
+2. Checks out that commit with persisted credentials disabled.
+3. Checks repository hygiene and the release environment contract.
+4. Builds native packages and resolved AUR-derived artifacts without signing
+   material.
+5. Signs packages and repository databases in a network-disabled container.
+6. Builds the ISO without signing material.
+7. Generates the package inventory, SPDX SBOM, build-input record, checksum,
+   and signed manifest in a network-disabled container.
+8. Creates the annotated tag for the exact built commit.
+9. Publishes and verifies the package repositories.
+10. Uploads and verifies immutable ISO release objects.
+11. Copies the verified objects to short-lived `latest` aliases, with the
+    detached signature immediately before the signed manifest and the manifest
+    last.
+12. Creates the GitHub release and attaches the authenticated metadata.
+13. Downloads the published manifest and signature and verifies them with the
+    packaged public key.
 
-Current limitation: the workflow creates the release tag before the package and
-ISO build completes. If the build fails, the tag is consumed and the correction
-must use the next valid tag rather than reusing the failed tag.
+Reusable workflow actions are pinned to complete commit SHAs. Workflow token
+permissions are read-only by default and elevated only for the publication job.
+Signing material is passed only to network-disabled signing stages, while
+object-storage credentials are passed only to publisher steps.
+
+## Protected Release Environment
+
+The hosted environment must be named `release` and restricted to `main`.
+Required reviewers may be enabled when practical for the maintainer model. Its
+secret inventory is limited to:
+
+```text
+VELDMUIS_GPG_PRIVATE_KEY
+VELDMUIS_GPG_FPR
+CF_R2_ACCESS_KEY_ID
+CF_R2_SECRET_ACCESS_KEY
+CF_R2_PACKAGE_ACCESS_KEY_ID
+CF_R2_PACKAGE_SECRET_ACCESS_KEY
+```
+
+The workflow checks that those named secrets and the required non-secret
+variables are populated, without retrieving or printing secret values. Review
+the hosted environment against this list after any publication-provider or
+maintainer-access change.
 
 ## Published Artifacts
 
-The public ISO path always points to the current ISO:
+Each release has an immutable directory:
+
+```text
+https://downloads.veldmuislinux.org/iso/releases/YYYY.MM.DD/
+```
+
+It contains:
+
+```text
+veldmuis-TAG-x86_64.iso
+veldmuis-TAG-x86_64.iso.sha256
+veldmuis-TAG-x86_64.manifest.txt
+veldmuis-TAG-x86_64.manifest.txt.sig
+veldmuis-TAG-x86_64.packages.tsv
+veldmuis-TAG-x86_64.spdx
+veldmuis-TAG-x86_64.build-inputs.txt
+veldmuis-TAG-x86_64.aur-packages.manifest.txt
+```
+
+Convenience aliases identify the current release:
 
 ```text
 https://downloads.veldmuislinux.org/iso/latest.iso
 https://downloads.veldmuislinux.org/iso/latest.iso.sha256
 https://downloads.veldmuislinux.org/iso/latest.manifest.txt
+https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
+https://downloads.veldmuislinux.org/iso/latest.packages.tsv
+https://downloads.veldmuislinux.org/iso/latest.spdx
+https://downloads.veldmuislinux.org/iso/latest.build-inputs.txt
+https://downloads.veldmuislinux.org/iso/latest.aur-packages.manifest.txt
 ```
 
-Historical GitHub releases retain:
+The signed manifest is the `latest` publication marker and points back to
+immutable objects. A reader may fail closed during the short alias-copy window,
+but cannot authenticate a mixed release as valid.
 
-- Human-authored and generated release notes.
-- A checksum asset.
-- A manifest asset.
-- The release tag and tagged commit.
+Releases produced by the current workflow retain the checksum, signed manifest
+and signature, package inventory, SPDX SBOM, build inputs, and exact AUR-input
+manifest. Release notes link to the immutable ISO rather than a mutable
+`latest` URL. Older releases may predate signed manifests. Release-specific
+objects are retained for at least 12 months and their paths are never reused.
 
-Historical GitHub releases do not retain a release-specific ISO download. This
-avoids a historical release page linking to a mutable `latest.iso` object.
+## Manifest And Build Inputs
 
-## Manifest Fields
-
-The release manifest records:
+The signed release manifest records:
 
 ```text
 release_tag
 release_sha
+release_path
 iso_name
 sha256
+checksum_name
+package_inventory_name
+package_inventory_sha256
+sbom_name
+sbom_sha256
+build_inputs_name
+build_inputs_sha256
+aur_manifest_name
+aur_manifest_sha256
 signing_fingerprint
+builder_base_digest
 built_at_utc
 ```
 
-Use the manifest to connect a GitHub release, tagged commit, checksum, and
-signing fingerprint. See [Security Policy](../SECURITY.md) for verification
-commands.
+The build-input record adds the requested builder image, immutable base-image
+digest, resulting builder image ID, Docker version, repository source commit,
+build-tool versions, and exact AUR refs. The TSV and SPDX files record the
+installed ISO package names, exact versions, and source repository
+classification.
+
+See [Security Policy](../SECURITY.md) for the signature-first verification
+flow.
 
 ## Package Repository Publication
 
@@ -126,35 +194,21 @@ The package repository publication writes:
 - Package files and detached package signatures.
 - `veldmuis-aur-packages.manifest.txt` when AUR artifacts are present.
 
-The package repository manifest records the source commit and repository
-metadata used by package-refresh checks.
+Veldmuis pacman configurations require both package and repository-database
+signatures.
 
 ## Release Notes
 
-Maintainer-authored release notes live under:
-
-```text
-development/release-notes/
-```
-
-One file may be added per release tag, with the file name matching the tag:
+Maintainer-authored release notes live under `development/release-notes/`, with
+one optional file named for the release tag, such as:
 
 ```text
 development/release-notes/2026.04.22.md
 ```
 
-When the file exists, the workflow prepends it to generated commit-list output.
-When the file does not exist, the workflow generates a minimal release body.
-
-For meaningful releases, prefer a human-authored note with:
-
-- User-visible highlights.
-- Known issues or upgrade notes.
-- A clear change summary grouped by area.
-- No empty changelog sections.
-- No outdated comparison labels or retired release terminology.
-
-See `development/release-notes/README.md` for the maintainer convention.
+When present, the workflow prepends it to generated commit-list output.
+Otherwise it generates a minimal release body. See
+`development/release-notes/README.md` for the maintainer convention.
 
 ## Release Checks
 
@@ -168,5 +222,7 @@ Remote release checks require GitHub CLI authentication:
 
 ```sh
 VELDMUIS_LATEST_ISO_URL=https://downloads.veldmuislinux.org/iso/latest.iso \
+VELDMUIS_LATEST_MANIFEST_URL=https://downloads.veldmuislinux.org/iso/latest.manifest.txt \
+VELDMUIS_LATEST_MANIFEST_SIGNATURE_URL=https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig \
   ./development/check-release-policy.sh --remote
 ```

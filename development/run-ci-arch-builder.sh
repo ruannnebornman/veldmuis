@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+umask 077
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
@@ -8,6 +9,10 @@ support_root="$(cd "${script_dir}/.." && pwd)"
 container_workspace="/workspace/veldmuis"
 container_support_root="/workspace/ci-support"
 builder_image=""
+builder_base_image="${VELDMUIS_BUILDER_BASE_IMAGE:-archlinux:base-devel}"
+builder_base_digest=""
+builder_image_id=""
+docker_version=""
 trusted_support_root=""
 
 common_packages=(
@@ -59,6 +64,7 @@ Environment:
   VELDMUIS_GPG_PRIVATE_KEY
   VELDMUIS_GPG_FPR
   VELDMUIS_RELEASE_TAG
+  VELDMUIS_RELEASE_SHA
   VELDMUIS_PACKAGER
   VELDMUIS_AUR_REF_MODE
   VELDMUIS_AUR_ENABLE_FALLBACK
@@ -102,7 +108,7 @@ validate_target() {
 
 validate_stage() {
   case "$1" in
-    packages|aur|sign|iso) ;;
+    packages|aur|sign|iso|release-metadata) ;;
     *)
       usage >&2
       die "Unsupported container stage: $1"
@@ -249,6 +255,28 @@ run_iso_stage() {
   chown_output_paths /workspace/build
 }
 
+run_release_metadata_stage() {
+  require_cmd gpg
+  require_cmd su
+  require_env BUILDER_USER
+  require_env GNUPGHOME
+  require_env VELDMUIS_KEY_FPR_FILE
+  require_env VELDMUIS_GPG_PRIVATE_KEY
+  require_env VELDMUIS_GPG_FPR
+  require_env VELDMUIS_RELEASE_TAG
+  require_env VELDMUIS_RELEASE_SHA
+  require_env VELDMUIS_BUILDER_BASE_IMAGE
+  require_env VELDMUIS_BUILDER_BASE_DIGEST
+  require_env VELDMUIS_BUILDER_IMAGE_ID
+  require_env HOST_UID
+  require_env HOST_GID
+
+  prepare_builder_user
+  import_signing_key
+  run_as_builder "GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_KEY_FPR_FILE=$(shell_quote "${VELDMUIS_KEY_FPR_FILE}") VELDMUIS_RELEASE_OUTPUT_DIR=/workspace/build/archiso/out VELDMUIS_RELEASE_TAG=$(shell_quote "${VELDMUIS_RELEASE_TAG}") VELDMUIS_RELEASE_SHA=$(shell_quote "${VELDMUIS_RELEASE_SHA}") VELDMUIS_BUILDER_BASE_IMAGE=$(shell_quote "${VELDMUIS_BUILDER_BASE_IMAGE}") VELDMUIS_BUILDER_BASE_DIGEST=$(shell_quote "${VELDMUIS_BUILDER_BASE_DIGEST}") VELDMUIS_BUILDER_IMAGE_ID=$(shell_quote "${VELDMUIS_BUILDER_IMAGE_ID}") VELDMUIS_DOCKER_VERSION=$(shell_quote "${VELDMUIS_DOCKER_VERSION:-unknown}") ${container_support_root}/development/generate-release-metadata.sh"
+  chown_output_paths /workspace/build
+}
+
 prepare_trusted_support() {
   trusted_support_root="${RUNNER_TEMP}/veldmuis-ci-support-${GITHUB_RUN_ID:-local}-$$"
   rm -rf "${trusted_support_root}"
@@ -269,11 +297,23 @@ prepare_builder_image() {
   builder_image="veldmuis-builder-${GITHUB_RUN_ID:-local}-$$"
   builder_image="${builder_image//[^A-Za-z0-9_.-]/-}"
 
+  docker pull "${builder_base_image}"
+  builder_base_digest="$(
+    docker image inspect --format '{{index .RepoDigests 0}}' "${builder_base_image}"
+  )"
+  [[ "${builder_base_digest}" == *@sha256:* ]] || \
+    die "Unable to resolve immutable builder base image digest: ${builder_base_image}"
+
   printf '%s\n' \
-    'FROM archlinux:base-devel' \
+    "FROM ${builder_base_digest}" \
     'RUN sed -i '\''/^\#\[multilib\]/{s/^#//; n; s/^#//;}'\'' /etc/pacman.conf' \
     "RUN pacman -Syu --noconfirm --needed ${package_list} && pacman -Scc --noconfirm" \
     | docker build --tag "${builder_image}" -
+
+  builder_image_id="$(docker image inspect --format '{{.Id}}' "${builder_image}")"
+  [[ "${builder_image_id}" == sha256:* ]] || \
+    die "Unable to resolve builder image ID: ${builder_image}"
+  docker_version="$(docker --version)"
 }
 
 cleanup_outer_resources() {
@@ -327,6 +367,20 @@ run_container_stage() {
       -e VELDMUIS_GPG_PRIVATE_KEY
       -e VELDMUIS_GPG_FPR
     )
+  elif [[ "${stage}" == "release-metadata" ]]; then
+    mount_mode="ro"
+    docker_args+=(
+      --network none
+      -e VELDMUIS_KEY_FPR_FILE
+      -e VELDMUIS_GPG_PRIVATE_KEY
+      -e VELDMUIS_GPG_FPR
+      -e VELDMUIS_RELEASE_TAG="${VELDMUIS_RELEASE_TAG:-}"
+      -e VELDMUIS_RELEASE_SHA="${VELDMUIS_RELEASE_SHA:-}"
+      -e VELDMUIS_BUILDER_BASE_IMAGE="${builder_base_image}"
+      -e VELDMUIS_BUILDER_BASE_DIGEST="${builder_base_digest}"
+      -e VELDMUIS_BUILDER_IMAGE_ID="${builder_image_id}"
+      -e VELDMUIS_DOCKER_VERSION="${docker_version}"
+    )
   elif [[ "${stage}" == "iso" ]]; then
     mount_mode="ro"
     docker_args+=(
@@ -347,7 +401,7 @@ run_container_stage() {
   elif [[ "${stage}" == "sign" ]]; then
     mkdir -p "${repo_root}/repos"
     docker_args+=(-v "${repo_root}/repos:${container_workspace}/repos:rw")
-  elif [[ "${stage}" == "iso" ]]; then
+  elif [[ "${stage}" == "iso" || "${stage}" == "release-metadata" ]]; then
     local host_build_root="${RUNNER_TEMP}/veldmuis-build"
     mkdir -p "${host_build_root}"
     docker_args+=(-v "${host_build_root}:/workspace/build:rw")
@@ -377,6 +431,11 @@ run_build_in_containers() {
   require_env VELDMUIS_GPG_FPR
   require_env RUNNER_TEMP
 
+  if [[ "${target}" == "iso" ]]; then
+    require_env VELDMUIS_RELEASE_TAG
+    require_env VELDMUIS_RELEASE_SHA
+  fi
+
   prepare_trusted_support
   trap cleanup_outer_resources EXIT
   prepare_builder_image "${target}"
@@ -386,6 +445,7 @@ run_build_in_containers() {
 
   if [[ "${target}" == "iso" ]]; then
     run_container_stage iso "${target}"
+    run_container_stage release-metadata "${target}"
   fi
 
   cleanup_outer_resources
@@ -419,6 +479,9 @@ main() {
         ;;
       iso)
         run_iso_stage
+        ;;
+      release-metadata)
+        run_release_metadata_stage
         ;;
     esac
   else

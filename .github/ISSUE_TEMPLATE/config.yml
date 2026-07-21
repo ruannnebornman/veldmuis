@@ -6,3 +6,6 @@ contact_links:
   - name: Security policy
     url: https://github.com/ruannnebornman/veldmuis/blob/main/SECURITY.md
     about: Read this before reporting a security-sensitive issue.
+  - name: Report a vulnerability privately
+    url: https://github.com/ruannnebornman/veldmuis/security/advisories/new
+    about: Submit exploit details or other sensitive security reports privately.

@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=45
+pkgrel=46
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -19,7 +19,7 @@ source=(
 )
 sha256sums=(
   "a5b527310f057519b61c3d14ea98d09af2c1763bdd88870e2b5be182549ddf5d"
-  "7eece63c8b7016ee9888f57e3da58a9c5007eb1c8a8728c1da40bac5e278b905"
+  "818bbbc31d8724178f446d483851cd5fbc7d3e6b8f5b88fe9f4ca2c144ef943f"
 )
 _payload_sha256sums=(
   "2321354727f1d9b98c1db72b5f3548c4398eac80b95b328d2a0fd2beb8008f90  modules/bootloader.conf"

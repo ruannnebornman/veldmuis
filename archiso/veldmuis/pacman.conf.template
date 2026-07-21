@@ -16,9 +16,9 @@ Include = /etc/pacman.d/mirrorlist
 Include = /etc/pacman.d/mirrorlist
 
 [veldmuis-core]
-SigLevel = Required DatabaseOptional
+SigLevel = Required DatabaseRequired
 Server = file://@VELDMUIS_REPO_ROOT@/veldmuis-core/os/$arch
 
 [veldmuis-extra]
-SigLevel = Required DatabaseOptional
+SigLevel = Required DatabaseRequired
 Server = file://@VELDMUIS_REPO_ROOT@/veldmuis-extra/os/$arch

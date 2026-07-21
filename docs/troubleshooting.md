@@ -5,17 +5,30 @@ and graphics problems.
 
 ## Verify The ISO First
 
-Before debugging install behavior, verify the ISO checksum:
+Before debugging install behavior, authenticate the signed manifest and verify
+the ISO checksum it records:
 
 ```sh
-curl -fL -o veldmuis.iso https://downloads.veldmuislinux.org/iso/latest.iso
-curl -fL -o latest.iso.sha256 https://downloads.veldmuislinux.org/iso/latest.iso.sha256
-expected_sha256="$(awk '{ print $1; exit }' latest.iso.sha256)"
-actual_sha256="$(sha256sum veldmuis.iso | awk '{ print $1; exit }')"
+curl -fL -o veldmuis.gpg \
+  https://raw.githubusercontent.com/ruannnebornman/veldmuis/main/packages/veldmuis-keyring/veldmuis.gpg
+curl -fL -o latest.manifest.txt https://downloads.veldmuislinux.org/iso/latest.manifest.txt
+curl -fL -o latest.manifest.txt.sig https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
+gpgv --keyring ./veldmuis.gpg latest.manifest.txt.sig latest.manifest.txt
+release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' latest.manifest.txt)"
+iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' latest.manifest.txt)"
+expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' latest.manifest.txt)"
+case "${release_path}/${iso_name}" in
+  releases/*/veldmuis-*.iso) ;;
+  *) echo 'Unsafe artifact path in manifest' >&2; exit 1 ;;
+esac
+curl -fL -o "${iso_name}" \
+  "https://downloads.veldmuislinux.org/iso/${release_path}/${iso_name}"
+actual_sha256="$(sha256sum "${iso_name}" | awk '{ print $1; exit }')"
 test "${actual_sha256}" = "${expected_sha256}"
 ```
 
-See [Security Policy](../SECURITY.md) for the full verification flow.
+Confirm the signing fingerprint and see [Security Policy](../SECURITY.md) for
+the full verification flow.
 
 ## Live ISO Does Not Reach Graphics
 

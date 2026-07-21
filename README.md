@@ -81,13 +81,15 @@ Current public ISO files:
 
 - ISO: https://downloads.veldmuislinux.org/iso/latest.iso
 - SHA-256 checksum: https://downloads.veldmuislinux.org/iso/latest.iso.sha256
-- Manifest: https://downloads.veldmuislinux.org/iso/latest.manifest.txt
+- Signed manifest: https://downloads.veldmuislinux.org/iso/latest.manifest.txt
+- Manifest signature: https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
 
-The public ISO path is latest-only and always points to the current image.
-Historical GitHub releases retain release notes, checksum assets, manifest
-assets, tags, and commit metadata, but not release-specific ISO downloads.
+The signed manifest points to an immutable release-specific ISO. Historical
+GitHub releases retain authenticated metadata and link to their exact ISO
+objects.
 
-Before installing, check the ISO against the published checksum and manifest.
+Before installing, verify the manifest signature and then check the ISO against
+the authenticated checksum.
 See [Security and verification](SECURITY.md) for the full verification flow and
 current signing-key details.
 
