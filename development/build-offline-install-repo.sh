@@ -259,7 +259,10 @@ build_signed_repository() {
     die "Offline repository database signature verification failed."
 
   manifest_sha256="$(sha256sum "${manifest_path}" | awk '{ print $1 }')"
-  package_count="$(awk 'END { print NR > 0 ? NR - 1 : 0 }' "${manifest_path}")"
+  package_count="$(
+    awk -f "${repo_root}/development/count-offline-manifest-packages.awk" \
+      "${manifest_path}"
+  )"
   repo_bytes="$(du --bytes --summarize "${offline_dir}" | awk '{ print $1 }')"
 
   {

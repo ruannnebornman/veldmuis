@@ -122,7 +122,10 @@ validate_offline_repository() {
   expected_count="$(offline_build_value offline_package_count)"
   expected_bytes="$(offline_build_value offline_repo_bytes)"
   actual_hash="$(sha256sum "${offline_manifest}" | awk '{ print $1 }')"
-  actual_count="$(awk 'END { print NR > 0 ? NR - 1 : 0 }' "${offline_manifest}")"
+  actual_count="$(
+    awk -f "${repo_root}/development/count-offline-manifest-packages.awk" \
+      "${offline_manifest}"
+  )"
   actual_bytes="$(du --bytes --summarize "${offline_dir}" | awk '{ print $1 }')"
 
   [[ "${expected_hash}" =~ ^[0-9a-f]{64}$ && "${actual_hash}" == "${expected_hash}" ]] || {

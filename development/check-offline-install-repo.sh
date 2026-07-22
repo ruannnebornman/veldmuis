@@ -62,7 +62,10 @@ validate_manifest() {
   actual_hash="$(sha256sum "${manifest_path}" | awk '{ print $1 }')"
   [[ "${expected_hash}" == "${actual_hash}" ]] || die "Offline package manifest checksum mismatch."
   expected_count="$(build_info_value offline_package_count)"
-  actual_count="$(awk 'END { print NR > 0 ? NR - 1 : 0 }' "${manifest_path}")"
+  actual_count="$(
+    awk -f "${repo_root}/development/count-offline-manifest-packages.awk" \
+      "${manifest_path}"
+  )"
   [[ "${expected_count}" =~ ^[1-9][0-9]*$ && "${expected_count}" == "${actual_count}" ]] || \
     die "Offline package manifest count mismatch."
 
