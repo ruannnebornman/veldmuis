@@ -1,0 +1,211 @@
+name: Offline ISO Size
+
+on:
+  workflow_dispatch:
+    inputs:
+      arch_snapshot:
+        description: Arch Linux Archive snapshot in YYYY/MM/DD; blank uses the previous UTC day
+        required: false
+        type: string
+      release_tag:
+        description: ISO label in YYYY.MM.DD or YYYY.MM.DD.N; blank uses the current UTC day
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-iso-size
+  cancel-in-progress: false
+
+jobs:
+  build-and-measure:
+    name: Build And Measure Offline ISO
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    environment: release
+    env:
+      BUILDER_USER: builder
+      BUILDER_HOME: /home/builder
+      GNUPGHOME: /home/builder/.gnupg
+      VELDMUIS_KEY_FPR_FILE: /home/builder/current-signing-key.fpr
+      VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
+      VELDMUIS_AUR_REF_MODE: locked
+      VELDMUIS_AUR_ENABLE_FALLBACK: false
+    steps:
+      - name: Check out candidate ref
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/heads/main
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
+      - name: Resolve candidate inputs
+        id: candidate
+        shell: bash
+        env:
+          INPUT_ARCH_SNAPSHOT: ${{ inputs.arch_snapshot }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          release_tag="${INPUT_RELEASE_TAG:-$(date -u +%Y.%m.%d)}"
+          arch_snapshot="${INPUT_ARCH_SNAPSHOT:-$(date -u -d yesterday +%Y/%m/%d)}"
+          daily_pattern='^([0-9]{4})\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])(\.([2-9]|[1-9][0-9]+))?$'
+          snapshot_pattern='^([0-9]{4})/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])$'
+
+          [[ "${release_tag}" =~ ${daily_pattern} ]] || {
+            echo "Invalid release tag: ${release_tag}" >&2
+            exit 1
+          }
+          release_date="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          [[ "$(date -u -d "${release_date//./-}" +%Y.%m.%d 2>/dev/null)" == "${release_date}" ]] || {
+            echo "Invalid release date: ${release_date}" >&2
+            exit 1
+          }
+
+          [[ "${arch_snapshot}" =~ ${snapshot_pattern} ]] || {
+            echo "Invalid Arch snapshot: ${arch_snapshot}" >&2
+            exit 1
+          }
+          [[ "$(date -u -d "${arch_snapshot//\//-}" +%Y/%m/%d 2>/dev/null)" == "${arch_snapshot}" ]] || {
+            echo "Invalid Arch snapshot date: ${arch_snapshot}" >&2
+            exit 1
+          }
+
+          release_sha="$(git rev-parse HEAD)"
+          [[ "${release_sha}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Unable to resolve candidate commit" >&2
+            exit 1
+          }
+
+          {
+            echo "release_tag=${release_tag}"
+            echo "release_sha=${release_sha}"
+            echo "arch_snapshot=${arch_snapshot}"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Validate signing configuration
+        shell: bash
+        env:
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+        run: |
+          set -euo pipefail
+          [[ -n "${VELDMUIS_GPG_PRIVATE_KEY:-}" ]] || {
+            echo "Missing required environment secret: VELDMUIS_GPG_PRIVATE_KEY" >&2
+            exit 1
+          }
+          [[ "${VELDMUIS_GPG_FPR:-}" =~ ^[0-9A-Fa-f]{40}$ ]] || {
+            echo "Missing or invalid environment secret: VELDMUIS_GPG_FPR" >&2
+            exit 1
+          }
+
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/local/lib/android \
+            /usr/share/dotnet
+          docker system prune --all --force --volumes
+          df -h /
+
+      - name: Build and validate full offline ISO
+        shell: bash
+        env:
+          CI_REPO_ROOT: ${{ github.workspace }}
+          VELDMUIS_RELEASE_TAG: ${{ steps.candidate.outputs.release_tag }}
+          VELDMUIS_RELEASE_SHA: ${{ steps.candidate.outputs.release_sha }}
+          VELDMUIS_ARCH_SNAPSHOT: ${{ steps.candidate.outputs.arch_snapshot }}
+          VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
+          VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+        run: |
+          set -euo pipefail
+          ./development/run-ci-arch-builder.sh offline-iso
+
+      - name: Report ISO and repository size
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.candidate.outputs.release_tag }}
+          ARCH_SNAPSHOT: ${{ steps.candidate.outputs.arch_snapshot }}
+        run: |
+          set -euo pipefail
+
+          output_root="${RUNNER_TEMP}/veldmuis-build/archiso/out"
+          artifact_stem="veldmuis-${RELEASE_TAG}-x86_64"
+          iso_path="${output_root}/${artifact_stem}.iso"
+          manifest_path="${output_root}/${artifact_stem}.manifest.txt"
+          offline_manifest_path="${output_root}/${artifact_stem}.offline-packages.tsv"
+
+          for artifact_path in "${iso_path}" "${manifest_path}" "${offline_manifest_path}"; do
+            [[ -s "${artifact_path}" ]] || {
+              echo "Expected candidate artifact is missing: ${artifact_path}" >&2
+              exit 1
+            }
+          done
+
+          manifest_value() {
+            local key="$1"
+            awk -F= -v wanted="${key}" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }' \
+              "${manifest_path}"
+          }
+
+          iso_bytes="$(stat --format '%s' "${iso_path}")"
+          offline_repo_bytes="$(manifest_value offline_repo_bytes)"
+          offline_package_count="$(manifest_value offline_package_count)"
+          recorded_snapshot="$(manifest_value arch_repository_snapshot)"
+
+          [[ "$(manifest_value iso_bytes)" == "${iso_bytes}" ]] || {
+            echo "Manifest ISO byte count does not match the built file" >&2
+            exit 1
+          }
+          [[ "${offline_repo_bytes}" =~ ^[1-9][0-9]*$ ]] || {
+            echo "Manifest offline repository byte count is invalid" >&2
+            exit 1
+          }
+          [[ "${offline_package_count}" =~ ^[1-9][0-9]*$ ]] || {
+            echo "Manifest offline package count is invalid" >&2
+            exit 1
+          }
+          [[ "${recorded_snapshot}" == "${ARCH_SNAPSHOT}" ]] || {
+            echo "Manifest Arch snapshot does not match the requested snapshot" >&2
+            exit 1
+          }
+
+          iso_human="$(numfmt --to=iec-i --suffix=B "${iso_bytes}")"
+          repo_human="$(numfmt --to=iec-i --suffix=B "${offline_repo_bytes}")"
+
+          echo "Full offline ISO size: ${iso_bytes} bytes (${iso_human})"
+          echo "Embedded Arch repository size: ${offline_repo_bytes} bytes (${repo_human})"
+          echo "Embedded official package count: ${offline_package_count}"
+          echo "Arch repository snapshot: ${recorded_snapshot}"
+
+          {
+            echo "## Full offline ISO size"
+            echo
+            echo "| Measurement | Result |"
+            echo "| --- | ---: |"
+            echo "| ISO | ${iso_bytes} bytes (${iso_human}) |"
+            echo "| Embedded Arch repository | ${offline_repo_bytes} bytes (${repo_human}) |"
+            echo "| Embedded official packages | ${offline_package_count} |"
+            echo "| Arch repository snapshot | ${recorded_snapshot} |"
+            echo
+            echo "Cloudflare publication was not configured or attempted."
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Stop before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Offline ISO candidate is built and measured. The workflow ends before any Cloudflare publication step."

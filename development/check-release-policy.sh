@@ -182,6 +182,23 @@ check_workflow_action_pins() {
   log "Workflow actions are pinned to immutable commit SHAs"
 }
 
+check_offline_candidate_workflow_source() {
+  local workflow="${repo_root}/.github/workflows/offline-iso-size.yml"
+
+  [[ -f "${workflow}" ]] || die "Offline ISO size workflow not found: ${workflow}"
+  grep -qF "if: github.ref == 'refs/heads/main'" "${workflow}" || \
+    die "Offline ISO size workflow is not restricted to main."
+  grep -qF 'ref: refs/heads/main' "${workflow}" || \
+    die "Offline ISO size workflow does not explicitly check out main."
+  grep -qF './development/run-ci-arch-builder.sh offline-iso' "${workflow}" || \
+    die "Offline ISO size workflow does not use the offline ISO build target."
+  if grep -Eq 'publish-r2|aws[[:space:]]+s3|CF_R2_|gh[[:space:]]+release|upload-artifact' "${workflow}"; then
+    die "Offline ISO size workflow contains a publication or artifact-upload path."
+  fi
+
+  log "Offline ISO size workflow is main-only and stops before publication"
+}
+
 check_repository_signature_policy() {
   local file=""
   local section=""
@@ -205,10 +222,16 @@ check_repository_signature_policy() {
   done
 
   file="${repo_root}/packages/veldmuis-calamares-config/veldmuis-calamares-bootstrap.sh"
-  [[ "$(grep -cF 'SigLevel = Required DatabaseRequired' "${file}")" -eq 2 ]] || \
-    die "Calamares bootstrap does not require both Veldmuis database signatures."
+  for section in veldmuis-core veldmuis-extra veldmuis-offline; do
+    awk -v wanted="${section}" '
+      /^\[/ { in_section = ($0 == "[" wanted "]") }
+      in_section && $0 == "SigLevel = Required DatabaseRequired" { found=1 }
+      END { exit found ? 0 : 1 }
+    ' "${file}" || \
+      die "Calamares bootstrap does not require the ${section} database signature."
+  done
 
-  log "All Veldmuis pacman configurations require repository database signatures"
+  log "All installer and Veldmuis pacman configurations require repository database signatures"
 }
 
 check_release_metadata_source() {
@@ -405,6 +428,7 @@ main() {
   check_tag_examples
   check_workflow_source
   check_workflow_action_pins
+  check_offline_candidate_workflow_source
   check_repository_signature_policy
   check_release_metadata_source
   check_private_reporting_source

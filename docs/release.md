@@ -81,6 +81,12 @@ permissions are read-only by default and elevated only for the publication job.
 Signing material is passed only to network-disabled signing stages, while
 object-storage credentials are passed only to publisher steps.
 
+The separate manually dispatched `Offline ISO Size` workflow builds and
+validates a full offline candidate from the selected source ref, reports its
+exact size, and ends before publication. It does not create a tag, publish a
+package repository, upload to object storage, create a GitHub release, or retain
+the ISO as an Actions artifact.
+
 ## Protected Release Environment
 
 The hosted environment must be named `release` and restricted to `main`.
@@ -155,6 +161,7 @@ release_sha
 release_path
 iso_name
 sha256
+iso_bytes
 checksum_name
 package_inventory_name
 package_inventory_sha256
@@ -167,6 +174,16 @@ aur_manifest_sha256
 signing_fingerprint
 builder_base_digest
 built_at_utc
+```
+
+Full offline candidate manifests additionally record:
+
+```text
+offline_manifest_name
+offline_manifest_sha256
+offline_repo_bytes
+offline_package_count
+arch_repository_snapshot
 ```
 
 The build-input record adds the requested builder image, immutable base-image

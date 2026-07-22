@@ -7,6 +7,7 @@ RAM_MB="${RAM_MB:-4096}"
 VCPUS="${VCPUS:-4}"
 DISK_GB="${DISK_GB:-40}"
 CONNECT_URI="${CONNECT_URI:-qemu:///session}"
+NETWORK_MODE="${NETWORK_MODE:-default}"
 POOL_DIR="${POOL_DIR:-$HOME/.local/share/libvirt/images}"
 DISK_PATH=""
 NETWORK_ARGS=()
@@ -23,6 +24,7 @@ Environment overrides:
   DISK_GB    Default: 40
   POOL_DIR   Default: ~/.local/share/libvirt/images
   CONNECT_URI Default: qemu:///session
+  NETWORK_MODE default attaches a NIC; none creates the VM without one
 EOF
 }
 
@@ -45,14 +47,29 @@ command -v virsh >/dev/null 2>&1 || die "virsh not found"
 case "$CONNECT_URI" in
   qemu:///session)
     DISK_PATH="${POOL_DIR}/${VM_NAME}.qcow2"
-    NETWORK_ARGS=(--network "user,model=virtio")
+    if [[ "${NETWORK_MODE}" == "default" ]]; then
+      NETWORK_ARGS=(--network "user,model=virtio")
+    fi
     ;;
   qemu:///system)
     DISK_PATH="${POOL_DIR}/${VM_NAME}.qcow2"
-    NETWORK_ARGS=(--network "network=default,model=virtio")
+    if [[ "${NETWORK_MODE}" == "default" ]]; then
+      NETWORK_ARGS=(--network "network=default,model=virtio")
+    fi
     ;;
   *)
     die "Unsupported CONNECT_URI: $CONNECT_URI"
+    ;;
+esac
+
+case "${NETWORK_MODE}" in
+  default)
+    ;;
+  none)
+    NETWORK_ARGS=(--network none)
+    ;;
+  *)
+    die "Unsupported NETWORK_MODE: ${NETWORK_MODE}"
     ;;
 esac
 

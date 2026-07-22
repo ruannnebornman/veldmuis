@@ -1,0 +1,82 @@
+name: Repository Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
+      - name: Check installer package-set seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          source ./packages/veldmuis-calamares-config/installer-package-sets.sh
+
+          ((${#veldmuis_offline_seed_packages[@]} > 0)) || {
+            echo "Offline installer package seed is empty" >&2
+            exit 1
+          }
+
+          declare -A seen=()
+          for package_name in "${veldmuis_offline_seed_packages[@]}"; do
+            [[ -n "${package_name}" ]] || {
+              echo "Offline installer package seed contains an empty entry" >&2
+              exit 1
+            }
+            [[ -z "${seen[${package_name}]:-}" ]] || {
+              echo "Duplicate offline installer seed package: ${package_name}" >&2
+              exit 1
+            }
+            seen["${package_name}"]=1
+          done
+
+          echo "Validated ${#seen[@]} offline installer seed packages"
+
+      - name: Check Calamares package source checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_root="packages/veldmuis-calamares-config"
+          expected_bootstrap="$(
+            awk '/^sha256sums=/{inside=1; next} inside && /^\)/{exit} inside {gsub(/["[:space:]]/, ""); if (++entry == 2) print}' \
+              "${package_root}/PKGBUILD"
+          )"
+          expected_sets="$(
+            awk '/^sha256sums=/{inside=1; next} inside && /^\)/{exit} inside {gsub(/["[:space:]]/, ""); if (++entry == 3) print}' \
+              "${package_root}/PKGBUILD"
+          )"
+          actual_bootstrap="$(sha256sum "${package_root}/veldmuis-calamares-bootstrap.sh" | awk '{ print $1 }')"
+          actual_sets="$(sha256sum "${package_root}/installer-package-sets.sh" | awk '{ print $1 }')"
+
+          [[ "${actual_bootstrap}" == "${expected_bootstrap}" ]] || {
+            echo "Calamares bootstrap checksum does not match PKGBUILD" >&2
+            exit 1
+          }
+          [[ "${actual_sets}" == "${expected_sets}" ]] || {
+            echo "Installer package-set checksum does not match PKGBUILD" >&2
+            exit 1
+          }

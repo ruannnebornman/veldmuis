@@ -47,6 +47,28 @@ When turning an issue into actionable work, add or record:
 
 Do not open a pull request unless there is a concrete change ready to review.
 
+Normal development happens on a short-lived branch. Direct changes to `main`
+are reserved for exceptional recovery work. Use a neutral branch name such as:
+
+```text
+feature/offline-iso
+fix/installer-bootstrap
+chore/repository-checks
+```
+
+Open a pull request into `main` and wait for the required repository checks to
+pass before merging. While the project has one maintainer, the branch rule does
+not require an independent approval: a pull request author cannot approve their
+own pull request, and requiring another approval would prevent normal solo
+maintenance. The maintainer should still review the Files Changed view,
+resolve any review conversations, and make the explicit merge decision.
+
+Pull-request checks must not receive release signing keys or publication
+credentials. Workflows that use the protected `release` environment run only
+from `main`. A manually dispatched workflow may technically target another
+branch, but release-environment policy and workflow-level checks must prevent a
+non-main ref from receiving production secrets.
+
 Pull requests should:
 
 - Keep branch names, titles, descriptions, commit messages, and generated docs

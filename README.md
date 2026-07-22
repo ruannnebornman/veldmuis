@@ -44,8 +44,10 @@ metapackages.
 
 The current ISO embeds the signed Veldmuis package repositories used by the
 installer. Arch packages are still resolved from Arch mirrors during
-installation, so the image should be treated as a network installer unless a
-future offline-install path is documented.
+installation, so the public image remains a network installer. A full offline
+candidate build and size-measurement path is documented in
+[Building Packages And ISOs](docs/building.md); it is not yet the public release
+path.
 
 ## Official Links
 
