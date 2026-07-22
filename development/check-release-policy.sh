@@ -175,11 +175,28 @@ check_workflow_action_pins() {
       action="$(sed -E 's/^[[:space:]]*-[[:space:]]+uses:[[:space:]]+([^[:space:]#]+).*/\1/' <<<"${line}")"
       [[ "${action}" == ./* ]] && continue
       [[ "${action}" =~ @([0-9a-f]{40})$ ]] || \
-        die "Workflow action is not pinned to a full commit SHA: ${workflow#${repo_root}/}: ${action}"
+        die "Workflow action is not pinned to a full commit SHA: ${workflow#"${repo_root}"/}: ${action}"
     done < <(grep -E '^[[:space:]]*-[[:space:]]+uses:' "${workflow}" || true)
   done < <(find "${repo_root}/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print)
 
   log "Workflow actions are pinned to immutable commit SHAs"
+}
+
+check_offline_candidate_workflow_source() {
+  local workflow="${repo_root}/.github/workflows/offline-iso-size.yml"
+
+  [[ -f "${workflow}" ]] || die "Offline ISO size workflow not found: ${workflow}"
+  grep -qF "if: github.ref == 'refs/heads/main'" "${workflow}" || \
+    die "Offline ISO size workflow is not restricted to main."
+  grep -qF 'ref: refs/heads/main' "${workflow}" || \
+    die "Offline ISO size workflow does not explicitly check out main."
+  grep -qF './development/run-ci-arch-builder.sh offline-iso' "${workflow}" || \
+    die "Offline ISO size workflow does not use the offline ISO build target."
+  if grep -Eq 'publish-r2|aws[[:space:]]+s3|CF_R2_|gh[[:space:]]+release|upload-artifact' "${workflow}"; then
+    die "Offline ISO size workflow contains a publication or artifact-upload path."
+  fi
+
+  log "Offline ISO size workflow is main-only and stops before publication"
 }
 
 check_repository_signature_policy() {
@@ -200,15 +217,21 @@ check_repository_signature_policy() {
         ' "${file}"
       )"
       [[ "${policy}" == "SigLevel = Required DatabaseRequired" ]] || \
-        die "${file#${repo_root}/} does not require ${section} database signatures."
+        die "${file#"${repo_root}"/} does not require ${section} database signatures."
     done
   done
 
   file="${repo_root}/packages/veldmuis-calamares-config/veldmuis-calamares-bootstrap.sh"
-  [[ "$(grep -cF 'SigLevel = Required DatabaseRequired' "${file}")" -eq 2 ]] || \
-    die "Calamares bootstrap does not require both Veldmuis database signatures."
+  for section in veldmuis-core veldmuis-extra veldmuis-offline; do
+    awk -v wanted="${section}" '
+      /^\[/ { in_section = ($0 == "[" wanted "]") }
+      in_section && $0 == "SigLevel = Required DatabaseRequired" { found=1 }
+      END { exit found ? 0 : 1 }
+    ' "${file}" || \
+      die "Calamares bootstrap does not require the ${section} database signature."
+  done
 
-  log "All Veldmuis pacman configurations require repository database signatures"
+  log "All installer and Veldmuis pacman configurations require repository database signatures"
 }
 
 check_release_metadata_source() {
@@ -405,6 +428,7 @@ main() {
   check_tag_examples
   check_workflow_source
   check_workflow_action_pins
+  check_offline_candidate_workflow_source
   check_repository_signature_policy
   check_release_metadata_source
   check_private_reporting_source

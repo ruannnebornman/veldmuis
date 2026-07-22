@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=46
+pkgrel=47
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -9,6 +9,7 @@ depends=(
   "arch-install-scripts"
   "bash"
   "calamares"
+  "gnupg"
   "reflector"
 )
 _source_root="${PWD}"
@@ -16,10 +17,12 @@ _branding_root="${_source_root}/../veldmuis-branding"
 source=(
   "settings.conf"
   "veldmuis-calamares-bootstrap.sh"
+  "installer-package-sets.sh"
 )
 sha256sums=(
   "a5b527310f057519b61c3d14ea98d09af2c1763bdd88870e2b5be182549ddf5d"
-  "818bbbc31d8724178f446d483851cd5fbc7d3e6b8f5b88fe9f4ca2c144ef943f"
+  "61090e7b39f3d77f245ba8d2f45c8694c633085f83109661e367254802b5c1d6"
+  "d927f2563a03bdf3e5f64e2fe0402032f5a92250b3c043bc69e18c9313b5ceb0"
 )
 _payload_sha256sums=(
   "2321354727f1d9b98c1db72b5f3548c4398eac80b95b328d2a0fd2beb8008f90  modules/bootloader.conf"
@@ -76,6 +79,8 @@ package() {
 
   install -Dm755 "${srcdir}/veldmuis-calamares-bootstrap.sh" \
     "${pkgdir}/usr/lib/veldmuis/veldmuis-calamares-bootstrap.sh"
+  install -Dm644 "${srcdir}/installer-package-sets.sh" \
+    "${pkgdir}/usr/lib/veldmuis/installer-package-sets.sh"
 
   install -Dm644 "${_source_root}/branding/veldmuis/branding.desc" \
     "${pkgdir}/etc/calamares/branding/veldmuis/branding.desc"

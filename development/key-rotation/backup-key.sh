@@ -200,6 +200,7 @@ EOF
 prepare_backup_layout() {
   local gpg_home="${GNUPGHOME:-${HOME}/.gnupg}"
   local revocation_cert="${gpg_home}/openpgp-revocs.d/${current_fingerprint}.rev"
+  local manifest_tmp=""
   local temp_root=""
 
   temp_root="$(select_temp_root)"
@@ -238,11 +239,13 @@ prepare_backup_layout() {
   install -m700 "${restore_script_path}" "${bundle_root}/restore-key.sh"
   write_restore_instructions
 
+  manifest_tmp="$(mktemp "${stage_parent}/BACKUP-MANIFEST.sha256.XXXXXX")"
   (
     cd "${bundle_root}"
-    find . -type f ! -name BACKUP-MANIFEST.sha256 -print0 | \
-      LC_ALL=C sort -z | xargs -0 sha256sum > BACKUP-MANIFEST.sha256
-  )
+    find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+  ) > "${manifest_tmp}"
+  install -m600 "${manifest_tmp}" "${bundle_root}/BACKUP-MANIFEST.sha256"
+  rm -f "${manifest_tmp}"
 }
 
 encrypt_archive() {

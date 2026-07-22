@@ -23,3 +23,6 @@
 - After starting a pipeline or workflow, do not monitor, poll, wait for, or
   report its progress unless explicitly asked in the current task. A request to
   start a pipeline or workflow authorizes only its dispatch.
+- Before reporting repository validation as successful, run
+  `./development/check-repo-hygiene.sh` with ShellCheck installed. If the script
+  reports that ShellCheck was skipped, describe validation as incomplete.

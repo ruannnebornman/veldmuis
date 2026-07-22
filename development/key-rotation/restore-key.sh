@@ -4,7 +4,10 @@ set -euo pipefail
 umask 077
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-default_repo_root="$(cd "${script_dir}/../.." 2>/dev/null && pwd || true)"
+default_repo_root=""
+if resolved_repo_root="$(cd "${script_dir}/../.." 2>/dev/null && pwd)"; then
+  default_repo_root="${resolved_repo_root}"
+fi
 
 action=""
 archive_path=""
