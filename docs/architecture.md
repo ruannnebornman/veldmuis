@@ -93,20 +93,23 @@ every individual and maximal selection with container networking disabled.
 
 ## Release Layer
 
-The release workflow resolves an exact `main` commit, builds packages and the
-ISO in isolated Arch containers, and creates authenticated release metadata in
-a network-disabled signing stage. It publishes the package repository and
-release-specific ISO objects before advancing the `latest` aliases.
+The package, network-installer, and offline-installer workflows are independent.
+Installer workflows resolve an exact `main` commit, build in isolated Arch
+containers, and create authenticated release metadata in a network-disabled
+signing stage. They publish release-specific ISO objects before advancing a
+small installer-specific channel document.
 
 GitHub releases keep release notes, the signed manifest and signature,
 checksum, package inventory, SPDX SBOM, build inputs, and resolved AUR inputs.
-The current convenience path is:
+The current channel paths are:
 
 ```text
-https://downloads.veldmuislinux.org/iso/latest.iso
+https://downloads.veldmuislinux.org/iso/channels/network.json
+https://downloads.veldmuislinux.org/iso/channels/offline.json
 ```
 
-The signed `latest.manifest.txt` points users to immutable artifacts under
-`iso/releases/TAG/`. Release-specific paths are never reused.
+Channel manifests point users to immutable artifacts under
+`iso/releases/TAG/`. Channel JSON and signed-manifest objects are small mutable
+pointers; release-specific paths are never reused.
 
 See [Release Process](release.md) for the full public release policy.

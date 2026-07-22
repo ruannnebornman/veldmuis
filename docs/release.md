@@ -1,9 +1,10 @@
 # Release Process
 
-Veldmuis releases are date-tagged builds from `main`. The release workflow
-builds packages and an ISO, authenticates the resulting metadata, publishes
-release-specific artifacts, advances the `latest` aliases, and creates a
-GitHub release.
+Veldmuis releases are date-tagged builds from `main`. Three independent
+workflows publish the rolling package repository, the network installer, and
+the offline installer. Installer artifacts use immutable versioned paths;
+small channel documents select the currently promoted build without storing a
+second copy of either ISO.
 
 ## Tag Formats
 
@@ -26,9 +27,12 @@ supported.
 
 ## Scheduled And Manual Releases
 
-The release workflow is defined in `.github/workflows/release.yml`. It runs as
-a monthly schedule or by manual dispatch with an explicit daily tag. Manual
-dispatch is accepted only from `main`.
+The network installer workflow is defined in `.github/workflows/release.yml`.
+It runs as a monthly schedule or by manual dispatch with an explicit daily
+tag. The offline installer workflow is defined in
+`.github/workflows/offline-iso-size.yml` and is manually dispatched with an
+optional daily tag and Arch Linux Archive snapshot. Manual dispatch is
+accepted only from `main`.
 
 Manual release tags must be the next valid tag for that UTC date. For example,
 if `2026.04.22` exists, the next release on that date must be
@@ -67,11 +71,9 @@ At a high level, the workflow:
 7. Generates the package inventory, SPDX SBOM, build-input record, checksum,
    and signed manifest in a network-disabled container.
 8. Creates the annotated tag for the exact built commit.
-9. Publishes and verifies the package repositories.
-10. Uploads and verifies immutable ISO release objects.
-11. Copies the verified objects to short-lived `latest` aliases, with the
-    detached signature immediately before the signed manifest and the manifest
-    last.
+9. Uploads and verifies immutable network-installer release objects.
+10. Promotes the small network channel document and signed channel manifest.
+11. Removes legacy mutable ISO aliases after the channel is usable.
 12. Creates the GitHub release and attaches the authenticated metadata.
 13. Downloads the published manifest and signature and verifies them with the
     packaged public key.
@@ -81,11 +83,11 @@ permissions are read-only by default and elevated only for the publication job.
 Signing material is passed only to network-disabled signing stages, while
 object-storage credentials are passed only to publisher steps.
 
-The separate manually dispatched `Offline ISO Size` workflow builds and
-validates a full offline candidate from the selected source ref, reports its
-exact size, and ends before publication. It does not create a tag, publish a
-package repository, upload to object storage, create a GitHub release, or retain
-the ISO as an Actions artifact.
+The separate manually dispatched `Offline Installer Release` workflow builds
+and validates a full offline installer from the selected snapshot, reports its
+exact size, uploads immutable release objects, and promotes the offline
+channel. It does not publish the rolling package repository, create a GitHub
+tag, or create a GitHub release.
 
 ## Protected Release Environment
 
@@ -118,37 +120,42 @@ https://downloads.veldmuislinux.org/iso/releases/YYYY.MM.DD/
 It contains:
 
 ```text
-veldmuis-TAG-x86_64.iso
-veldmuis-TAG-x86_64.iso.sha256
-veldmuis-TAG-x86_64.manifest.txt
-veldmuis-TAG-x86_64.manifest.txt.sig
-veldmuis-TAG-x86_64.packages.tsv
-veldmuis-TAG-x86_64.spdx
-veldmuis-TAG-x86_64.build-inputs.txt
-veldmuis-TAG-x86_64.aur-packages.manifest.txt
+veldmuis-TAG-network-x86_64.iso
+veldmuis-TAG-network-x86_64.iso.sha256
+veldmuis-TAG-network-x86_64.manifest.txt
+veldmuis-TAG-network-x86_64.manifest.txt.sig
+veldmuis-TAG-network-x86_64.packages.tsv
+veldmuis-TAG-network-x86_64.spdx
+veldmuis-TAG-network-x86_64.build-inputs.txt
+veldmuis-TAG-network-x86_64.aur-packages.manifest.txt
+
+veldmuis-TAG-offline-x86_64.iso
+veldmuis-TAG-offline-x86_64.iso.sha256
+veldmuis-TAG-offline-x86_64.manifest.txt
+veldmuis-TAG-offline-x86_64.manifest.txt.sig
+veldmuis-TAG-offline-x86_64.offline-packages.tsv
 ```
 
-Convenience aliases identify the current release:
+Small channel documents identify the promoted installer releases:
 
 ```text
-https://downloads.veldmuislinux.org/iso/latest.iso
-https://downloads.veldmuislinux.org/iso/latest.iso.sha256
-https://downloads.veldmuislinux.org/iso/latest.manifest.txt
-https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
-https://downloads.veldmuislinux.org/iso/latest.packages.tsv
-https://downloads.veldmuislinux.org/iso/latest.spdx
-https://downloads.veldmuislinux.org/iso/latest.build-inputs.txt
-https://downloads.veldmuislinux.org/iso/latest.aur-packages.manifest.txt
+https://downloads.veldmuislinux.org/iso/channels/network.json
+https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt
+https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
+https://downloads.veldmuislinux.org/iso/channels/offline.json
+https://downloads.veldmuislinux.org/iso/channels/offline.manifest.txt
+https://downloads.veldmuislinux.org/iso/channels/offline.manifest.txt.sig
 ```
 
-The signed manifest is the `latest` publication marker and points back to
-immutable objects. A reader may fail closed during the short alias-copy window,
-but cannot authenticate a mixed release as valid.
+Each JSON channel document contains the immutable ISO, checksum, signed
+manifest, and detached-signature URLs. The manifest and signature are also
+copied to small channel-specific paths for command-line verification. The JSON
+document is promoted last and no mutable path contains ISO bytes.
 
 Releases produced by the current workflow retain the checksum, signed manifest
 and signature, package inventory, SPDX SBOM, build inputs, and exact AUR-input
 manifest. Release notes link to the immutable ISO rather than a mutable
-`latest` URL. Older releases may predate signed manifests. Release-specific
+channel URL. Older releases may predate signed manifests. Release-specific
 objects are retained for at least 12 months and their paths are never reused.
 
 ## Manifest And Build Inputs
@@ -158,6 +165,7 @@ The signed release manifest records:
 ```text
 release_tag
 release_sha
+installer
 release_path
 iso_name
 sha256
@@ -238,8 +246,8 @@ Local source checks:
 Remote release checks require GitHub CLI authentication:
 
 ```sh
-VELDMUIS_LATEST_ISO_URL=https://downloads.veldmuislinux.org/iso/latest.iso \
-VELDMUIS_LATEST_MANIFEST_URL=https://downloads.veldmuislinux.org/iso/latest.manifest.txt \
-VELDMUIS_LATEST_MANIFEST_SIGNATURE_URL=https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig \
+VELDMUIS_NETWORK_CHANNEL_URL=https://downloads.veldmuislinux.org/iso/channels/network.json \
+VELDMUIS_NETWORK_MANIFEST_URL=https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt \
+VELDMUIS_NETWORK_MANIFEST_SIGNATURE_URL=https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig \
   ./development/check-release-policy.sh --remote
 ```

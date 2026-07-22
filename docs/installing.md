@@ -13,8 +13,9 @@ important data before changing disk partitions.
 - UEFI firmware. BIOS and legacy boot are not supported.
 - At least 2 GiB of RAM and 12 GiB of available storage. These are installer
   minimums; normal desktop use needs additional capacity.
-- A working internet connection throughout installation. The ISO contains the
-  Veldmuis repositories, but downloads Arch packages from Arch mirrors.
+- A working internet connection throughout installation when using the network
+  installer. The offline installer carries its dated Arch package snapshot and
+  does not require network access during installation.
 - A USB drive or other bootable medium large enough for the ISO.
 - A backup of any data that must survive repartitioning.
 
@@ -28,10 +29,10 @@ Download the public key, signed manifest, and detached signature:
 ```sh
 curl -fL -o veldmuis.gpg \
   https://raw.githubusercontent.com/ruannnebornman/veldmuis/main/packages/veldmuis-keyring/veldmuis.gpg
-curl -fL -o latest.manifest.txt https://downloads.veldmuislinux.org/iso/latest.manifest.txt
-curl -fL -o latest.manifest.txt.sig https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
+curl -fL -o network.manifest.txt https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt
+curl -fL -o network.manifest.txt.sig https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
 gpg --show-keys --with-fingerprint veldmuis.gpg
-gpgv --keyring ./veldmuis.gpg latest.manifest.txt.sig latest.manifest.txt
+gpgv --keyring ./veldmuis.gpg network.manifest.txt.sig network.manifest.txt
 ```
 
 Confirm the fingerprint shown in [Security and verification](../SECURITY.md).
@@ -39,9 +40,9 @@ After the signature succeeds, download the immutable ISO named by the manifest
 and verify its authenticated checksum:
 
 ```sh
-release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' latest.manifest.txt)"
-iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' latest.manifest.txt)"
-expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' latest.manifest.txt)"
+release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' network.manifest.txt)"
+iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' network.manifest.txt)"
+expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' network.manifest.txt)"
 case "${release_path}/${iso_name}" in
   releases/*/veldmuis-*.iso) ;;
   *) echo 'Unsafe artifact path in manifest' >&2; exit 1 ;;
@@ -54,6 +55,8 @@ test "${actual_sha256}" = "${expected_sha256}"
 
 A successful signature check and `test` command authenticate the release
 metadata and verify the ISO bytes. Do not continue if either command fails.
+For the offline installer, substitute `offline` for `network` in both channel
+manifest URLs and local manifest filenames.
 
 ## 2. Create The Bootable Medium
 

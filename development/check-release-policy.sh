@@ -157,8 +157,8 @@ check_workflow_source() {
     die "Release workflow does not restrict source checkout to main."
   grep -q 'publish-r2-release.sh' "${workflow}" || \
     die "Release workflow does not use immutable release publication."
-  grep -q 'latest.manifest.txt.sig' "${workflow}" || \
-    die "Release workflow does not publish a release-manifest signature."
+  grep -q 'channels/network.manifest.txt.sig' "${workflow}" || \
+    die "Network release workflow does not publish a channel-manifest signature."
   grep -q 'gpgv --keyring ./packages/veldmuis-keyring/veldmuis.gpg' "${workflow}" || \
     die "Release workflow does not verify generated metadata with the packaged keyring."
 
@@ -182,7 +182,7 @@ check_workflow_action_pins() {
   log "Workflow actions are pinned to immutable commit SHAs"
 }
 
-check_offline_candidate_workflow_source() {
+check_offline_release_workflow_source() {
   local workflow="${repo_root}/.github/workflows/offline-iso-size.yml"
 
   [[ -f "${workflow}" ]] || die "Offline ISO size workflow not found: ${workflow}"
@@ -192,11 +192,15 @@ check_offline_candidate_workflow_source() {
     die "Offline ISO size workflow does not explicitly check out main."
   grep -qF './development/run-ci-arch-builder.sh offline-iso' "${workflow}" || \
     die "Offline ISO size workflow does not use the offline ISO build target."
-  if grep -Eq 'publish-r2|aws[[:space:]]+s3|CF_R2_|gh[[:space:]]+release|upload-artifact' "${workflow}"; then
-    die "Offline ISO size workflow contains a publication or artifact-upload path."
+  grep -qF './development/publish-r2-release.sh' "${workflow}" || \
+    die "Offline release workflow does not publish immutable artifacts."
+  grep -qF 'VELDMUIS_ISO_MODE: offline' "${workflow}" || \
+    die "Offline release workflow does not select the offline release channel."
+  if grep -Eq 'gh[[:space:]]+release|git/tags|git/refs' "${workflow}"; then
+    die "Offline release workflow must not mutate the network release tag history."
   fi
 
-  log "Offline ISO size workflow is main-only and stops before publication"
+  log "Offline release workflow is main-only and publishes the offline channel"
 }
 
 check_repository_signature_policy() {
@@ -246,6 +250,8 @@ check_release_metadata_source() {
     die "Release metadata generator does not create the SPDX inventory."
   grep -q 'releases/%s/%s' "${publisher}" || \
     die "Release publisher does not use release-specific object paths."
+  grep -q 'channels/%s.%s' "${publisher}" || \
+    die "Release publisher does not use installer-specific channel documents."
   grep -q 'Immutable release object already exists and will not be overwritten' "${publisher}" || \
     die "Release publisher does not reject existing immutable objects."
   if grep -Eq 'aws[[:space:]]+s3[[:space:]]+rm' "${publisher}"; then
@@ -304,9 +310,10 @@ check_remote_releases() {
   local manifest_sha
   local bad_body_tags
   local retired_body_tags
-  local latest_iso_url="${VELDMUIS_LATEST_ISO_URL:-}"
-  local latest_manifest_url="${VELDMUIS_LATEST_MANIFEST_URL:-}"
-  local latest_signature_url="${VELDMUIS_LATEST_MANIFEST_SIGNATURE_URL:-}"
+  local network_channel_url="${VELDMUIS_NETWORK_CHANNEL_URL:-}"
+  local network_manifest_url="${VELDMUIS_NETWORK_MANIFEST_URL:-}"
+  local network_signature_url="${VELDMUIS_NETWORK_MANIFEST_SIGNATURE_URL:-}"
+  local channel_body=""
   local release_keyring="${VELDMUIS_RELEASE_KEYRING:-${repo_root}/packages/veldmuis-keyring/veldmuis.gpg}"
   local required_signed_tag="${VELDMUIS_REQUIRED_SIGNED_RELEASE_TAG:-}"
   local required_signed_tag_seen=0
@@ -381,24 +388,30 @@ check_remote_releases() {
     die "Required signed release was not returned by the release listing: ${required_signed_tag}"
   fi
 
-  if [[ -n "${latest_iso_url}" ]]; then
-    [[ "${latest_iso_url}" =~ ^https:// ]] || \
-      die "VELDMUIS_LATEST_ISO_URL must use HTTPS: ${latest_iso_url}"
-    curl -fsSI "${latest_iso_url}" >/dev/null || \
-      die "Latest ISO URL is not reachable: ${latest_iso_url}"
+  if [[ -n "${network_channel_url}" ]]; then
+    [[ "${network_channel_url}" =~ ^https:// ]] || \
+      die "VELDMUIS_NETWORK_CHANNEL_URL must use HTTPS: ${network_channel_url}"
+    channel_body="$(curl -fsSL "${network_channel_url}")" || \
+      die "Network release channel is not reachable: ${network_channel_url}"
+    grep -qF '"installer": "network"' <<<"${channel_body}" || \
+      die "Network release channel does not identify the network installer."
+    if [[ -n "${required_signed_tag}" ]]; then
+      grep -qF "\"release_tag\": \"${required_signed_tag}\"" <<<"${channel_body}" || \
+        die "Network release channel does not point to ${required_signed_tag}."
+    fi
   fi
 
-  if [[ -n "${latest_manifest_url}" || -n "${latest_signature_url}" ]]; then
-    [[ "${latest_manifest_url}" =~ ^https:// ]] || \
-      die "VELDMUIS_LATEST_MANIFEST_URL must use HTTPS."
-    [[ "${latest_signature_url}" =~ ^https:// ]] || \
-      die "VELDMUIS_LATEST_MANIFEST_SIGNATURE_URL must use HTTPS."
-    manifest_path="${temp_root}/latest.manifest.txt"
+  if [[ -n "${network_manifest_url}" || -n "${network_signature_url}" ]]; then
+    [[ "${network_manifest_url}" =~ ^https:// ]] || \
+      die "VELDMUIS_NETWORK_MANIFEST_URL must use HTTPS."
+    [[ "${network_signature_url}" =~ ^https:// ]] || \
+      die "VELDMUIS_NETWORK_MANIFEST_SIGNATURE_URL must use HTTPS."
+    manifest_path="${temp_root}/network.manifest.txt"
     signature_path="${manifest_path}.sig"
-    curl -fsSL -o "${manifest_path}" "${latest_manifest_url}"
-    curl -fsSL -o "${signature_path}" "${latest_signature_url}"
+    curl -fsSL -o "${manifest_path}" "${network_manifest_url}"
+    curl -fsSL -o "${signature_path}" "${network_signature_url}"
     gpgv --keyring "${release_keyring}" "${signature_path}" "${manifest_path}" >/dev/null 2>&1 || \
-      die "Latest release manifest signature is invalid."
+      die "Network channel manifest signature is invalid."
   fi
 
   log "GitHub releases and manifests follow the release policy"
@@ -428,7 +441,7 @@ main() {
   check_tag_examples
   check_workflow_source
   check_workflow_action_pins
-  check_offline_candidate_workflow_source
+  check_offline_release_workflow_source
   check_repository_signature_policy
   check_release_metadata_source
   check_private_reporting_source

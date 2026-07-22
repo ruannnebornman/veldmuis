@@ -65,20 +65,20 @@ gpg --show-keys --with-fingerprint veldmuis.gpg
 Download and authenticate the current manifest before selecting the ISO:
 
 ```sh
-curl -fL -o latest.manifest.txt \
-  https://downloads.veldmuislinux.org/iso/latest.manifest.txt
-curl -fL -o latest.manifest.txt.sig \
-  https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
-gpgv --keyring ./veldmuis.gpg latest.manifest.txt.sig latest.manifest.txt
+curl -fL -o network.manifest.txt \
+  https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt
+curl -fL -o network.manifest.txt.sig \
+  https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
+gpgv --keyring ./veldmuis.gpg network.manifest.txt.sig network.manifest.txt
 ```
 
 After a successful signature check, use the immutable release path named by the
 manifest:
 
 ```sh
-release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' latest.manifest.txt)"
-iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' latest.manifest.txt)"
-expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' latest.manifest.txt)"
+release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' network.manifest.txt)"
+iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' network.manifest.txt)"
+expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' network.manifest.txt)"
 case "${release_path}/${iso_name}" in
   releases/*/veldmuis-*.iso) ;;
   *) echo 'Unsafe artifact path in manifest' >&2; exit 1 ;;
@@ -89,9 +89,8 @@ actual_sha256="$(sha256sum "${iso_name}" | awk '{ print $1; exit }')"
 test "${actual_sha256}" = "${expected_sha256}"
 ```
 
-This flow treats the signed manifest as the publication marker. The mutable
-`latest` aliases are convenience pointers; the verified manifest directs the
-download to release-specific immutable objects.
+This flow treats the signed channel manifest as the publication marker. The
+verified manifest directs the download to release-specific immutable objects.
 
 ## Verify A Historical Release
 

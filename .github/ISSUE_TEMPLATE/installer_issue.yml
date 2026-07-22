@@ -13,7 +13,7 @@ body:
     id: release
     attributes:
       label: Veldmuis release tag or ISO name
-      placeholder: "2026.06.24 or veldmuis-2026.06.24-x86_64.iso"
+      placeholder: "2026.06.24 or veldmuis-2026.06.24-offline-x86_64.iso"
     validations:
       required: true
   - type: dropdown
