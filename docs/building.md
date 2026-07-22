@@ -250,11 +250,13 @@ metadata records the requested image, resolved base digest, resulting image ID,
 Docker version, relevant build-tool versions, release source commit, and exact
 AUR refs.
 
-The manually dispatched `Offline Installer Release` workflow runs the
-`offline-iso` target, generates signed metadata, prints the exact ISO and
-embedded repository sizes, and publishes immutable artifacts plus the small
-offline channel documents. It does not publish the rolling package repository
-or upload the large ISO as a GitHub artifact.
+The `Offline Installer Release` workflow runs the `offline-iso` target,
+generates signed metadata, prints the exact ISO and embedded repository sizes,
+and publishes immutable artifacts plus the small offline channel documents.
+Scheduled monthly network releases call it with a frozen tag, source commit,
+and Arch snapshot after network publication succeeds; it also remains
+manually dispatchable. It does not publish the rolling package repository or
+upload the large ISO as a GitHub artifact.
 
 Release metadata can be generated inside an appropriately prepared Arch build
 environment with:

@@ -8,8 +8,22 @@ on:
         required: false
         type: string
       release_tag:
-        description: Immutable release tag in YYYY.MM.DD or YYYY.MM.DD.N; blank uses the current UTC day
+        description: Immutable release tag in YYYY.MM, YYYY.MM.DD, or YYYY.MM.DD.N; blank uses the current UTC day
         required: false
+        type: string
+  workflow_call:
+    inputs:
+      arch_snapshot:
+        description: Exact Arch Linux Archive snapshot in YYYY/MM/DD
+        required: true
+        type: string
+      release_tag:
+        description: Immutable monthly or daily release tag
+        required: true
+        type: string
+      release_sha:
+        description: Exact tagged release commit
+        required: true
         type: string
 
 permissions:
@@ -39,18 +53,12 @@ jobs:
       CF_R2_PREFIX: ${{ vars.CF_R2_PREFIX }}
       CF_R2_PUBLIC_BASE_URL: ${{ vars.CF_R2_PUBLIC_BASE_URL }}
     steps:
-      - name: Check out candidate ref
+      - name: Check out repository metadata
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           persist-credentials: false
           ref: refs/heads/main
-
-      - name: Check repository hygiene
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./development/check-repo-hygiene.sh
 
       - name: Resolve candidate inputs
         id: candidate
@@ -58,21 +66,38 @@ jobs:
         env:
           INPUT_ARCH_SNAPSHOT: ${{ inputs.arch_snapshot }}
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_RELEASE_SHA: ${{ inputs.release_sha }}
         run: |
           set -euo pipefail
 
           release_tag="${INPUT_RELEASE_TAG:-$(date -u +%Y.%m.%d)}"
           arch_snapshot="${INPUT_ARCH_SNAPSHOT:-$(date -u -d yesterday +%Y/%m/%d)}"
+          monthly_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])$'
           daily_pattern='^([0-9]{4})\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])(\.([2-9]|[1-9][0-9]+))?$'
           snapshot_pattern='^([0-9]{4})/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])$'
 
-          [[ "${release_tag}" =~ ${daily_pattern} ]] || {
-            echo "Invalid release tag: ${release_tag}" >&2
-            exit 1
+          is_valid_monthly_tag() {
+            local tag="$1"
+            local normalized=""
+
+            [[ "${tag}" =~ ${monthly_pattern} ]] || return 1
+            normalized="$(date -u -d "${tag//./-}-01" +%Y.%m 2>/dev/null)" || return 1
+            [[ "${normalized}" == "${tag}" ]]
           }
-          release_date="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-          [[ "$(date -u -d "${release_date//./-}" +%Y.%m.%d 2>/dev/null)" == "${release_date}" ]] || {
-            echo "Invalid release date: ${release_date}" >&2
+
+          is_valid_daily_tag() {
+            local tag="$1"
+            local date_part=""
+            local normalized=""
+
+            [[ "${tag}" =~ ${daily_pattern} ]] || return 1
+            date_part="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            normalized="$(date -u -d "${date_part//./-}" +%Y.%m.%d 2>/dev/null)" || return 1
+            [[ "${normalized}" == "${date_part}" ]]
+          }
+
+          is_valid_monthly_tag "${release_tag}" || is_valid_daily_tag "${release_tag}" || {
+            echo "Invalid release tag: ${release_tag}" >&2
             exit 1
           }
 
@@ -85,17 +110,54 @@ jobs:
             exit 1
           }
 
-          release_sha="$(git rev-parse HEAD)"
+          git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
+          if [[ -n "${INPUT_RELEASE_SHA}" ]]; then
+            release_sha="${INPUT_RELEASE_SHA}"
+          elif git rev-parse --verify "refs/tags/${release_tag}^{commit}" >/dev/null 2>&1; then
+            release_sha="$(git rev-parse "refs/tags/${release_tag}^{commit}")"
+          else
+            release_sha="$(git rev-parse origin/main)"
+          fi
           [[ "${release_sha}" =~ ^[0-9a-f]{40}$ ]] || {
             echo "Unable to resolve candidate commit" >&2
             exit 1
           }
+          git cat-file -e "${release_sha}^{commit}" 2>/dev/null || {
+            echo "Candidate commit does not exist: ${release_sha}" >&2
+            exit 1
+          }
+          if [[ -n "${INPUT_RELEASE_SHA}" ]]; then
+            tag_sha="$(git rev-parse "refs/tags/${release_tag}^{commit}" 2>/dev/null || true)"
+            [[ "${tag_sha}" == "${release_sha}" ]] || {
+              echo "Release tag ${release_tag} does not resolve to ${release_sha}" >&2
+              exit 1
+            }
+          fi
 
           {
             echo "release_tag=${release_tag}"
             echo "release_sha=${release_sha}"
             echo "arch_snapshot=${arch_snapshot}"
           } >>"${GITHUB_OUTPUT}"
+
+      - name: Check out candidate ref
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ steps.candidate.outputs.release_sha }}
+
+      - name: Check repository hygiene
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ steps.candidate.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "${RELEASE_SHA}" ]] || {
+            echo "Checked-out source does not match the resolved release commit" >&2
+            exit 1
+          }
+          ./development/check-repo-hygiene.sh
 
       - name: Validate signing configuration
         shell: bash

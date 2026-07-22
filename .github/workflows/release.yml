@@ -26,6 +26,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      arch_snapshot: ${{ steps.resolve.outputs.arch_snapshot }}
       release_tag: ${{ steps.resolve.outputs.release_tag }}
       release_sha: ${{ steps.resolve.outputs.release_sha }}
     steps:
@@ -53,6 +54,7 @@ jobs:
           git fetch --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
           monthly_tag_pattern='^[0-9]{4}\.(0[1-9]|1[0-2])$'
           daily_tag_pattern='^([0-9]{4})\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])(\.([2-9]|[1-9][0-9]+))?$'
+          snapshot_pattern='^([0-9]{4})/(0[1-9]|1[0-2])/(0[1-9]|[12][0-9]|3[01])$'
 
           is_valid_monthly_tag() {
             local tag="$1"
@@ -140,8 +142,18 @@ jobs:
             echo "Unable to resolve the main release commit" >&2
             exit 1
           }
+          arch_snapshot="$(date -u -d yesterday +%Y/%m/%d)"
+          [[ "${arch_snapshot}" =~ ${snapshot_pattern} ]] || {
+            echo "Unable to resolve the offline Arch snapshot" >&2
+            exit 1
+          }
+          [[ "$(date -u -d "${arch_snapshot//\//-}" +%Y/%m/%d 2>/dev/null)" == "${arch_snapshot}" ]] || {
+            echo "Resolved offline Arch snapshot is not a valid date: ${arch_snapshot}" >&2
+            exit 1
+          }
 
           {
+            echo "arch_snapshot=${arch_snapshot}"
             echo "release_tag=${release_tag}"
             echo "release_sha=${release_sha}"
           } >> "${GITHUB_OUTPUT}"
@@ -667,3 +679,17 @@ jobs:
               echo "- Immutable ISO URL: ${{ steps.metadata.outputs.immutable_iso_url }}"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  build-and-publish-offline:
+    name: Build And Publish Offline Installer
+    if: github.event_name == 'schedule'
+    needs:
+      - validate-release
+      - build-and-publish
+    permissions:
+      contents: read
+    uses: ./.github/workflows/offline-iso-size.yml
+    with:
+      arch_snapshot: ${{ needs.validate-release.outputs.arch_snapshot }}
+      release_tag: ${{ needs.validate-release.outputs.release_tag }}
+      release_sha: ${{ needs.validate-release.outputs.release_sha }}
