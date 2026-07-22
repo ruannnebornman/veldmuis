@@ -93,11 +93,13 @@ every individual and maximal selection with container networking disabled.
 
 ## Release Layer
 
-The package, network-installer, and offline-installer workflows are independent.
-Installer workflows resolve an exact `main` commit, build in isolated Arch
-containers, and create authenticated release metadata in a network-disabled
-signing stage. They publish release-specific ISO objects before advancing a
-small installer-specific channel document.
+The package repository has its own workflow. Scheduled network-installer
+releases call the offline-installer workflow after network publication;
+manual installer releases remain independently dispatchable. Installer
+workflows resolve an exact `main` commit, build in isolated Arch containers,
+and create authenticated release metadata in a network-disabled signing stage.
+They publish release-specific ISO objects before advancing a small
+installer-specific channel document.
 
 GitHub releases keep release notes, the signed manifest and signature,
 checksum, package inventory, SPDX SBOM, build inputs, and resolved AUR inputs.
@@ -110,6 +112,8 @@ https://downloads.veldmuislinux.org/iso/channels/offline.json
 
 Channel manifests point users to immutable artifacts under
 `iso/releases/TAG/`. Channel JSON and signed-manifest objects are small mutable
-pointers; release-specific paths are never reused.
+pointers; release-specific paths are never reused. Bucket-level CORS is
+configured separately in the Cloudflare dashboard, while the release
+workflows retain object-scoped write access.
 
 See [Release Process](release.md) for the full public release policy.

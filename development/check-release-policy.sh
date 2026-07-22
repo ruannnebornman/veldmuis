@@ -145,6 +145,10 @@ check_workflow_source() {
     die "Release workflow writes mutable ISO links into historical release notes."
   fi
 
+  if grep -qF 'configure-r2-release-cors.sh' "${workflow}"; then
+    die "Release workflow attempts to modify bucket-level CORS configuration."
+  fi
+
   grep -q 'YYYY.MM.DD.N' "${workflow}" || \
     die "Release workflow does not document sequenced same-day tags."
   grep -q 'already exists and cannot be reused' "${workflow}" || \
@@ -208,6 +212,9 @@ check_offline_release_workflow_source() {
     die "Offline release workflow does not publish immutable artifacts."
   grep -qF 'VELDMUIS_ISO_MODE: offline' "${workflow}" || \
     die "Offline release workflow does not select the offline release channel."
+  if grep -qF 'configure-r2-release-cors.sh' "${workflow}"; then
+    die "Offline release workflow attempts to modify bucket-level CORS configuration."
+  fi
   if grep -Eq 'gh[[:space:]]+release|git/tags|git/refs' "${workflow}"; then
     die "Offline release workflow must not mutate the network release tag history."
   fi

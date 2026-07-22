@@ -86,7 +86,8 @@ At a high level, the workflow:
 Reusable workflow actions are pinned to complete commit SHAs. Workflow token
 permissions are read-only by default and elevated only for the publication job.
 Signing material is passed only to network-disabled signing stages, while
-object-storage credentials are passed only to publisher steps.
+object-storage credentials are passed only to publisher steps. Release jobs do
+not receive bucket-administration credentials or modify bucket configuration.
 
 The reusable and manually dispatchable `Offline Installer Release` workflow
 builds and validates a full offline installer from the selected snapshot,
@@ -114,6 +115,40 @@ The workflow checks that those named secrets and the required non-secret
 variables are populated, without retrieving or printing secret values. Review
 the hosted environment against this list after any publication-provider or
 maintainer-access change.
+
+The two `CF_R2_*` credential pairs use Object Read & Write access scoped to
+their respective buckets. Do not grant the release environment administrative
+bucket permissions.
+
+## Cloudflare R2 Bucket Configuration
+
+The website reads the installer channel documents from the download domain,
+so the release bucket must allow browser reads from the website origins. CORS
+is bucket infrastructure, not part of an individual release. Configure it once
+in the Cloudflare dashboard before the first channel publication.
+
+Open R2 Object Storage, select `veldmuis-releases`, open **Settings**, and add
+this policy under **CORS Policy** using the JSON editor:
+
+```json
+[
+  {
+    "AllowedOrigins": [
+      "https://veldmuislinux.org",
+      "https://www.veldmuislinux.org"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["Content-Length", "ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+The installer workflows deliberately cannot modify bucket configuration with
+their object-scoped publication credentials. If the custom domain already has
+cached objects when the policy changes, purge that hostname's cache before
+testing browser access.
 
 ## Published Artifacts
 
