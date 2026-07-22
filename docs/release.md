@@ -1,10 +1,11 @@
 # Release Process
 
-Veldmuis releases are date-tagged builds from `main`. Three independent
-workflows publish the rolling package repository, the network installer, and
-the offline installer. Installer artifacts use immutable versioned paths;
-small channel documents select the currently promoted build without storing a
-second copy of either ISO.
+Veldmuis releases are date-tagged builds from `main`. Three workflows publish
+the rolling package repository, the network installer, and the offline
+installer. Scheduled monthly network releases chain the offline installer
+after successful network publication. Installer artifacts use immutable
+versioned paths; small channel documents select the currently promoted build
+without storing a second copy of either ISO.
 
 ## Tag Formats
 
@@ -30,9 +31,11 @@ supported.
 The network installer workflow is defined in `.github/workflows/release.yml`.
 It runs as a monthly schedule or by manual dispatch with an explicit daily
 tag. The offline installer workflow is defined in
-`.github/workflows/offline-iso-size.yml` and is manually dispatched with an
-optional daily tag and Arch Linux Archive snapshot. Manual dispatch is
-accepted only from `main`.
+`.github/workflows/offline-iso-size.yml`. A successful scheduled network
+release calls it with the same release tag and exact source commit, plus an
+Arch Linux Archive snapshot resolved before the network build starts. It also
+remains manually dispatchable with an optional monthly or daily tag and
+snapshot. Manual dispatch is accepted only from `main`.
 
 Manual release tags must be the next valid tag for that UTC date. For example,
 if `2026.04.22` exists, the next release on that date must be
@@ -77,17 +80,20 @@ At a high level, the workflow:
 12. Creates the GitHub release and attaches the authenticated metadata.
 13. Downloads the published manifest and signature and verifies them with the
     packaged public key.
+14. For a scheduled monthly release, calls the offline installer workflow with
+    the frozen tag, commit, and snapshot after network publication succeeds.
 
 Reusable workflow actions are pinned to complete commit SHAs. Workflow token
 permissions are read-only by default and elevated only for the publication job.
 Signing material is passed only to network-disabled signing stages, while
 object-storage credentials are passed only to publisher steps.
 
-The separate manually dispatched `Offline Installer Release` workflow builds
-and validates a full offline installer from the selected snapshot, reports its
-exact size, uploads immutable release objects, and promotes the offline
-channel. It does not publish the rolling package repository, create a GitHub
-tag, or create a GitHub release.
+The reusable and manually dispatchable `Offline Installer Release` workflow
+builds and validates a full offline installer from the selected snapshot,
+reports its exact size, uploads immutable release objects, and promotes the
+offline channel. It verifies and checks out the exact tagged commit when
+called by the scheduled network release. It does not publish the rolling
+package repository, create a GitHub tag, or create a GitHub release.
 
 ## Protected Release Environment
 
@@ -114,7 +120,7 @@ maintainer-access change.
 Each release has an immutable directory:
 
 ```text
-https://downloads.veldmuislinux.org/iso/releases/YYYY.MM.DD/
+https://downloads.veldmuislinux.org/iso/releases/TAG/
 ```
 
 It contains:

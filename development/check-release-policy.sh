@@ -161,6 +161,12 @@ check_workflow_source() {
     die "Network release workflow does not publish a channel-manifest signature."
   grep -q 'gpgv --keyring ./packages/veldmuis-keyring/veldmuis.gpg' "${workflow}" || \
     die "Release workflow does not verify generated metadata with the packaged keyring."
+  grep -qF "if: github.event_name == 'schedule'" "${workflow}" || \
+    die "Network release workflow does not restrict automatic offline builds to scheduled releases."
+  grep -qF 'uses: ./.github/workflows/offline-iso-size.yml' "${workflow}" || \
+    die "Network release workflow does not call the offline installer workflow."
+  grep -qF "arch_snapshot: \${{ needs.validate-release.outputs.arch_snapshot }}" "${workflow}" || \
+    die "Network release workflow does not pass its frozen Arch snapshot to the offline build."
 
   log "Release workflow source follows the one-shot release policy"
 }
@@ -190,6 +196,12 @@ check_offline_release_workflow_source() {
     die "Offline ISO size workflow is not restricted to main."
   grep -qF 'ref: refs/heads/main' "${workflow}" || \
     die "Offline ISO size workflow does not explicitly check out main."
+  grep -qF 'workflow_call:' "${workflow}" || \
+    die "Offline release workflow is not reusable by the scheduled release."
+  grep -qF "ref: \${{ steps.candidate.outputs.release_sha }}" "${workflow}" || \
+    die "Offline release workflow does not check out the resolved release commit."
+  grep -qF "Release tag \${release_tag} does not resolve to \${release_sha}" "${workflow}" || \
+    die "Offline release workflow does not verify the called release tag and commit."
   grep -qF './development/run-ci-arch-builder.sh offline-iso' "${workflow}" || \
     die "Offline ISO size workflow does not use the offline ISO build target."
   grep -qF './development/publish-r2-release.sh' "${workflow}" || \
