@@ -11,12 +11,12 @@ the ISO checksum it records:
 ```sh
 curl -fL -o veldmuis.gpg \
   https://raw.githubusercontent.com/ruannnebornman/veldmuis/main/packages/veldmuis-keyring/veldmuis.gpg
-curl -fL -o latest.manifest.txt https://downloads.veldmuislinux.org/iso/latest.manifest.txt
-curl -fL -o latest.manifest.txt.sig https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
-gpgv --keyring ./veldmuis.gpg latest.manifest.txt.sig latest.manifest.txt
-release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' latest.manifest.txt)"
-iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' latest.manifest.txt)"
-expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' latest.manifest.txt)"
+curl -fL -o network.manifest.txt https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt
+curl -fL -o network.manifest.txt.sig https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
+gpgv --keyring ./veldmuis.gpg network.manifest.txt.sig network.manifest.txt
+release_path="$(awk -F= '$1 == "release_path" { print $2; exit }' network.manifest.txt)"
+iso_name="$(awk -F= '$1 == "iso_name" { print $2; exit }' network.manifest.txt)"
+expected_sha256="$(awk -F= '$1 == "sha256" { print $2; exit }' network.manifest.txt)"
 case "${release_path}/${iso_name}" in
   releases/*/veldmuis-*.iso) ;;
   *) echo 'Unsafe artifact path in manifest' >&2; exit 1 ;;

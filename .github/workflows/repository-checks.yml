@@ -29,6 +29,12 @@ jobs:
           set -euo pipefail
           ./development/check-repo-hygiene.sh
 
+      - name: Check installer publication plans
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-release-publisher.sh
+
       - name: Check installer package-set seed
         shell: bash
         run: |

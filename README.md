@@ -79,16 +79,16 @@ changing disk partitions.
 
 ## Download And Verify
 
-Current public ISO files:
+Current installer channels:
 
-- ISO: https://downloads.veldmuislinux.org/iso/latest.iso
-- SHA-256 checksum: https://downloads.veldmuislinux.org/iso/latest.iso.sha256
-- Signed manifest: https://downloads.veldmuislinux.org/iso/latest.manifest.txt
-- Manifest signature: https://downloads.veldmuislinux.org/iso/latest.manifest.txt.sig
+- Network installer: https://downloads.veldmuislinux.org/iso/channels/network.json
+- Offline installer: https://downloads.veldmuislinux.org/iso/channels/offline.json
+- Network signed manifest: https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt
+- Network manifest signature: https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
 
-The signed manifest points to an immutable release-specific ISO. Historical
-GitHub releases retain authenticated metadata and link to their exact ISO
-objects.
+The small channel documents point to immutable release-specific ISOs and avoid
+storing duplicate `latest` ISO objects. Historical GitHub releases retain
+authenticated metadata and link to their exact network-installer objects.
 
 Before installing, verify the manifest signature and then check the ISO against
 the authenticated checksum.

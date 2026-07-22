@@ -62,8 +62,8 @@ Current reproducibility limits:
 - Native package build dependencies are prepared by the host or CI image.
 - AUR-derived NVIDIA packages can be built from locked refs or latest refs,
   depending on `VELDMUIS_AUR_REF_MODE`.
-- The current ISO is not a full offline installer; Arch packages are resolved
-  from Arch mirrors during installation.
+- The network installer resolves Arch packages from mirrors during
+  installation.
 
 Full offline ISO candidates use one dated Arch Linux Archive snapshot for the
 complete install-time dependency closure. Candidate metadata records that
@@ -250,11 +250,11 @@ metadata records the requested image, resolved base digest, resulting image ID,
 Docker version, relevant build-tool versions, release source commit, and exact
 AUR refs.
 
-The manually dispatched `Offline ISO Size` workflow runs the `offline-iso`
-target, generates signed metadata, prints the exact ISO and embedded repository
-sizes to the log and job summary, and then ends. It has no Cloudflare
-credentials or publication step and does not upload the large ISO as a GitHub
-artifact.
+The manually dispatched `Offline Installer Release` workflow runs the
+`offline-iso` target, generates signed metadata, prints the exact ISO and
+embedded repository sizes, and publishes immutable artifacts plus the small
+offline channel documents. It does not publish the rolling package repository
+or upload the large ISO as a GitHub artifact.
 
 Release metadata can be generated inside an appropriately prepared Arch build
 environment with:

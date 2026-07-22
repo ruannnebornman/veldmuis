@@ -375,13 +375,16 @@ mkarchiso -v \
   -o "${out_dir}" \
   "${profile_work}"
 
+generated_iso_path="${out_dir}/veldmuis-${release_tag}-x86_64.iso"
+iso_path="${out_dir}/veldmuis-${release_tag}-${iso_mode}-x86_64.iso"
+[[ -s "${generated_iso_path}" ]] || {
+  echo "Expected ISO output is missing: ${generated_iso_path}" >&2
+  exit 1
+}
+mv -f "${generated_iso_path}" "${iso_path}"
+
 if [[ "${iso_mode}" == "offline" ]]; then
-  iso_path="${out_dir}/veldmuis-${release_tag}-x86_64.iso"
-  summary_path="${out_dir}/veldmuis-${release_tag}-x86_64.offline-repo.txt"
-  [[ -s "${iso_path}" ]] || {
-    echo "Expected offline ISO output is missing: ${iso_path}" >&2
-    exit 1
-  }
+  summary_path="${out_dir}/veldmuis-${release_tag}-${iso_mode}-x86_64.offline-repo.txt"
   {
     cat "${offline_build_info}"
     printf 'iso_bytes=%s\n' "$(stat --format '%s' "${iso_path}")"

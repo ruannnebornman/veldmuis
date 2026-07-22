@@ -162,6 +162,7 @@ write_build_inputs() {
   {
     printf 'release_tag=%s\n' "${release_tag}"
     printf 'release_sha=%s\n' "${release_sha}"
+    printf 'installer=%s\n' "${iso_mode}"
     printf 'veldmuis_repository_source_sha=%s\n' "${release_sha}"
     printf 'builder_base_image=%s\n' "${builder_base_image}"
     printf 'builder_base_digest=%s\n' "${builder_base_digest}"
@@ -203,6 +204,7 @@ write_signed_manifest() {
   {
     printf 'release_tag=%s\n' "${release_tag}"
     printf 'release_sha=%s\n' "${release_sha}"
+    printf 'installer=%s\n' "${iso_mode}"
     printf 'release_path=releases/%s\n' "${release_tag}"
     printf 'iso_name=%s\n' "${iso_name}"
     printf 'sha256=%s\n' "${iso_sha256}"
@@ -284,7 +286,7 @@ main() {
     extra_package_names["${package_name}"]=1
   done
 
-  expected_iso_name="veldmuis-${release_tag}-x86_64.iso"
+  expected_iso_name="veldmuis-${release_tag}-${iso_mode}-x86_64.iso"
   iso_path="${output_root}/${expected_iso_name}"
   [[ -f "${iso_path}" ]] || die "Expected ISO is missing: ${iso_path}"
   iso_name="${expected_iso_name}"
