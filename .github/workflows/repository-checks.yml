@@ -55,6 +55,24 @@ jobs:
 
           echo "Validated ${#seen[@]} offline installer seed packages"
 
+      - name: Check offline manifest package counter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          counter="development/count-offline-manifest-packages.awk"
+          empty_count="$(printf 'header\n' | awk -f "${counter}")"
+          populated_count="$(printf 'header\none\ntwo\n' | awk -f "${counter}")"
+
+          [[ "${empty_count}" == "0" ]] || {
+            echo "Empty offline manifest count is invalid: ${empty_count}" >&2
+            exit 1
+          }
+          [[ "${populated_count}" == "2" ]] || {
+            echo "Populated offline manifest count is invalid: ${populated_count}" >&2
+            exit 1
+          }
+
       - name: Check Calamares package source checksums
         shell: bash
         run: |
