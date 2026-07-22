@@ -299,16 +299,6 @@ jobs:
           set -euo pipefail
           ./development/ensure-aws-cli.sh
 
-      - name: Configure release-channel browser access
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-        run: |
-          set -euo pipefail
-          ./development/configure-r2-release-cors.sh
-
       - name: Publish immutable offline installer
         shell: bash
         env:
