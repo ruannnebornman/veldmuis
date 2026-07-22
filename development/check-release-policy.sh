@@ -175,7 +175,7 @@ check_workflow_action_pins() {
       action="$(sed -E 's/^[[:space:]]*-[[:space:]]+uses:[[:space:]]+([^[:space:]#]+).*/\1/' <<<"${line}")"
       [[ "${action}" == ./* ]] && continue
       [[ "${action}" =~ @([0-9a-f]{40})$ ]] || \
-        die "Workflow action is not pinned to a full commit SHA: ${workflow#${repo_root}/}: ${action}"
+        die "Workflow action is not pinned to a full commit SHA: ${workflow#"${repo_root}"/}: ${action}"
     done < <(grep -E '^[[:space:]]*-[[:space:]]+uses:' "${workflow}" || true)
   done < <(find "${repo_root}/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print)
 
@@ -217,7 +217,7 @@ check_repository_signature_policy() {
         ' "${file}"
       )"
       [[ "${policy}" == "SigLevel = Required DatabaseRequired" ]] || \
-        die "${file#${repo_root}/} does not require ${section} database signatures."
+        die "${file#"${repo_root}"/} does not require ${section} database signatures."
     done
   done
 

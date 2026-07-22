@@ -108,8 +108,8 @@ resolve_closure() {
   local package_arch=""
   local source_repo=""
   local package_filename=""
-  local database_size=""
-  local database_sha256=""
+  local _database_size=""
+  local _database_sha256=""
   local package_url=""
   declare -A seen_packages=()
 
@@ -124,7 +124,7 @@ resolve_closure() {
   while IFS= read -r record; do
     IFS='|' read -r \
       package_name package_version package_arch source_repo package_filename \
-      database_size database_sha256 package_url <<<"${record}"
+      _database_size _database_sha256 package_url <<<"${record}"
 
     [[ -n "${package_name}" && -n "${package_version}" && -n "${source_repo}" ]] || \
       die "Malformed pacman resolution record: ${record}"
@@ -161,7 +161,7 @@ stage_official_packages() {
   local package_arch=""
   local source_repo=""
   local package_filename=""
-  local database_size=""
+  local _database_size=""
   local database_sha256=""
   local package_url=""
   local package_path=""
@@ -174,7 +174,7 @@ stage_official_packages() {
 
   while IFS='|' read -r \
     package_name package_version package_arch source_repo package_filename \
-    database_size database_sha256 package_url
+    _database_size database_sha256 package_url
   do
     case "${source_repo}" in
       core|extra|multilib)

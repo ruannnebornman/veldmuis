@@ -3,6 +3,8 @@
 # Shared package selections for the Calamares bootstrap and the offline
 # repository build. Keep the installer UI identifiers mapped to these arrays so
 # the ISO closure and the packages selected at install time cannot diverge.
+# ShellCheck analyzes this source file in isolation and cannot see its consumers.
+# shellcheck disable=SC2034
 
 declare -ag veldmuis_installer_base_packages=(
   veldmuis-desktop
