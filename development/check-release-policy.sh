@@ -52,6 +52,52 @@ is_valid_release_tag() {
   is_valid_monthly_tag "$1" || is_valid_daily_tag "$1"
 }
 
+select_release_signature_url() {
+  local asset_urls="$1"
+
+  awk '/\.manifest\.txt\.sig$/ { print; exit }' <<<"${asset_urls}"
+}
+
+select_release_manifest_url() {
+  local asset_urls="$1"
+  local signature_url="$2"
+  local manifest_url=""
+
+  if [[ -n "${signature_url}" ]]; then
+    manifest_url="${signature_url%.sig}"
+    awk -v wanted="${manifest_url}" '$0 == wanted { found=1 } END { exit !found }' \
+      <<<"${asset_urls}" || return 1
+    printf '%s\n' "${manifest_url}"
+    return 0
+  fi
+
+  awk '/\.manifest\.txt$/ && !/\.aur-packages\.manifest\.txt$/ { print; exit }' \
+    <<<"${asset_urls}"
+}
+
+check_release_asset_selection() {
+  local release_base="https://downloads.example.test/releases/2099.12"
+  local manifest_url="${release_base}/veldmuis-2099.12-network-x86_64.manifest.txt"
+  local signature_url="${manifest_url}.sig"
+  local asset_urls=""
+  local selected_manifest=""
+  local selected_signature=""
+
+  asset_urls="$(printf '%s\n' \
+    "${release_base}/veldmuis-2099.12-network-x86_64.aur-packages.manifest.txt" \
+    "${manifest_url}" \
+    "${signature_url}")"
+  selected_signature="$(select_release_signature_url "${asset_urls}")"
+  selected_manifest="$(select_release_manifest_url "${asset_urls}" "${selected_signature}")"
+
+  [[ "${selected_signature}" == "${signature_url}" ]] || \
+    die "Release asset selection did not select the manifest signature."
+  [[ "${selected_manifest}" == "${manifest_url}" ]] || \
+    die "Release asset selection did not pair the signature with its exact manifest."
+
+  log "Release signature selection pairs the exact manifest asset"
+}
+
 check_local_tags() {
   local tag
 
@@ -320,6 +366,7 @@ check_package_suffix_source() {
 check_remote_releases() {
   local release_tag
   local tag_sha
+  local release_asset_urls
   local manifest_url
   local signature_url
   local temp_root
@@ -373,16 +420,11 @@ check_remote_releases() {
       die "GitHub release has no matching local tag: ${release_tag}"
 
     tag_sha="$(git -C "${repo_root}" rev-list -n 1 "${release_tag}")"
+    release_asset_urls="$(gh release view "${release_tag}" --json assets --jq '.assets[].url')"
+    signature_url="$(select_release_signature_url "${release_asset_urls}")"
     manifest_url="$(
-      gh release view "${release_tag}" --json assets \
-        --jq '.assets[] | select(.name | endswith(".manifest.txt")) | .url' \
-        | head -n 1
-    )"
-    signature_url="$(
-      gh release view "${release_tag}" --json assets \
-        --jq '.assets[] | select(.name | endswith(".manifest.txt.sig")) | .url' \
-        | head -n 1
-    )"
+      select_release_manifest_url "${release_asset_urls}" "${signature_url}"
+    )" || die "GitHub release signature has no matching manifest asset: ${release_tag}"
     [[ -n "${manifest_url}" ]] || die "GitHub release has no manifest asset: ${release_tag}"
 
     manifest_path="${temp_root}/${release_tag}.manifest.txt"
@@ -458,6 +500,7 @@ main() {
   check_local_tags
   check_local_tag_sequences
   check_tag_examples
+  check_release_asset_selection
   check_workflow_source
   check_workflow_action_pins
   check_offline_release_workflow_source
