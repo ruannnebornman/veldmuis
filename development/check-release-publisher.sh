@@ -75,6 +75,82 @@ check_installer() {
   fi
 }
 
+check_storage_prune() {
+  local aws_log="${temp_root}/aws.log"
+  local fake_bin="${temp_root}/bin"
+  local output=""
+
+  output="$(
+    VELDMUIS_RELEASE_TAG="${release_tag}" \
+    CF_R2_BUCKET=fixture-releases \
+    CF_R2_ACCOUNT_ID=fixture-account \
+    CF_R2_PREFIX=iso \
+    RELEASE_STORAGE_PRUNE_DRY_RUN=1 \
+      "${script_dir}/prune-release-storage.sh"
+  )"
+
+  grep -qF "s3://fixture-releases/iso/releases/" <<<"${output}"
+  grep -qF -- "--exclude ${release_tag}/\\*" <<<"${output}"
+  if grep -qF "iso/channels/" <<<"${output}"; then
+    printf '[check-release-publisher] ERROR: release pruning targets channel objects.\n' >&2
+    exit 1
+  fi
+
+  mkdir -p "${fake_bin}"
+  cat > "${fake_bin}/aws" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%q ' "$@" >>"${AWS_LOG}"
+printf '\n' >>"${AWS_LOG}"
+if [[ "${1:-}" == "s3api" ]]; then
+  printf '%s\n' "${AWS_LIST_OUTPUT:-None}"
+fi
+EOF
+  chmod +x "${fake_bin}/aws"
+
+  PATH="${fake_bin}:${PATH}" \
+  AWS_LOG="${aws_log}" \
+  AWS_ACCESS_KEY_ID=fixture-access \
+  AWS_SECRET_ACCESS_KEY=fixture-secret \
+  VELDMUIS_RELEASE_TAG="${release_tag}" \
+  CF_R2_BUCKET=fixture-releases \
+  CF_R2_ACCOUNT_ID=fixture-account \
+  CF_R2_PREFIX=iso \
+    "${script_dir}/prune-release-storage.sh" >/dev/null
+
+  grep -qF "s3 rm s3://fixture-releases/iso/releases/ --recursive --exclude ${release_tag}/\\*" \
+    "${aws_log}"
+  grep -qF "s3api list-objects-v2 --bucket fixture-releases --prefix iso/releases/" \
+    "${aws_log}"
+
+  if PATH="${fake_bin}:${PATH}" \
+    AWS_LOG="${aws_log}" \
+    AWS_LIST_OUTPUT="iso/releases/2099.12.30/old.iso" \
+    AWS_ACCESS_KEY_ID=fixture-access \
+    AWS_SECRET_ACCESS_KEY=fixture-secret \
+    VELDMUIS_RELEASE_TAG="${release_tag}" \
+    CF_R2_BUCKET=fixture-releases \
+    CF_R2_ACCOUNT_ID=fixture-account \
+    CF_R2_PREFIX=iso \
+      "${script_dir}/prune-release-storage.sh" >/dev/null 2>&1
+  then
+    printf '[check-release-publisher] ERROR: release pruning accepted an old remaining object.\n' >&2
+    exit 1
+  fi
+
+  if VELDMUIS_RELEASE_TAG="${release_tag}" \
+    CF_R2_BUCKET=fixture-releases \
+    CF_R2_ACCOUNT_ID=fixture-account \
+    CF_R2_PREFIX=../iso \
+    RELEASE_STORAGE_PRUNE_DRY_RUN=1 \
+      "${script_dir}/prune-release-storage.sh" >/dev/null 2>&1
+  then
+    printf '[check-release-publisher] ERROR: release pruning accepted an unsafe prefix.\n' >&2
+    exit 1
+  fi
+}
+
 check_installer network
 check_installer offline
-printf '[check-release-publisher] Network and offline publication plans use immutable ISOs and small channels.\n'
+check_storage_prune
+printf '[check-release-publisher] Publication plans prune previous releases, protect the current tag, and use small channels.\n'

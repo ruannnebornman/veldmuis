@@ -1,11 +1,11 @@
 # Release Process
 
-Veldmuis releases are date-tagged builds from `main`. Three workflows publish
-the rolling package repository, the network installer, and the offline
-installer. Scheduled monthly network releases chain the offline installer
-after successful network publication. Installer artifacts use immutable
-versioned paths; small channel documents select the currently promoted build
-without storing a second copy of either ISO.
+Veldmuis releases are date-tagged builds from `main`. The rolling package
+repository has its own workflow. The installer release workflow publishes the
+network installer and then calls the reusable offline-installer workflow with
+the same tag, commit, and Arch snapshot. Installer artifacts use immutable
+versioned paths while published; small channel documents select the currently
+promoted build without storing a second copy of either ISO.
 
 ## Tag Formats
 
@@ -28,14 +28,14 @@ supported.
 
 ## Scheduled And Manual Releases
 
-The network installer workflow is defined in `.github/workflows/release.yml`.
-It runs as a monthly schedule or by manual dispatch with an explicit daily
-tag. The offline installer workflow is defined in
-`.github/workflows/offline-iso-size.yml`. A successful scheduled network
-release calls it with the same release tag and exact source commit, plus an
-Arch Linux Archive snapshot resolved before the network build starts. It also
-remains manually dispatchable with an optional monthly or daily tag and
-snapshot. Manual dispatch is accepted only from `main`.
+The `Installer Release` workflow is defined in
+`.github/workflows/release.yml`. It runs as a monthly schedule or by manual
+dispatch with an explicit daily tag. After successful network publication,
+every run calls the reusable offline installer workflow in
+`.github/workflows/offline-iso-size.yml` with the same release tag, exact
+source commit, and Arch Linux Archive snapshot resolved before the network
+build starts. The offline workflow cannot be dispatched independently. Manual
+release dispatch is accepted only from `main`.
 
 Manual release tags must be the next valid tag for that UTC date. For example,
 if `2026.04.22` exists, the next release on that date must be
@@ -43,9 +43,12 @@ if `2026.04.22` exists, the next release on that date must be
 
 ## Immutability Policy
 
-Release tags and release-specific object paths are immutable. Do not move,
-delete, overwrite, or reuse them. If a published release is wrong, fix the
-source and publish the next valid release tag.
+Release tags and release-specific object paths are immutable while published.
+Do not move, overwrite, or reuse them. Before publishing a new network
+installer, the workflow removes every older release prefix while protecting
+the new tag. Git tags, GitHub releases, and their authenticated metadata remain
+the historical record. If a published release is wrong, fix the source and
+publish the next valid release tag.
 
 The workflow rejects a release if:
 
@@ -74,14 +77,15 @@ At a high level, the workflow:
 7. Generates the package inventory, SPDX SBOM, build-input record, checksum,
    and signed manifest in a network-disabled container.
 8. Creates the annotated tag for the exact built commit.
-9. Uploads and verifies immutable network-installer release objects.
-10. Promotes the small network channel document and signed channel manifest.
-11. Removes legacy mutable ISO aliases after the channel is usable.
-12. Creates the GitHub release and attaches the authenticated metadata.
-13. Downloads the published manifest and signature and verifies them with the
+9. Removes all earlier installer release prefixes while protecting the new tag.
+10. Uploads and verifies immutable network-installer release objects.
+11. Promotes the small network channel document and signed channel manifest.
+12. Removes legacy mutable ISO aliases after the channel is usable.
+13. Creates the GitHub release and attaches the authenticated metadata.
+14. Downloads the published manifest and signature and verifies them with the
     packaged public key.
-14. For a scheduled monthly release, calls the offline installer workflow with
-    the frozen tag, commit, and snapshot after network publication succeeds.
+15. Calls the offline installer workflow with the frozen tag, commit, and
+    snapshot after network publication succeeds.
 
 Reusable workflow actions are pinned to complete commit SHAs. Workflow token
 permissions are read-only by default and elevated only for the publication job.
@@ -89,12 +93,12 @@ Signing material is passed only to network-disabled signing stages, while
 object-storage credentials are passed only to publisher steps. Release jobs do
 not receive bucket-administration credentials or modify bucket configuration.
 
-The reusable and manually dispatchable `Offline Installer Release` workflow
-builds and validates a full offline installer from the selected snapshot,
-reports its exact size, uploads immutable release objects, and promotes the
-offline channel. It verifies and checks out the exact tagged commit when
-called by the scheduled network release. It does not publish the rolling
-package repository, create a GitHub tag, or create a GitHub release.
+The reusable `Offline Installer Release` workflow builds and validates a full
+offline installer from the selected snapshot, reports its exact size, uploads
+immutable release objects, and promotes the offline channel. It verifies and
+checks out the exact tagged commit supplied by the network release workflow.
+It does not publish the rolling package repository, create a GitHub tag, or
+create a GitHub release.
 
 ## Protected Release Environment
 
@@ -193,11 +197,11 @@ manifest, and detached-signature URLs. The manifest and signature are also
 copied to small channel-specific paths for command-line verification. The JSON
 document is promoted last and no mutable path contains ISO bytes.
 
-Releases produced by the current workflow retain the checksum, signed manifest
-and signature, package inventory, SPDX SBOM, build inputs, and exact AUR-input
-manifest. Release notes link to the immutable ISO rather than a mutable
-channel URL. Older releases may predate signed manifests. Release-specific
-objects are retained for at least 12 months and their paths are never reused.
+The currently published release retains the checksum, signed manifest and
+signature, package inventory, SPDX SBOM, build inputs, and exact AUR-input
+manifest. Release notes retain authenticated metadata for historical releases,
+but their object-storage ISO links expire when the next release prunes the old
+prefix. Release-specific paths are never reused.
 
 ## Manifest And Build Inputs
 
