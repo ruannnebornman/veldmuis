@@ -693,3 +693,4 @@ jobs:
       arch_snapshot: ${{ needs.validate-release.outputs.arch_snapshot }}
       release_tag: ${{ needs.validate-release.outputs.release_tag }}
       release_sha: ${{ needs.validate-release.outputs.release_sha }}
+    secrets: inherit

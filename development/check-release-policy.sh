@@ -224,6 +224,8 @@ check_workflow_source() {
   fi
   grep -qF 'uses: ./.github/workflows/offline-iso-size.yml' "${workflow}" || \
     die "Network release workflow does not call the offline installer workflow."
+  grep -qF 'secrets: inherit' "${workflow}" || \
+    die "Network release workflow does not pass protected secrets to the offline build."
   grep -qF "arch_snapshot: \${{ needs.validate-release.outputs.arch_snapshot }}" "${workflow}" || \
     die "Network release workflow does not pass its frozen Arch snapshot to the offline build."
 
