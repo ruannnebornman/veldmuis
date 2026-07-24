@@ -106,11 +106,13 @@ For a historical release:
 3. Verify the signature with the Veldmuis public key.
 4. Confirm `release_tag=` matches the release and `release_sha=` matches the
    tagged commit.
-5. Download the ISO from `release_path=` and verify it against `sha256=`.
+5. If the release is still current, download the ISO from `release_path=` and
+   verify it against `sha256=`.
 
-The publication workflow never overwrites or removes release-specific objects.
-The documented retention window is at least 12 months; removing older images
-requires an announced policy change and does not permit reusing their paths.
+Before a new installer release is published, the publication workflow removes
+older release-specific objects. Historical tags, signed manifests, checksums,
+and other authenticated metadata remain on the corresponding GitHub release.
+Release-specific paths are never reused.
 
 ## Package Repository Trust
 

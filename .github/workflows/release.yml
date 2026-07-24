@@ -1,4 +1,4 @@
-name: Network Installer Release
+name: Installer Release
 
 on:
   schedule:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   validate-release:
-    name: Validate Network Release Ref
+    name: Validate Release Ref
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
@@ -454,6 +454,17 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Remove previous installer releases
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          VELDMUIS_RELEASE_TAG: ${{ needs.validate-release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          ./development/prune-release-storage.sh
+
       - name: Publish immutable network installer
         shell: bash
         env:
@@ -672,7 +683,6 @@ jobs:
 
   build-and-publish-offline:
     name: Build And Publish Offline Installer
-    if: github.event_name == 'schedule'
     needs:
       - validate-release
       - build-and-publish

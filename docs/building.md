@@ -253,10 +253,10 @@ AUR refs.
 The `Offline Installer Release` workflow runs the `offline-iso` target,
 generates signed metadata, prints the exact ISO and embedded repository sizes,
 and publishes immutable artifacts plus the small offline channel documents.
-Scheduled monthly network releases call it with a frozen tag, source commit,
-and Arch snapshot after network publication succeeds; it also remains
-manually dispatchable. It does not publish the rolling package repository or
-upload the large ISO as a GitHub artifact.
+Every scheduled or manually dispatched network release calls it with a frozen
+tag, source commit, and Arch snapshot after network publication succeeds. It
+cannot be dispatched independently, does not publish the rolling package
+repository, and does not upload the large ISO as a GitHub artifact.
 
 Release metadata can be generated inside an appropriately prepared Arch build
 environment with:
@@ -271,9 +271,11 @@ The object-storage publisher is:
 ./development/publish-r2-release.sh
 ```
 
-It uploads and verifies release-specific objects before copying them to the
-`latest` aliases. The signed manifest is updated last and no release prefix is
-deleted or overwritten.
+The release workflow first runs `prune-release-storage.sh` to remove every
+older release prefix while protecting the tag being published. The publisher
+then uploads and verifies release-specific objects before promoting the small
+channel documents. The signed manifest is updated last and objects under the
+current tag are never overwritten.
 
 ## Publish The Package Repository
 

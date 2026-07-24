@@ -87,8 +87,9 @@ Current installer channels:
 - Network manifest signature: https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
 
 The small channel documents point to immutable release-specific ISOs and avoid
-storing duplicate `latest` ISO objects. Historical GitHub releases retain
-authenticated metadata and link to their exact network-installer objects.
+storing duplicate `latest` ISO objects. Publishing a new release prunes older
+installer objects, while historical GitHub releases retain authenticated
+metadata for verification.
 
 Before installing, verify the manifest signature and then check the ISO against
 the authenticated checksum.

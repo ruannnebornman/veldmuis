@@ -172,6 +172,9 @@ check_tag_examples() {
 
 check_workflow_source() {
   local workflow="${repo_root}/.github/workflows/release.yml"
+  local cleanup_line=""
+  local publish_line=""
+  local tag_line=""
 
   [[ -f "${workflow}" ]] || die "Release workflow not found: ${workflow}"
 
@@ -181,10 +184,6 @@ check_workflow_source() {
 
   if grep -Eq 'gh release edit|--clobber' "${workflow}"; then
     die "Release workflow contains a release replacement path."
-  fi
-
-  if grep -Eq 'aws[[:space:]]+s3[[:space:]]+rm' "${workflow}"; then
-    die "Release workflow contains a delete-before-publish path."
   fi
 
   if grep -Eq 'ISO download:|Direct HTTPS ISO:|Direct HTTPS checksum:' "${workflow}"; then
@@ -207,12 +206,22 @@ check_workflow_source() {
     die "Release workflow does not restrict source checkout to main."
   grep -q 'publish-r2-release.sh' "${workflow}" || \
     die "Release workflow does not use immutable release publication."
+  grep -q 'prune-release-storage.sh' "${workflow}" || \
+    die "Release workflow does not prune previous installer releases."
+  tag_line="$(grep -nF -- '- name: Create immutable release tag' "${workflow}" | cut -d: -f1)"
+  cleanup_line="$(grep -nF -- './development/prune-release-storage.sh' "${workflow}" | cut -d: -f1)"
+  publish_line="$(grep -nF -- './development/publish-r2-release.sh' "${workflow}" | head -n 1 | cut -d: -f1)"
+  [[ "${tag_line}" =~ ^[0-9]+$ && "${cleanup_line}" =~ ^[0-9]+$ && "${publish_line}" =~ ^[0-9]+$ ]] || \
+    die "Release workflow publication ordering could not be resolved."
+  ((tag_line < cleanup_line && cleanup_line < publish_line)) || \
+    die "Release workflow must tag, prune older releases, and then publish in that order."
   grep -q 'channels/network.manifest.txt.sig' "${workflow}" || \
     die "Network release workflow does not publish a channel-manifest signature."
   grep -q 'gpgv --keyring ./packages/veldmuis-keyring/veldmuis.gpg' "${workflow}" || \
     die "Release workflow does not verify generated metadata with the packaged keyring."
-  grep -qF "if: github.event_name == 'schedule'" "${workflow}" || \
-    die "Network release workflow does not restrict automatic offline builds to scheduled releases."
+  if grep -qF "if: github.event_name == 'schedule'" "${workflow}"; then
+    die "Network release workflow still restricts offline builds to scheduled releases."
+  fi
   grep -qF 'uses: ./.github/workflows/offline-iso-size.yml' "${workflow}" || \
     die "Network release workflow does not call the offline installer workflow."
   grep -qF "arch_snapshot: \${{ needs.validate-release.outputs.arch_snapshot }}" "${workflow}" || \
@@ -242,6 +251,9 @@ check_offline_release_workflow_source() {
   local workflow="${repo_root}/.github/workflows/offline-iso-size.yml"
 
   [[ -f "${workflow}" ]] || die "Offline ISO size workflow not found: ${workflow}"
+  if grep -qF 'workflow_dispatch:' "${workflow}"; then
+    die "Offline release workflow remains independently dispatchable."
+  fi
   grep -qF "if: github.ref == 'refs/heads/main'" "${workflow}" || \
     die "Offline ISO size workflow is not restricted to main."
   grep -qF 'ref: refs/heads/main' "${workflow}" || \
@@ -306,9 +318,11 @@ check_repository_signature_policy() {
 check_release_metadata_source() {
   local generator="${repo_root}/development/generate-release-metadata.sh"
   local publisher="${repo_root}/development/publish-r2-release.sh"
+  local pruner="${repo_root}/development/prune-release-storage.sh"
 
   [[ -x "${generator}" ]] || die "Release metadata generator is missing or not executable."
   [[ -x "${publisher}" ]] || die "Release publisher is missing or not executable."
+  [[ -x "${pruner}" ]] || die "Release-storage pruner is missing or not executable."
   grep -q -- '--detach-sign' "${generator}" || \
     die "Release metadata generator does not create a detached signature."
   grep -q 'SPDXVersion: SPDX-2.3' "${generator}" || \
@@ -322,8 +336,14 @@ check_release_metadata_source() {
   if grep -Eq 'aws[[:space:]]+s3[[:space:]]+rm' "${publisher}"; then
     die "Release publisher contains a destructive prefix-removal path."
   fi
+  grep -qF "s3 rm \"s3://\${bucket}/\${release_root}/\"" "${pruner}" || \
+    die "Release-storage pruner does not target the release root."
+  grep -qF -- "--exclude \"\${release_tag}/*\"" "${pruner}" || \
+    die "Release-storage pruner does not protect the current release tag."
+  grep -qF 'verify_previous_releases_removed' "${pruner}" || \
+    die "Release-storage pruner does not verify cleanup."
 
-  log "Release metadata is signed and published under immutable paths"
+  log "Release metadata is signed, previous releases are pruned, and the current tag remains immutable"
 }
 
 check_private_reporting_source() {
