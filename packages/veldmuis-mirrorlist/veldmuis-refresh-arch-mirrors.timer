@@ -4,8 +4,8 @@ Description=Refresh ranked Arch Linux mirrorlist weekly
 [Timer]
 OnCalendar=weekly
 Persistent=true
-RandomizedDelaySec=12h
-AccuracySec=1h
+RandomizedDelaySec=10min
+AccuracySec=1min
 
 [Install]
 WantedBy=timers.target
