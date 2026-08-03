@@ -308,7 +308,7 @@ build_package_base() {
   log "Building ${package_base}"
   (
     cd "${build_dir}"
-    makepkg --syncdeps --noconfirm --cleanbuild --force
+    SRCDEST="${build_dir}" makepkg --syncdeps --noconfirm --cleanbuild --force
   )
 
   copy_package_outputs "${package_base}" "${build_dir}"
@@ -317,7 +317,8 @@ build_package_base() {
 
 write_manifest() {
   local manifest_tmp="${manifest_path}.tmp"
-  local package_base package_path
+  local package_base package_path source_path source_name
+  local -a source_paths=()
 
   {
     printf 'built_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -332,6 +333,35 @@ write_manifest() {
         "${package_base}" \
         "${resolved_refs[${package_base}]}" \
         "$(aur_url "${package_base}")"
+    done
+
+    printf '\n[source_inputs]\n'
+    for package_base in "${package_bases[@]}"; do
+      printf '%s\tPKGBUILD\t%s\n' \
+        "${package_base}" \
+        "$(sha256sum "${work_root}/${package_base}/PKGBUILD" | awk '{print $1}')"
+
+      source_paths=()
+      while IFS= read -r -d '' source_path; do
+        source_name="${source_path##*/}"
+        case "${source_name}" in
+          *.pkg.tar.*|*.log|*.sig)
+            continue
+            ;;
+          *.tar|*.tar.*|*.tgz|*.tbz|*.txz|*.zip|*.7z|*.run|*.bin)
+            source_paths+=("${source_path}")
+            ;;
+        esac
+      done < <(find "${work_root}/${package_base}" -maxdepth 1 -type f -print0 | sort -z)
+
+      ((${#source_paths[@]} > 0)) || \
+        die "No downloaded source archive found for ${package_base}"
+      for source_path in "${source_paths[@]}"; do
+        printf '%s\t%s\t%s\n' \
+          "${package_base}" \
+          "${source_path##*/}" \
+          "$(sha256sum "${source_path}" | awk '{print $1}')"
+      done
     done
 
     printf '\n[package_files]\n'

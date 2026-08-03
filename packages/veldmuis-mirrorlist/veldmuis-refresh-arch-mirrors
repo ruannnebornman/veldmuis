@@ -3,6 +3,7 @@
 set -euo pipefail
 
 output_path="/etc/pacman.d/mirrorlist"
+fallback_path="${VELDMUIS_ARCH_MIRRORLIST_FALLBACK:-/usr/share/veldmuis/arch-mirrorlist-fallback}"
 backup_dir="/etc/pacman.d/veldmuis-mirrorlist-backups"
 keep_backups=5
 max_mirrors="${VELDMUIS_REFLECTOR_MAX_MIRRORS:-10}"
@@ -27,10 +28,6 @@ Options:
   --no-backup    Do not back up the existing output file.
   -h, --help     Show this help.
 EOF
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
 
 has_active_servers() {
@@ -164,6 +161,31 @@ EOF
   } > "${output}"
 }
 
+write_fallback_mirrorlist() {
+  local output_dir=""
+  local output_name=""
+  local tmp_output=""
+
+  [[ -r "${fallback_path}" ]] || \
+    die "Static Arch mirrorlist fallback is missing: ${fallback_path}"
+  output_dir="$(dirname -- "${output_path}")"
+  output_name="$(basename -- "${output_path}")"
+  [[ -d "${output_dir}" ]] || install -d -m755 "${output_dir}"
+  tmp_output="$(mktemp -p "${output_dir}" ".${output_name}.veldmuis.XXXXXX")"
+
+  awk '/^[[:space:]]*Server[[:space:]]*=/{ sub(/^[[:space:]]*/, ""); print }' \
+    "${fallback_path}" >"${tmp_output}"
+  has_active_servers "${tmp_output}" || {
+    rm -f -- "${tmp_output}"
+    die "Static Arch mirrorlist fallback has no active servers."
+  }
+
+  backup_existing_mirrorlist
+  install -m644 "${tmp_output}" "${output_path}"
+  rm -f -- "${tmp_output}"
+  log "Using static Arch mirrorlist fallback at ${output_path}"
+}
+
 backup_existing_mirrorlist() {
   local backup_path=""
   local timestamp=""
@@ -235,14 +257,18 @@ write_ranked_mirrorlist() {
 
   if ((${#mirrorlist_sources[@]} == 0)); then
     rm -f -- "${tmp_output}" "${country_output}" "${global_output}"
-    die "Reflector failed to generate a ranked Arch mirrorlist."
+    log "Reflector failed to generate a ranked Arch mirrorlist"
+    write_fallback_mirrorlist
+    return
   fi
 
   write_combined_mirrorlist "${tmp_output}" "${country_filter}" "${mirrorlist_sources[@]}"
 
   if ! has_active_servers "${tmp_output}"; then
     rm -f -- "${tmp_output}" "${country_output}" "${global_output}"
-    die "Reflector did not produce an active Arch mirrorlist."
+    log "Reflector did not produce an active Arch mirrorlist"
+    write_fallback_mirrorlist
+    return
   fi
 
   backup_existing_mirrorlist
@@ -284,7 +310,11 @@ main() {
     backup_enabled=0
   fi
 
-  require_cmd reflector
+  if ! command -v reflector >/dev/null 2>&1; then
+    log "Reflector is unavailable"
+    write_fallback_mirrorlist
+    return
+  fi
   write_ranked_mirrorlist
 }
 

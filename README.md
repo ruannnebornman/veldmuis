@@ -1,14 +1,39 @@
 # Veldmuis Linux
 
-Veldmuis Linux is a small Arch-based KDE Plasma distribution project focused on
-transparent release engineering: package composition, signed pacman
-repositories, keyring packaging, archiso image construction, Calamares
-installer integration, systemd-boot installation, and automated GitHub
-releases.
+Shaped around the African veld at sunset: a small Arch-based KDE Plasma desktop
+whose packages, installer, and release workflow are built in the open and can be
+followed end to end from this repository.
+
+Veldmuis is an Arch-based KDE Plasma distribution project focused on transparent
+release engineering: package composition, signed pacman repositories, keyring
+packaging, archiso image construction, Calamares installer integration,
+systemd-boot installation, and automated GitHub releases.
 
 The project is intentionally narrow. It is public so the packaging, installer
-configuration, release workflow, and known limitations can be inspected from
-one repository.
+configuration, release workflow, and known limitations can be inspected from one
+repository.
+
+## Why Veldmuis
+
+The veld at sunset is an open place: dry grass, a long horizon, and light that
+does not hide anything. Veldmuis is built in that spirit. It is a small desktop
+distribution that keeps its work visible — every package is defined in
+`packages/`, every installer step is documented in `docs/`, every release is
+signed and verifiable from `SECURITY.md`.
+
+That means Veldmuis makes no promises it cannot keep:
+
+- It is a desktop for people who like Arch and want to see everything a distro
+  does before they run it.
+- It does not pretend to be a mass-market distribution, and it does not
+  accumulate feature groups by default. The default install stays close to KDE
+  Plasma, and optional groups (gaming, downloads, sync, development, NVIDIA)
+  are opt-in.
+- Release metadata records signed repositories, signed release manifests, and
+  immutable ISO paths. Verify those records before using an official download.
+
+Veldmuis is for people who want to inspect the whole path from package definition
+to installed desktop.
 
 ## What This Is
 
@@ -31,9 +56,8 @@ one repository.
 
 ## Current Scope
 
-Veldmuis is best read as a public Linux distribution engineering project. The
-current default install target is a KDE Plasma desktop with Veldmuis release,
-keyring, boot, display-manager, multimedia, and branding packages.
+The current default install target is a KDE Plasma desktop with Veldmuis
+release, keyring, boot, display-manager, multimedia, and branding packages.
 
 The installer supports open-source graphics choices and an optional NVIDIA
 580xx DKMS path. Optional application groups currently include gaming, download,
@@ -55,11 +79,19 @@ path.
 - Source, issues, and releases: https://github.com/ruannnebornman/veldmuis
 - Issue tracker: https://github.com/ruannnebornman/veldmuis/issues
 - Package repository: https://packages.veldmuislinux.org/
+- ISO releases: https://downloads.veldmuislinux.org/iso/
 
 Official Veldmuis communication currently happens through the website and
 GitHub repository above. Veldmuis does not currently have official outside
 affiliations, community platforms, or fundraising pages. If that changes, it
-will be announced through those official links.
+will be announced through those official links. A Discord community is planned,
+and a Twitter/X account is being prepared, but neither has an official invite
+or handle published yet.
+
+Treat similarly named websites, accounts, mirrors, download pages, and direct
+messages as unofficial unless they are listed here or in [SECURITY.md](SECURITY.md).
+Veldmuis will not ask for signing keys, passwords, or recovery material through
+an unlisted channel.
 
 ## Before Installing
 
@@ -162,6 +194,56 @@ Infrastructure and installer packages include:
 - `veldmuis-lsb-release`
 - `veldmuis-mirrorlist`
 - `veldmuis-release`
+
+## FAQ
+
+**Is Veldmuis a "rat"?**
+Veldmuis is Afrikaans for "field mouse" — a small, quiet animal of the veld.
+It is not a remote access trojan. The repository and release metadata are
+public, the ISO and repositories are signed, and every release can be checked
+using [SECURITY.md](SECURITY.md).
+
+**Why another Arch distribution?**
+Because a distro can be a small thing, honestly built. Veldmuis exists to show
+that a one-person project can ship signed packages, a verifiable installer, and
+a documented release pipeline — and to give people a desktop they can inspect
+from the first commit. If you want a larger community around your Arch desktop,
+EndeavourOS and CachyOS do that well; Veldmuis is not trying to outrun them.
+
+**Why KDE Plasma?**
+KDE Plasma is the default desktop: mature, configurable, and comfortable in the
+evening light. The Veldmuis branding package carries a dusk-and-ember color
+scheme, and optional groups add gaming, downloads, sync, and development tools
+without cluttering the default install.
+
+**Why is it a network installer?**
+The public image resolves Arch packages from Arch mirrors during installation,
+so the download stays small and current. An offline candidate build is
+documented in [Building Packages And ISOs](docs/building.md) but is not yet the
+public release path.
+
+**Why is Secure Boot not supported?**
+The install path targets UEFI with systemd-boot and Secure Boot disabled. This
+is a documented limitation, not an oversight; see
+[Installing Veldmuis](docs/installing.md).
+
+**Is this a serious project?**
+It is a small project with a defined support scope. Releases are signed and
+verifiable, the security model is described in [SECURITY.md](SECURITY.md), and
+known limitations are listed in [SUPPORT.md](SUPPORT.md).
+
+## Maintainer
+
+Veldmuis is maintained by **Ruanne Bornman**:
+
+- Personal site: https://ruannebornman.com/
+- GitHub: https://github.com/ruannnebornman
+- The project's voice and look are its own — shaped around the African veld at
+  sunset — not an extension of any one personality.
+
+The Veldmuis signing key is the project's key, and the security model does not
+depend on the maintainer's reputation alone. See [SECURITY.md](SECURITY.md) for
+the full verification flow.
 
 ## License
 

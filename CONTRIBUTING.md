@@ -4,6 +4,15 @@ Veldmuis is currently a solo-maintainer project. Contributions and issue reports
 are welcome, but the project uses GitHub issues and pull requests primarily as
 an audit trail.
 
+## Voice And Tone
+
+The project has its own voice, shaped around the African veld at sunset: warm,
+plain, and unhurried — never corporate, never promotional. Write documentation
+as if you are showing someone around at golden hour: explain what the project
+does, what it does not do, and keep the technical parts precise. Do not add
+filler, slogans, or maintainer personality to project docs; the voice belongs to
+Veldmuis, not to any one person.
+
 ## Before Opening An Issue
 
 Read:

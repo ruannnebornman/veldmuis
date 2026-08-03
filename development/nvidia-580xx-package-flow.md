@@ -35,7 +35,7 @@ the package repo build.
 6. `development/build-local-repo.sh` copies `veldmuis-nvidia-legacy` plus the
    NVIDIA 580xx artifacts into `veldmuis-extra` and signs the repository.
 7. `development/publish-r2-package-repo.sh` publishes the pacman repositories
-   and includes the AUR manifest when present.
+   and includes the AUR manifest, including resolved refs and source hashes.
 8. `development/publish-known-good-nvidia-packages.sh` updates the known-good
    NVIDIA package cache after a successful non-fallback build.
 9. `development/restore-known-good-nvidia-packages.sh` restores that cache when

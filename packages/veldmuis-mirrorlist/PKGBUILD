@@ -1,6 +1,6 @@
 pkgname=veldmuis-mirrorlist
 pkgver=20260305
-pkgrel=6
+pkgrel=7
 pkgdesc="Mirrorlist and Arch mirror refresh tooling for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -8,13 +8,15 @@ license=("MIT")
 depends=("bash" "reflector")
 source=(
   "veldmuis-mirrorlist"
+  "arch-mirrorlist-fallback"
   "veldmuis-refresh-arch-mirrors"
   "veldmuis-refresh-arch-mirrors.service"
   "veldmuis-refresh-arch-mirrors.timer"
 )
 sha256sums=(
   "64a8ce0f088374db8fd519bd9d315aae1099808d59a5336f4de88367ad7097b0"
-  "09761e056513aa20e860e083f32924555f73b5d142a5da1d41cf6f9d0faa6e9f"
+  "7a253cc79cead64ae701dd9565274766e8bcf0b80e2a4b1f01643644a5f4bb9d"
+  "410b1fdb8a8eb06a3039852d4b3452a09e6c8978737617a60e184ab66aeba6b9"
   "58e90c9387063f2546073539a7801052ee4037e9a3ffe63aace25dae1c4d73e7"
   "e8dc06402b6aff032cd1241e808766b8b660d2f7d696b2df022cdce318167727"
 )
@@ -22,6 +24,8 @@ sha256sums=(
 package() {
   install -Dm644 veldmuis-mirrorlist \
     "$pkgdir/etc/pacman.d/veldmuis-mirrorlist"
+  install -Dm644 arch-mirrorlist-fallback \
+    "$pkgdir/usr/share/veldmuis/arch-mirrorlist-fallback"
   install -Dm755 veldmuis-refresh-arch-mirrors \
     "$pkgdir/usr/bin/veldmuis-refresh-arch-mirrors"
   install -Dm644 veldmuis-refresh-arch-mirrors.service \

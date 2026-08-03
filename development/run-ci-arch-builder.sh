@@ -54,6 +54,7 @@ usage() {
   cat <<'EOF'
 Usage:
   run-ci-arch-builder.sh packages
+  run-ci-arch-builder.sh candidate
   run-ci-arch-builder.sh iso
   run-ci-arch-builder.sh offline-iso
 
@@ -100,7 +101,7 @@ is_true() {
 
 validate_target() {
   case "$1" in
-    packages|iso|offline-iso) ;;
+    packages|candidate|iso|offline-iso) ;;
     *)
       usage >&2
       die "Unsupported build target: $1"
@@ -484,9 +485,11 @@ run_build_in_containers() {
   require_env BUILDER_USER
   require_env BUILDER_HOME
   require_env GNUPGHOME
-  require_env VELDMUIS_KEY_FPR_FILE
-  require_env VELDMUIS_GPG_PRIVATE_KEY
-  require_env VELDMUIS_GPG_FPR
+  if [[ "${target}" != candidate ]]; then
+    require_env VELDMUIS_KEY_FPR_FILE
+    require_env VELDMUIS_GPG_PRIVATE_KEY
+    require_env VELDMUIS_GPG_FPR
+  fi
   require_env RUNNER_TEMP
 
   if [[ "${target}" == "iso" || "${target}" == "offline-iso" ]]; then
@@ -502,7 +505,9 @@ run_build_in_containers() {
   prepare_builder_image "${target}"
   run_container_stage packages "${target}"
   run_container_stage aur "${target}"
-  run_container_stage sign "${target}"
+  if [[ "${target}" != candidate ]]; then
+    run_container_stage sign "${target}"
+  fi
 
   if [[ "${target}" == "offline-iso" ]]; then
     run_container_stage offline-download "${target}"

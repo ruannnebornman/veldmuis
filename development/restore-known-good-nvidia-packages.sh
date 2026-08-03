@@ -122,6 +122,24 @@ parse_package_bases() {
   ' "${manifest_file}"
 }
 
+parse_source_inputs() {
+  local manifest_file="$1"
+
+  awk '
+    /^\[source_inputs\]$/ {
+      in_source_inputs = 1
+      next
+    }
+    /^\[/ {
+      in_source_inputs = 0
+      next
+    }
+    in_source_inputs && NF >= 2 && $1 !~ /^#/ {
+      print
+    }
+  ' "${manifest_file}"
+}
+
 ensure_expected_package_set() {
   local package_name package_path
 
@@ -200,6 +218,8 @@ write_fallback_manifest() {
     printf 'package_dir=%s\n' "${package_dir}"
     printf '\n[package_bases]\n'
     parse_package_bases "${source_aur_manifest_path}"
+    printf '\n[source_inputs]\n'
+    parse_source_inputs "${source_aur_manifest_path}"
     printf '\n[package_files]\n'
     while IFS= read -r package_path; do
       sha256sum "${package_path}" | awk -v file_name="${package_path##*/}" '{print $1 "\t" file_name}'

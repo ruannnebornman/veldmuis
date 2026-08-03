@@ -60,14 +60,22 @@ Current reproducibility limits:
 - Native and live-filesystem Arch build dependencies are not yet pinned to an
   Arch Linux Archive snapshot.
 - Native package build dependencies are prepared by the host or CI image.
-- AUR-derived NVIDIA packages can be built from locked refs or latest refs,
-  depending on `VELDMUIS_AUR_REF_MODE`.
+- AUR-derived NVIDIA packages use the locked refs in
+  `development/aur-packages.lock` by default. `latest` is an explicit update
+  path and should be used only while reviewing a lock-file change.
 - The network installer resolves Arch packages from mirrors during
   installation.
 
 Full offline ISO candidates use one dated Arch Linux Archive snapshot for the
 complete install-time dependency closure. Candidate metadata records that
 snapshot, the package manifest, package count, and repository byte count.
+
+The current roadmap for stronger reproducibility is to select one dated Arch
+Linux Archive snapshot for native build dependencies and the live filesystem,
+pass it through the package and ISO workflows, and validate a clean rebuild
+against the recorded inputs before signing. This is roughly one to two
+maintainer-days of implementation followed by a full offline and VM validation
+cycle; it assumes no new hosted infrastructure.
 
 ## Build Native Packages
 
@@ -94,13 +102,16 @@ The NVIDIA 580xx AUR package bases are defined in:
 packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
 ```
 
-Build using locked refs from `development/aur-packages.lock`:
+Build using the locked refs from `development/aur-packages.lock` (the normal
+release path):
 
 ```sh
 VELDMUIS_AUR_REF_MODE=locked ./development/build-aur-packages.sh
 ```
 
-Build using the latest AUR refs:
+Build using the latest AUR refs only when deliberately reviewing a lock-file
+update. Do not use this mode for production publication; the automated review
+workflow promotes only the exact refs it has audited:
 
 ```sh
 VELDMUIS_AUR_REF_MODE=latest ./development/build-aur-packages.sh
@@ -123,6 +134,26 @@ The AUR output directory defaults to:
 ```text
 artifacts/aur-packages/current/
 ```
+
+The AUR manifest records the resolved ref, the checked-out `PKGBUILD` hash, and
+the downloaded source-archive hashes for each package base. These records make
+the selected inputs auditable; they do not prove that the upstream source is
+safe or that the package can be rebuilt byte-for-byte.
+
+## Automated AUR Update Review
+
+The `AUR Update Review` workflow checks for newer AUR commits without signing or
+publishing them. It compares each candidate with the accepted lock, builds the
+candidate in Arch containers without signing credentials, validates the expected
+package set, and scans the resulting package payloads.
+
+An update group has one open pull request. A newer candidate updates that PR to
+the newest exact refs, reruns the checks, and adds the superseded report to the
+PR history. High-risk candidates, including the proprietary NVIDIA group,
+require review before the lock can reach `main`. Low-risk candidates receive
+the lighter automated policy but still require the maintainer to merge the PR.
+A lock-file change on `main` starts the normal signed package-repository refresh,
+which rebuilds the exact accepted refs.
 
 ## Build The Local Package Repository
 

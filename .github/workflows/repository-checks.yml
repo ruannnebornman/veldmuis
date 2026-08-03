@@ -4,6 +4,12 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to validate
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +28,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
 
       - name: Check repository hygiene
         shell: bash
@@ -116,3 +123,32 @@ jobs:
             echo "Installer package-set checksum does not match PKGBUILD" >&2
             exit 1
           }
+
+      - name: Check AUR review helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for script in \
+            development/audit-aur-update.sh \
+            development/manage-aur-update-pr.sh \
+            development/scan-aur-candidate.sh \
+            development/update-aur-lock.sh
+          do
+            bash -n "${script}"
+          done
+
+          test_root="$(mktemp -d)"
+          trap 'rm -rf -- "${test_root}"' EXIT
+          cp development/aur-packages.lock "${test_root}/aur-packages.lock"
+          awk 'NF && $1 !~ /^#/ { print $1 " " $2 }' \
+            development/aur-packages.lock > "${test_root}/resolved-refs.txt"
+          ./development/update-aur-lock.sh \
+            --resolved-refs "${test_root}/resolved-refs.txt" \
+            --lock-file "${test_root}/aur-packages.lock"
+          cmp -s development/aur-packages.lock "${test_root}/aur-packages.lock"
+
+          ./development/audit-aur-update.sh \
+            --resolved-refs development/aur-packages.lock \
+            --report "${test_root}/aur-update-report.md"
+          grep -q '^Overall risk: low$' "${test_root}/aur-update-report.md"

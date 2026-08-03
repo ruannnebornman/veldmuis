@@ -192,6 +192,12 @@ write_build_inputs() {
       /^\[/ { in_section=0 }
       in_section && NF { print }
     ' "${aur_manifest_path}"
+    printf '\n[aur_source_inputs]\n'
+    awk '
+      /^\[source_inputs\]$/ { in_section=1; next }
+      /^\[/ { in_section=0 }
+      in_section && NF { print }
+    ' "${aur_manifest_path}"
   } > "${build_inputs_path}"
 }
 
