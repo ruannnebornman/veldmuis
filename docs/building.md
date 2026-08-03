@@ -136,9 +136,9 @@ artifacts/aur-packages/current/
 ```
 
 The AUR manifest records the resolved ref, the checked-out `PKGBUILD` hash, and
-the downloaded source-archive hashes for each package base. These records make
-the selected inputs auditable; they do not prove that the upstream source is
-safe or that the package can be rebuilt byte-for-byte.
+pre-build hashes for the source inputs present in each package checkout. These
+records make the selected inputs auditable; they do not prove that the upstream
+source is safe or that the package can be rebuilt byte-for-byte.
 
 ## Automated AUR Update Review
 
@@ -149,9 +149,10 @@ package set, and scans the resulting package payloads.
 
 An update group has one open pull request. A newer candidate updates that PR to
 the newest exact refs, reruns the checks, and adds the superseded report to the
-PR history. High-risk candidates, including the proprietary NVIDIA group,
-require review before the lock can reach `main`. Low-risk candidates receive
-the lighter automated policy but still require the maintainer to merge the PR.
+PR history. High-risk candidates, including the proprietary NVIDIA group, are
+created as draft pull requests and returned to draft when their candidate SHA
+changes. Low-risk candidates receive the lighter automated policy but still
+require the maintainer to merge the PR.
 A lock-file change on `main` starts the normal signed package-repository refresh,
 which rebuilds the exact accepted refs.
 

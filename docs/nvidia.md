@@ -82,7 +82,7 @@ The current automation:
   explicit update path.
 - Builds AUR packages without the Veldmuis signing key.
 - Validates the expected package names and license metadata.
-- Records the checked-out `PKGBUILD` and downloaded source-archive hashes.
+- Records the checked-out `PKGBUILD` and pre-build source-input hashes.
 - Signs packages only in a later network-disabled signing stage.
 - Publishes the signed package set through `veldmuis-extra`.
 - Publishes a known-good NVIDIA package cache after successful non-fallback

@@ -29,7 +29,8 @@ the package repo build.
    repository mounted read-only. It can write only to
    `artifacts/aur-packages`.
 4. If enabled, the AUR stage restores the known-good NVIDIA package set when a
-   fresh AUR build fails.
+   fresh AUR build fails, verifying the project's detached package signatures
+   before the artifacts enter the signing stage.
 5. A network-disabled signing container validates the expected NVIDIA artifact
    set, imports the signing key, and runs `development/build-local-repo.sh`.
 6. `development/build-local-repo.sh` copies `veldmuis-nvidia-legacy` plus the

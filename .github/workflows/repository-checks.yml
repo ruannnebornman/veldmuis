@@ -114,6 +114,10 @@ jobs:
 
       - name: Check AUR review helpers
         shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
           set -euo pipefail
 
@@ -128,6 +132,35 @@ jobs:
 
           test_root="$(mktemp -d)"
           trap 'rm -rf -- "${test_root}"' EXIT
+
+          if [[ -n "${PR_BASE_SHA:-}" ]]; then
+            base_sha="${PR_BASE_SHA}"
+          else
+            git fetch --force origin main:refs/remotes/origin/main
+            base_sha="$(git rev-parse refs/remotes/origin/main)"
+          fi
+          git cat-file -e "${base_sha}^{commit}"
+
+          base_lock="${test_root}/base-aur-packages.lock"
+          git show "${base_sha}:development/aur-packages.lock" > "${base_lock}"
+
+          if ! git diff --quiet "${base_sha}" HEAD -- development/aur-packages.lock; then
+            if [[ "${GITHUB_EVENT_NAME}" == pull_request && ( \
+              "${PR_HEAD_REF}" != automation/aur-update/nvidia-580xx || \
+              "${PR_HEAD_REPOSITORY}" != "${GITHUB_REPOSITORY}" ) ]]; then
+              echo "AUR lock changes must come from the automated update branch" >&2
+              exit 1
+            fi
+
+            changed_files="$(git diff --name-only "${base_sha}" HEAD)"
+            while IFS= read -r changed_file; do
+              [[ "${changed_file}" == development/aur-packages.lock ]] || {
+                echo "AUR update branch changed an unexpected file: ${changed_file}" >&2
+                exit 1
+              }
+            done <<< "${changed_files}"
+          fi
+
           cp development/aur-packages.lock "${test_root}/aur-packages.lock"
           awk 'NF && $1 !~ /^#/ { print $1 " " $2 }' \
             development/aur-packages.lock > "${test_root}/resolved-refs.txt"
@@ -136,7 +169,8 @@ jobs:
             --lock-file "${test_root}/aur-packages.lock"
           cmp -s development/aur-packages.lock "${test_root}/aur-packages.lock"
 
-          ./development/audit-aur-update.sh \
+          VELDMUIS_AUR_LOCK_FILE="${base_lock}" \
+            ./development/audit-aur-update.sh \
             --resolved-refs development/aur-packages.lock \
             --report "${test_root}/aur-update-report.md"
-          grep -q '^Overall risk: low$' "${test_root}/aur-update-report.md"
+          grep -q '^Overall risk: \(low\|high\)$' "${test_root}/aur-update-report.md"

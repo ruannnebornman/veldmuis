@@ -11,6 +11,7 @@ work_root="${VELDMUIS_KNOWN_GOOD_WORK_ROOT:-${repo_root}/artifacts/aur-packages/
 known_good_url="${VELDMUIS_KNOWN_GOOD_NVIDIA_URL:-}"
 known_good_manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
 failed_ref_mode="${VELDMUIS_AUR_REF_MODE:-unknown}"
+package_keyring="${VELDMUIS_PACKAGE_KEYRING:-${repo_root}/packages/veldmuis-keyring/veldmuis.gpg}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
 [[ -r "${nvidia_package_set}" ]] || {
@@ -154,6 +155,22 @@ ensure_expected_package_set() {
   done
 }
 
+verify_package_signatures() {
+  local package_path signature_path
+
+  while IFS= read -r package_path; do
+    signature_path="${package_path}.sig"
+    [[ -r "${signature_path}" ]] || die "Known-good package signature missing: ${signature_path}"
+    gpgv --keyring "${package_keyring}" "${signature_path}" "${package_path}" >/dev/null 2>&1 || \
+      die "Known-good package signature is invalid: ${package_path}"
+  done < <(
+    find "${package_dir}" -maxdepth 1 -type f \
+      -name '*.pkg.tar.zst' \
+      ! -name '*-debug-*.pkg.tar.zst' \
+      | sort -V
+  )
+}
+
 restore_packages() {
   local known_good_manifest="${work_root}/${known_good_manifest_name}"
   local source_aur_manifest
@@ -199,6 +216,7 @@ restore_packages() {
   done < <(parse_signature_files "${known_good_manifest}")
 
   ensure_expected_package_set
+  verify_package_signatures
   write_fallback_manifest "${known_good_manifest}" "${source_aur_manifest_path}"
 }
 
@@ -238,8 +256,10 @@ main() {
   require_cmd curl
   require_cmd date
   require_cmd find
+  require_cmd gpgv
   require_cmd sha256sum
   require_cmd sort
+  [[ -r "${package_keyring}" ]] || die "Package keyring not readable: ${package_keyring}"
 
   configure_known_good_url
   restore_packages

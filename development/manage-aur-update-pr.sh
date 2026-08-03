@@ -75,7 +75,7 @@ write_pr_body() {
     else
       printf 'This candidate passed the low-risk automated policy. The maintainer may merge it after required checks pass.\n'
     fi
-    printf '\nThe lock update is the accepted provenance boundary. The production package workflow must rebuild the exact SHA after this PR reaches `main`.\n'
+    printf '\nThe lock update is the accepted provenance boundary. The production package workflow must rebuild the exact SHA after this PR reaches main.\n'
   } >"${body_file}"
 }
 
@@ -84,6 +84,7 @@ main() {
   local body_file=""
   local lock_relative=""
   local unexpected_files=""
+  local is_draft=""
 
   case "${1:-}" in
     -h|--help)
@@ -126,13 +127,24 @@ main() {
   if [[ -n "${pr_number}" ]]; then
     gh pr comment "${pr_number}" --body-file "${report_file}" >/dev/null
     gh pr edit "${pr_number}" --title "${pr_title}" --body-file "${body_file}" >/dev/null
+    if [[ "${risk}" == high ]]; then
+      is_draft="$(gh pr view "${pr_number}" --json isDraft --jq '.isDraft')"
+      if [[ "${is_draft}" != true ]]; then
+        gh pr ready "${pr_number}" --undo >/dev/null
+      fi
+    fi
   else
     local pr_url=""
-    pr_url="$(gh pr create \
-      --base main \
-      --head "${branch_name}" \
-      --title "${pr_title}" \
-      --body-file "${body_file}")"
+    local -a create_args=(
+      --base main
+      --head "${branch_name}"
+      --title "${pr_title}"
+      --body-file "${body_file}"
+    )
+    if [[ "${risk}" == high ]]; then
+      create_args+=(--draft)
+    fi
+    pr_url="$(gh pr create "${create_args[@]}")"
     pr_number="$(gh pr view "${pr_url}" --json number --jq '.number')"
   fi
 
