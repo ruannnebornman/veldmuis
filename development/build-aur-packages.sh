@@ -24,6 +24,8 @@ nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/v
 package_bases=("${veldmuis_nvidia_580xx_aur_package_bases[@]}")
 
 declare -A resolved_refs=()
+declare -A source_input_hashes=()
+declare -a source_input_entries=()
 
 log() {
   printf '[build-aur-packages] %s\n' "$*"
@@ -195,6 +197,29 @@ install_built_dependencies() {
   esac
 }
 
+record_source_inputs() {
+  local package_base="$1"
+  local build_dir="$2"
+  local source_path source_name source_hash
+  local found=0
+
+  while IFS= read -r -d '' source_path; do
+    source_name="${source_path##*/}"
+    case "${source_name}" in
+      *.pkg.tar.*|*.log|*.sig)
+        continue
+        ;;
+    esac
+
+    source_hash="$(sha256sum "${source_path}" | awk '{print $1}')"
+    source_input_entries+=("${package_base}"$'\t'"${source_name}")
+    source_input_hashes["${package_base}:${source_name}"]="${source_hash}"
+    found=1
+  done < <(find "${build_dir}" -maxdepth 1 -type f -print0 | sort -z)
+
+  ((found == 1)) || die "No source inputs found for ${package_base}"
+}
+
 package_info_value() {
   local package_path="$1"
   local key="$2"
@@ -308,6 +333,11 @@ build_package_base() {
   log "Building ${package_base}"
   (
     cd "${build_dir}"
+    SRCDEST="${build_dir}" makepkg --verifysource --noconfirm
+  )
+  record_source_inputs "${package_base}" "${build_dir}"
+  (
+    cd "${build_dir}"
     SRCDEST="${build_dir}" makepkg --syncdeps --noconfirm --cleanbuild --force
   )
 
@@ -317,8 +347,7 @@ build_package_base() {
 
 write_manifest() {
   local manifest_tmp="${manifest_path}.tmp"
-  local package_base package_path source_path source_name
-  local -a source_paths=()
+  local package_base package_path source_entry source_name source_hash source_package_base
 
   {
     printf 'built_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -336,32 +365,12 @@ write_manifest() {
     done
 
     printf '\n[source_inputs]\n'
-    for package_base in "${package_bases[@]}"; do
-      printf '%s\tPKGBUILD\t%s\n' \
-        "${package_base}" \
-        "$(sha256sum "${work_root}/${package_base}/PKGBUILD" | awk '{print $1}')"
-
-      source_paths=()
-      while IFS= read -r -d '' source_path; do
-        source_name="${source_path##*/}"
-        case "${source_name}" in
-          *.pkg.tar.*|*.log|*.sig)
-            continue
-            ;;
-          *.tar|*.tar.*|*.tgz|*.tbz|*.txz|*.zip|*.7z|*.run|*.bin)
-            source_paths+=("${source_path}")
-            ;;
-        esac
-      done < <(find "${work_root}/${package_base}" -maxdepth 1 -type f -print0 | sort -z)
-
-      ((${#source_paths[@]} > 0)) || \
-        die "No downloaded source archive found for ${package_base}"
-      for source_path in "${source_paths[@]}"; do
-        printf '%s\t%s\t%s\n' \
-          "${package_base}" \
-          "${source_path##*/}" \
-          "$(sha256sum "${source_path}" | awk '{print $1}')"
-      done
+    for source_entry in "${source_input_entries[@]}"; do
+      IFS=$'\t' read -r source_package_base source_name <<< "${source_entry}"
+      source_hash="${source_input_hashes[${source_package_base}:${source_name}]:-}"
+      [[ -n "${source_hash}" ]] || die "Source input hash is missing for ${source_package_base}/${source_name}"
+      printf '%s\t%s\t%s\n' \
+        "${source_package_base}" "${source_name}" "${source_hash}"
     done
 
     printf '\n[package_files]\n'

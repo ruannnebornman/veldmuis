@@ -151,7 +151,7 @@ do not bypass it with `SigLevel = Never` or an untrusted replacement keyring.
 The NVIDIA 580xx packages are built from configured AUR package bases,
 validated as package artifacts, and then signed into the Veldmuis package
 repository. The release build records the exact resolved refs, the AUR
-`PKGBUILD` hashes, and downloaded source-file hashes in its AUR-input and
+`PKGBUILD` hashes, and pre-build source-input hashes in its AUR-input and
 build-input manifests.
 
 The AUR build stage does not receive the signing key. Signing happens later in
