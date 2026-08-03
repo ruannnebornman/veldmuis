@@ -4,7 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
-ref_mode="${VELDMUIS_AUR_REF_MODE:-latest}"
+ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
 force_refresh="${VELDMUIS_PACKAGE_REFRESH_FORCE:-0}"
 package_base="${PACKAGE_BASE_URL:-https://packages.veldmuislinux.org}"
 package_manifest_url="${PUBLISHED_PACKAGE_MANIFEST_URL:-}"

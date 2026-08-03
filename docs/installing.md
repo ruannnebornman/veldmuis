@@ -103,6 +103,11 @@ installer. Confirm that web pages or Arch mirrors are reachable.
 The installer ranks Arch mirrors and downloads Arch packages while building the
 target system. Installation cannot complete as an offline operation.
 
+Mirror ranking only selects where Arch packages are downloaded from. HTTPS is
+used for the selected mirrors, and pacman still requires Arch package and
+database signatures. If ranking fails, the installer uses the conservative
+Veldmuis fallback mirrorlist; it does not disable signature checks.
+
 ## 5. Run The Installer
 
 Launch the Calamares installer from the live desktop. It guides you through:

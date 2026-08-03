@@ -140,6 +140,20 @@ render_manifest() {
         print
       }
     ' "${aur_manifest_path}"
+    printf '\n[source_inputs]\n'
+    awk '
+      /^\[source_inputs\]$/ {
+        in_source_inputs = 1
+        next
+      }
+      /^\[/ {
+        in_source_inputs = 0
+        next
+      }
+      in_source_inputs && NF >= 2 && $1 !~ /^#/ {
+        print
+      }
+    ' "${aur_manifest_path}"
     printf '\n[package_files]\n'
     find "${stage_dir}" -maxdepth 1 -type f \
       -name '*.pkg.tar.zst' \
