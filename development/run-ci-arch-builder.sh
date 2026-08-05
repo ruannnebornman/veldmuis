@@ -134,10 +134,13 @@ prepare_builder_user() {
   install -d -m 700 -o "${BUILDER_USER}" -g "${BUILDER_USER}" "${GNUPGHOME}"
 
   if [[ "${allow_pacman}" == "1" ]]; then
+    [[ -x "${container_support_root}/development/install-aur-build-dependency.sh" ]] || \
+      die "Restricted AUR dependency installer is missing"
     install -d -m 0750 /etc/sudoers.d
-    printf '%s ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman\n' "${BUILDER_USER}" \
-      > /etc/sudoers.d/veldmuis-builder-pacman
-    chmod 0440 /etc/sudoers.d/veldmuis-builder-pacman
+    printf '%s ALL=(root) NOPASSWD: %s\n' "${BUILDER_USER}" \
+      "${container_support_root}/development/install-aur-build-dependency.sh \"\"" \
+      > /etc/sudoers.d/veldmuis-builder-aur-dependency
+    chmod 0440 /etc/sudoers.d/veldmuis-builder-aur-dependency
   fi
 }
 
@@ -194,11 +197,12 @@ run_aur_build_stage() {
 
   local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
   local aur_ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+  local aur_dependency_installer="${container_support_root}/development/install-aur-build-dependency.sh"
   local aur_build_status=0
   local build_aur_command
   local override_name
 
-  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}")"
+  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") VELDMUIS_AUR_DEPENDENCY_INSTALLER=$(shell_quote "${aur_dependency_installer}")"
   for override_name in \
     VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS \
     VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS \
