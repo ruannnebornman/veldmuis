@@ -135,6 +135,7 @@ jobs:
 
           for script in \
             development/audit-aur-update.sh \
+            development/install-aur-build-dependency.sh \
             development/manage-aur-update-pr.sh \
             development/scan-aur-candidate.sh \
             development/update-aur-lock.sh

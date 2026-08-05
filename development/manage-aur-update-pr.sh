@@ -6,6 +6,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 lock_file="${VELDMUIS_AUR_LOCK_FILE:-${repo_root}/development/aur-packages.lock}"
 candidate_lock="${VELDMUIS_AUR_CANDIDATE_LOCK:-}"
 report_file="${VELDMUIS_AUR_UPDATE_REPORT:-}"
+review_base_sha="${VELDMUIS_AUR_REVIEW_BASE_SHA:-}"
 risk="${VELDMUIS_AUR_UPDATE_RISK:-high}"
 group_name="${VELDMUIS_AUR_UPDATE_GROUP:-nvidia-580xx}"
 branch_name="${VELDMUIS_AUR_UPDATE_BRANCH:-automation/aur-update/${group_name}}"
@@ -84,6 +85,7 @@ main() {
   local body_file=""
   local lock_relative=""
   local unexpected_files=""
+  local current_main_sha=""
   local is_draft=""
 
   case "${1:-}" in
@@ -99,11 +101,18 @@ main() {
     die "Candidate lock file is required"
   [[ -n "${report_file}" && -r "${report_file}" ]] || \
     die "Candidate report is required"
+  [[ -z "${review_base_sha}" || "${review_base_sha}" =~ ^[0-9a-f]{40}$ ]] || \
+    die "Review base SHA must be a 40-character commit SHA"
   [[ "${risk}" == low || "${risk}" == high ]] || die "Unsupported risk: ${risk}"
 
   gh auth setup-git
   pr_number="$(find_open_pr)"
   prepare_branch
+  if [[ -n "${review_base_sha}" ]]; then
+    current_main_sha="$(git rev-parse refs/remotes/origin/main)"
+    [[ "${current_main_sha}" == "${review_base_sha}" ]] || \
+      die "main changed during AUR review; candidate evidence is stale"
+  fi
   lock_relative="${lock_file#"${repo_root}"/}"
   unexpected_files="$(git diff --name-only origin/main...HEAD | awk -v lock_file="${lock_relative}" '$0 != lock_file')"
   [[ -z "${unexpected_files}" ]] || \

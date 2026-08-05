@@ -48,9 +48,11 @@ jobs:
         run: |
           set -euo pipefail
           resolved_refs="${RUNNER_TEMP}/veldmuis-aur-resolved-refs.txt"
+          base_sha="$(git rev-parse HEAD)"
           VELDMUIS_AUR_REF_MODE=latest \
             ./development/build-aur-packages.sh --resolve-only \
             | sort > "${resolved_refs}"
+          printf 'base_sha=%s\n' "${base_sha}" >> "${GITHUB_OUTPUT}"
           printf 'resolved_refs=%s\n' "${resolved_refs}" >> "${GITHUB_OUTPUT}"
 
       - name: Audit AUR changes
@@ -134,12 +136,15 @@ jobs:
         env:
           AUDIT_REPORT: ${{ steps.audit.outputs.report_file }}
           SCAN_REPORT: ${{ steps.scan.outputs.report_file }}
+          REVIEW_BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
         run: |
           set -euo pipefail
           evidence_report="${RUNNER_TEMP}/veldmuis-aur-candidate-evidence.md"
-          cat "${AUDIT_REPORT}" > "${evidence_report}"
+          printf '# Review base commit\n\n%s\n' "${REVIEW_BASE_SHA}" > "${evidence_report}"
           printf '\n---\n\n' >> "${evidence_report}"
           cat "${SCAN_REPORT}" >> "${evidence_report}"
+          printf '\n---\n\n' >> "${evidence_report}"
+          cat "${AUDIT_REPORT}" >> "${evidence_report}"
           risk=low
           [[ "${{ steps.audit.outputs.risk }}" == high || "${{ steps.scan.outputs.risk }}" == high ]] && risk=high
           printf '\nfinal_risk=%s\n' "${risk}" >> "${GITHUB_OUTPUT}"
@@ -164,6 +169,7 @@ jobs:
           VELDMUIS_AUR_CANDIDATE_LOCK: ${{ steps.candidate_lock.outputs.candidate_lock }}
           VELDMUIS_AUR_UPDATE_REPORT: ${{ steps.evidence.outputs.evidence_report }}
           VELDMUIS_AUR_UPDATE_RISK: ${{ steps.evidence.outputs.final_risk }}
+          VELDMUIS_AUR_REVIEW_BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
         run: |
           set -euo pipefail
           ./development/manage-aur-update-pr.sh

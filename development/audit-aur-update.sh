@@ -125,9 +125,9 @@ classify_change() {
     else
       printf -- '- %s\n' "${changed_paths[@]}"
     fi
-    printf '\nPKGBUILD diff:\n'
+    printf '\nCandidate recipe diff:\n'
     git -C "${repo_path}" diff --no-ext-diff --unified=3 \
-      "${old_ref}" "${new_ref}" -- PKGBUILD | awk 'NR <= 500'
+      "${old_ref}" "${new_ref}" -- "${changed_paths[@]}"
   } >>"${report_file}"
 }
 

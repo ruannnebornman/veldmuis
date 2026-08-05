@@ -12,6 +12,7 @@ work_root="${VELDMUIS_AUR_WORK_ROOT:-${repo_root}/artifacts/aur-packages/work}"
 package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
 manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
 ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+dependency_installer="${VELDMUIS_AUR_DEPENDENCY_INSTALLER:-}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
 [[ -r "${nvidia_package_set}" ]] || {
@@ -192,7 +193,11 @@ install_built_dependencies() {
     nvidia-580xx-utils)
       package_path="$(latest_built_package "${build_dir}" "nvidia-580xx-utils")"
       log "Installing build dependency from local artifact: $(basename "${package_path}")"
-      sudo pacman -U --noconfirm --needed "${package_path}"
+      if [[ -n "${dependency_installer}" ]]; then
+        sudo "${dependency_installer}"
+      else
+        sudo pacman -U --noconfirm --needed "${package_path}"
+      fi
       ;;
   esac
 }
