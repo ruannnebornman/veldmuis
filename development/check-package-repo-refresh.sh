@@ -9,11 +9,18 @@ force_refresh="${VELDMUIS_PACKAGE_REFRESH_FORCE:-0}"
 package_base="${PACKAGE_BASE_URL:-https://packages.veldmuislinux.org}"
 package_manifest_url="${PUBLISHED_PACKAGE_MANIFEST_URL:-}"
 aur_manifest_url="${PUBLISHED_AUR_MANIFEST_URL:-}"
+known_good_url="${VELDMUIS_KNOWN_GOOD_NVIDIA_URL:-}"
+known_good_manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
+known_good_manifest_signature_name="${known_good_manifest_name}.sig"
+package_keyring="${VELDMUIS_PACKAGE_KEYRING:-${repo_root}/packages/veldmuis-keyring/veldmuis.gpg}"
 work_root="${RUNNER_TEMP:-/tmp}/veldmuis-package-refresh"
 resolved_refs_file="${VELDMUIS_AUR_RESOLVED_REFS_FILE:-${work_root}/resolved-aur-refs.txt}"
 published_package_manifest="${work_root}/published-package-manifest.txt"
 published_aur_manifest="${work_root}/published-aur-manifest.txt"
 published_refs_file="${work_root}/published-aur-refs.txt"
+known_good_manifest="${work_root}/${known_good_manifest_name}"
+known_good_manifest_signature="${work_root}/${known_good_manifest_signature_name}"
+known_good_source_manifest="${work_root}/known-good-aur-manifest.txt"
 current_source_commit=""
 published_source_commit=""
 
@@ -106,11 +113,73 @@ parse_manifest_refs() {
   ' "${manifest_path}" | sort
 }
 
+safe_file_name() {
+  local file_name="$1"
+
+  [[ -n "${file_name}" ]] || return 1
+  [[ "${file_name}" != */* ]] || return 1
+  [[ "${file_name}" != .* ]] || return 1
+}
+
+manifest_value() {
+  local manifest_file="$1"
+  local key="$2"
+
+  awk -F '=' -v key="${key}" '$1 == key { print $2; found = 1; exit } END { exit !found }' \
+    "${manifest_file}" 2>/dev/null || true
+}
+
+configure_known_good_url() {
+  if [[ -z "${known_good_url}" ]]; then
+    package_base="${package_base%/}"
+    [[ -n "${package_base}" ]] || die "PACKAGE_BASE_URL resolves to an empty value"
+    known_good_url="${package_base}/_known-good/nvidia-580xx/current"
+  fi
+
+  known_good_url="${known_good_url%/}"
+}
+
+validate_known_good_cache() {
+  local source_aur_manifest source_aur_manifest_hash actual_source_aur_manifest_hash
+  local signing_fingerprint
+
+  configure_known_good_url
+  rm -f "${known_good_manifest}" "${known_good_manifest_signature}" "${known_good_source_manifest}"
+
+  curl --fail --silent --show-error --location \
+    "${known_good_url}/${known_good_manifest_name}" \
+    --output "${known_good_manifest}" || return 1
+  curl --fail --silent --show-error --location \
+    "${known_good_url}/${known_good_manifest_signature_name}" \
+    --output "${known_good_manifest_signature}" || return 1
+
+  gpgv --keyring "${package_keyring}" \
+    "${known_good_manifest_signature}" "${known_good_manifest}" >/dev/null 2>&1 || return 1
+  [[ "$(manifest_value "${known_good_manifest}" schema_version)" == "2" ]] || return 1
+  signing_fingerprint="$(manifest_value "${known_good_manifest}" signing_fingerprint)"
+  [[ "${signing_fingerprint}" =~ ^[0-9A-Fa-f]{40}$ ]] || return 1
+
+  source_aur_manifest="$(manifest_value "${known_good_manifest}" source_aur_manifest)"
+  safe_file_name "${source_aur_manifest}" || return 1
+  curl --fail --silent --show-error --location \
+    "${known_good_url}/${source_aur_manifest}" \
+    --output "${known_good_source_manifest}" || return 1
+
+  source_aur_manifest_hash="$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
+  [[ "${source_aur_manifest_hash}" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
+  actual_source_aur_manifest_hash="$(sha256sum "${known_good_source_manifest}" | awk '{print $1}')"
+  [[ "${actual_source_aur_manifest_hash}" == "${source_aur_manifest_hash}" ]]
+}
+
 main() {
   require_cmd awk
   require_cmd curl
   require_cmd git
+  require_cmd gpgv
+  require_cmd sha256sum
   require_cmd sort
+
+  [[ -r "${package_keyring}" ]] || die "Package keyring not readable: ${package_keyring}"
 
   mkdir -p "${work_root}"
   : > "${resolved_refs_file}"
@@ -145,6 +214,11 @@ main() {
 
   if [[ "${published_source_commit}" != "${current_source_commit}" ]]; then
     finish "true" "Repository source commit differs from the published package repository."
+    return 0
+  fi
+
+  if ! validate_known_good_cache; then
+    finish "true" "Known-good NVIDIA cache manifest signature or source manifest checksum is invalid."
     return 0
   fi
 

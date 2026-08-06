@@ -24,6 +24,11 @@ nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/v
 
 package_bases=("${veldmuis_nvidia_580xx_aur_package_bases[@]}")
 
+declare -A official_build_dependency_roots=()
+for dependency in "${veldmuis_nvidia_580xx_official_build_dependency_roots[@]}"; do
+  official_build_dependency_roots["${dependency}"]=1
+done
+
 declare -A resolved_refs=()
 declare -A source_input_hashes=()
 declare -a source_input_entries=()
@@ -202,6 +207,60 @@ install_built_dependencies() {
   esac
 }
 
+dependency_package_name() {
+  local dependency="$1"
+
+  printf '%s' "${dependency%%[<>=]*}"
+}
+
+check_isolated_build_dependencies() {
+  local package_base="$1"
+  local srcinfo dependency dependency_name
+  local -A dependency_specs=()
+  local -A missing_dependencies=()
+
+  srcinfo="$(makepkg --printsrcinfo)" || \
+    die "Unable to inspect SRCINFO for ${package_base}"
+
+  while IFS= read -r dependency; do
+    [[ -n "${dependency}" ]] || continue
+    dependency_name="$(dependency_package_name "${dependency}")"
+
+    if [[ -n "${official_build_dependency_roots[${dependency_name}]:-}" ]]; then
+      dependency_specs["${dependency}"]=1
+    elif [[ -n "${resolved_refs[${dependency_name}]:-}" || "${dependency_name}" == "${package_base}" ]]; then
+      :
+    else
+      die "Unapproved AUR build dependency for ${package_base}: ${dependency}"
+    fi
+  done < <(
+    printf '%s\n' "${srcinfo}" | awk '
+      $1 == "pkgbase" && $2 == "=" {
+        in_pkgbase = 1
+        next
+      }
+      $1 == "pkgname" && $2 == "=" {
+        in_pkgbase = 0
+        next
+      }
+      in_pkgbase && ($1 == "depends" || $1 == "makedepends" || $1 == "checkdepends") && $2 == "=" {
+        print $3
+      }
+    '
+  )
+
+  for dependency in "${!dependency_specs[@]}"; do
+    if ! pacman -T "${dependency}" >/dev/null 2>&1; then
+      dependency_name="$(dependency_package_name "${dependency}")"
+      missing_dependencies["${dependency_name}"]=1
+    fi
+  done
+
+  if ((${#missing_dependencies[@]} > 0)); then
+    die "Missing isolated AUR build dependencies for ${package_base}: ${!missing_dependencies[*]}"
+  fi
+}
+
 record_source_inputs() {
   local package_base="$1"
   local build_dir="$2"
@@ -343,7 +402,12 @@ build_package_base() {
   record_source_inputs "${package_base}" "${build_dir}"
   (
     cd "${build_dir}"
-    SRCDEST="${build_dir}" makepkg --syncdeps --noconfirm --cleanbuild --force
+    if [[ -n "${dependency_installer}" ]]; then
+      check_isolated_build_dependencies "${package_base}"
+      SRCDEST="${build_dir}" makepkg --nodeps --noconfirm --cleanbuild --force
+    else
+      SRCDEST="${build_dir}" makepkg --syncdeps --noconfirm --cleanbuild --force
+    fi
   )
 
   copy_package_outputs "${package_base}" "${build_dir}"
@@ -442,6 +506,9 @@ main() {
   require_cmd date
   require_cmd find
   require_cmd makepkg
+  if [[ -n "${dependency_installer}" ]]; then
+    require_cmd pacman
+  fi
   require_cmd sha256sum
   require_cmd sort
   require_cmd sudo
