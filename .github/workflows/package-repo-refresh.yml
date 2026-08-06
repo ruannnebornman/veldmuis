@@ -156,7 +156,7 @@ jobs:
           CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
-          ./development/publish-known-good-nvidia-packages.sh
+          ./development/publish-known-good-nvidia-packages.sh --publish-only
 
       - name: Write package refresh summary
         shell: bash

@@ -36,6 +36,22 @@ jobs:
           set -euo pipefail
           ./development/check-repo-hygiene.sh
 
+      - name: Check known-good NVIDIA cache helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for script in \
+            development/check-package-repo-refresh.sh \
+            development/check-known-good-nvidia-cache.sh \
+            development/publish-known-good-nvidia-packages.sh \
+            development/restore-known-good-nvidia-packages.sh
+          do
+            bash -n "${script}"
+          done
+
+          ./development/check-known-good-nvidia-cache.sh
+
       - name: Check installer publication plans
         shell: bash
         run: |

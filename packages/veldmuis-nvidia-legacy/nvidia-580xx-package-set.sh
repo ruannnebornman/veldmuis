@@ -9,6 +9,26 @@ veldmuis_nvidia_580xx_aur_package_bases=(
   "nvidia-580xx-settings"
 )
 
+# Audited direct official build-dependency roots for the locked AUR recipes
+# above. Keep locally built nvidia-580xx packages out of this list.
+veldmuis_nvidia_580xx_official_build_dependency_roots=(
+  "dkms"
+  "egl-gbm"
+  "egl-wayland"
+  "egl-x11"
+  "gtk3"
+  "jansson"
+  "lib32-gcc-libs"
+  "lib32-libglvnd"
+  "lib32-zlib"
+  "libglvnd"
+  "libvdpau"
+  "libxext"
+  "libxv"
+  "vulkan-headers"
+  "zlib"
+)
+
 veldmuis_nvidia_580xx_repository_packages=(
   "nvidia-580xx-dkms"
   "nvidia-580xx-utils"
