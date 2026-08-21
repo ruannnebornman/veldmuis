@@ -1,12 +1,13 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=14
-pkgdesc="KDE Plasma desktop metapackage for Veldmuis Linux"
+pkgrel=16
+pkgdesc="KDE Plasma desktop package for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
 depends=(
   "veldmuis-base"
+  "veldmuis-branding"
   "plasma-desktop"
   "plasma-workspace"
   "systemsettings"
@@ -22,7 +23,9 @@ depends=(
   "kde-gtk-config"
   "powerdevil"
   "power-profiles-daemon"
-  "konsole"
+  "wezterm"
+  "fish"
+  "atuin"
   "firefox"
   "dolphin"
   "ark"
@@ -50,7 +53,19 @@ depends=(
   "breeze"
   "breeze-gtk"
 )
+source=(
+  "config.fish"
+  "wezterm.lua"
+)
+sha256sums=(
+  "b1334e5dd9cfb14f3d588f57a940204a5d7b0a5d60e512e6f22be8a6003c579c"
+  "c8ce0765e4a13c5f828ea140526c14416ad7651f9dccd5749289941fad4b16d4"
+)
 
 package() {
-  :
+  install -Dm644 "${srcdir}/config.fish" \
+    "${pkgdir}/etc/skel/.config/fish/config.fish"
+  install -Dm644 "${srcdir}/wezterm.lua" \
+    "${pkgdir}/etc/skel/.config/wezterm/wezterm.lua"
+  install -d "${pkgdir}/etc/skel/.local/bin"
 }
