@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Veldmuis User Defaults Update
+Exec=/usr/lib/veldmuis/veldmuis-user-defaults-update
+TryExec=/usr/lib/veldmuis/veldmuis-user-defaults-update
+OnlyShowIn=KDE;
+NoDisplay=true
+Terminal=false
+StartupNotify=false
+X-KDE-StartupNotify=false

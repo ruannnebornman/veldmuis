@@ -29,6 +29,18 @@ jobs:
           set -euo pipefail
           ./development/check-repo-hygiene.sh
 
+      - name: Check managed user defaults updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages/veldmuis-desktop-kde/test-veldmuis-user-defaults-update.sh
+
+      - name: Check managed user defaults package payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-managed-user-defaults-package.sh
+
       - name: Check installer publication plans
         shell: bash
         run: |

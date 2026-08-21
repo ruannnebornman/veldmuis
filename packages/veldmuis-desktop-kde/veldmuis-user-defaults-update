@@ -1,0 +1,881 @@
+#!/bin/bash
+set -u
+set -o pipefail
+
+# Keep package parsing and file replacement independent of the caller's PATH.
+PATH=/usr/bin:/bin
+export PATH
+readonly BIN_CAT=/usr/bin/cat
+readonly BIN_CHMOD=/usr/bin/chmod
+readonly BIN_FLOCK=/usr/bin/flock
+readonly BIN_MKDIR=/usr/bin/mkdir
+readonly BIN_MKTEMP=/usr/bin/mktemp
+readonly BIN_MV=/usr/bin/mv
+readonly BIN_RM=/usr/bin/rm
+readonly BIN_SHA256SUM=/usr/bin/sha256sum
+readonly BIN_STAT=/usr/bin/stat
+readonly BIN_SYNC=/usr/bin/sync
+
+readonly PROGRAM=${0##*/}
+readonly UID_CURRENT=${EUID:-0}
+readonly PRODUCTION_ROOT='/usr/share/veldmuis/user-defaults/v1'
+readonly FISH_CONFIG='fish/config.fish'
+readonly WEZTERM_CONFIG='wezterm/wezterm.lua'
+
+declare -a IDS=(fish wezterm)
+declare -A M_CAND M_REV M_CONFIG M_TEMPLATE_FILE
+declare -A HIST_HASH HIST_REV
+declare -A MODE ORIGIN APPLIED STATE_CAND OBSERVATION ENROLL_UPDATE SKIP_PROCESS
+declare -A PENDING P_TARGET P_OLD_HASH P_NEW_HASH P_TEMP P_OLD_DEV P_OLD_INO P_OLD_MODE
+
+STATE_EXISTS=0
+STATE_DEV=''
+STATE_INO=''
+STATE_DIR=''
+STATE_FILE=''
+CONFIG_ROOT=''
+LOCK_FILE=''
+LOCK_FD=''
+TARGET_LOCK_FILE=''
+TARGET_LOCK_FD=''
+ROOT=''
+TEST_ROOT_MODE=0
+
+die() {
+  printf '%s: %s\n' "$PROGRAM" "$*" >&2
+  exit 1
+}
+
+is_absolute_path() {
+  [[ -n $1 && $1 == /* && $1 != *$'\n'* && $1 != *$'\r'* ]]
+}
+
+is_sha256() {
+  [[ $1 =~ ^[0-9a-f]{64}$ ]]
+}
+
+is_revision() {
+  [[ $1 =~ ^[1-9][0-9]{0,8}$ ]]
+}
+
+is_relative_path() {
+  local value=$1 part
+  local -a parts
+
+  [[ -n $value && $value != /* && $value != *$'\t'* && $value != *$'\n'* && $value != *$'\r'* ]] || return 1
+  IFS=/ read -r -a parts <<< "$value"
+  ((${#parts[@]} > 0)) || return 1
+  for part in "${parts[@]}"; do
+    [[ -n $part && $part != . && $part != .. ]] || return 1
+  done
+}
+
+hash_file() {
+  local result
+
+  result=$("$BIN_SHA256SUM" -- "$1") || return 1
+  result=${result%% *}
+  is_sha256 "$result" || return 1
+  printf '%s' "$result"
+}
+
+sync_file() {
+  "$BIN_SYNC" -d -- "$1"
+}
+
+sync_directory() {
+  "$BIN_SYNC" -f -- "$1"
+}
+
+safe_regular_file() {
+  local path=$1 uid links
+
+  [[ ! -L $path && -f $path && -r $path ]] || return 1
+  uid=$("$BIN_STAT" -c '%u' -- "$path") || return 1
+  links=$("$BIN_STAT" -c '%h' -- "$path") || return 1
+  [[ $uid == "$UID_CURRENT" && $links == 1 ]]
+}
+
+validate_user_path_components() {
+  local path=$1 create_missing=$2 label=$3 current=/ part owner mode
+  local user_owned_seen=0
+  local -a parts
+
+  is_absolute_path "$path" || return 1
+  IFS=/ read -r -a parts <<< "${path#/}"
+  for part in "${parts[@]}"; do
+    [[ -n $part && $part != . && $part != .. ]] || return 1
+    current="${current%/}/$part"
+    [[ ! -L $current ]] || return 1
+    if [[ ! -e $current ]]; then
+      if ((create_missing)); then
+        (umask 077; "$BIN_MKDIR" -- "$current") || return 1
+      else
+        return 0
+      fi
+    fi
+    [[ -d $current ]] || return 1
+    owner=$("$BIN_STAT" -c '%u' -- "$current") || return 1
+    mode=$("$BIN_STAT" -c '%a' -- "$current") || return 1
+    if [[ $owner == "$UID_CURRENT" ]]; then
+      user_owned_seen=1
+      (( (8#$mode & 022) == 0 )) || return 1
+    elif ((user_owned_seen)); then
+      return 1
+    elif (( (8#$mode & 022) != 0 )) && (( (8#$mode & 01000) == 0 )); then
+      return 1
+    fi
+  done
+  if [[ -d $path && ! -L $path ]]; then
+    owner=$("$BIN_STAT" -c '%u' -- "$path") || return 1
+    mode=$("$BIN_STAT" -c '%a' -- "$path") || return 1
+    [[ $owner == "$UID_CURRENT" ]] || return 1
+    (( (8#$mode & 022) == 0 )) || return 1
+  fi
+  return 0
+}
+
+ensure_dir_chain() {
+  validate_user_path_components "$1" 1 state || die "unsafe state directory: $1"
+}
+
+trusted_package_file() {
+  local path=$1 label=$2 owner mode
+
+  [[ ! -L $path && -f $path && -r $path ]] || die "invalid $label: $path"
+  owner=$("$BIN_STAT" -c '%u' -- "$path") || die "cannot inspect $label: $path"
+  mode=$("$BIN_STAT" -c '%a' -- "$path") || die "cannot inspect $label mode: $path"
+  if ((TEST_ROOT_MODE == 0)); then
+    [[ $owner == 0 ]] || die "$label is not root-owned: $path"
+  else
+    [[ $owner == 0 || $owner == "$UID_CURRENT" ]] || die "$label is not owned by the test user: $path"
+  fi
+  (( (8#$mode & 022) == 0 )) || die "$label is group/world writable: $path"
+}
+
+trusted_package_dir() {
+  local path=$1 owner mode
+
+  [[ -d $path && ! -L $path ]] || die "invalid package directory: $path"
+  owner=$("$BIN_STAT" -c '%u' -- "$path") || die "cannot inspect package directory: $path"
+  mode=$("$BIN_STAT" -c '%a' -- "$path") || die "cannot inspect package directory mode: $path"
+  if ((TEST_ROOT_MODE == 0)); then
+    [[ $owner == 0 ]] || die "package directory is not root-owned: $path"
+  else
+    [[ $owner == 0 || $owner == "$UID_CURRENT" ]] || die "package directory is not test-owned: $path"
+  fi
+  (( (8#$mode & 022) == 0 )) || die "package directory is group/world writable: $path"
+}
+
+validate_package_root() {
+  local owner mode
+
+  [[ -d $ROOT && ! -L $ROOT ]] || die 'defaults root is not a safe directory'
+  owner=$("$BIN_STAT" -c '%u' -- "$ROOT") || die 'cannot inspect defaults root'
+  mode=$("$BIN_STAT" -c '%a' -- "$ROOT") || die 'cannot inspect defaults root mode'
+  if ((TEST_ROOT_MODE == 0)); then
+    [[ $owner == 0 ]] || die 'defaults root is not root-owned'
+  else
+    [[ $owner == 0 || $owner == "$UID_CURRENT" ]] || die 'test defaults root is not owned by the test user'
+  fi
+  (( (8#$mode & 022) == 0 )) || die 'defaults root is group/world writable'
+  trusted_package_file "$ROOT/manifest.tsv" manifest
+  trusted_package_file "$ROOT/history.tsv" history
+}
+
+root_file() {
+  local relative=$1 current=$ROOT part index=0 final_index
+  local -a parts
+
+  IFS=/ read -r -a parts <<< "$relative"
+  final_index=$((${#parts[@]} - 1))
+  for part in "${parts[@]}"; do
+    current="$current/$part"
+    if ((index < final_index)); then
+      trusted_package_dir "$current"
+    fi
+    ((index++))
+  done
+  trusted_package_file "$current" "package template $relative"
+  printf '%s' "$current"
+}
+
+load_manifest() {
+  local path="$ROOT/manifest.tsv" line line_no=0 config template candidate revision extra id actual
+  declare -A seen_templates
+
+  while IFS= read -r line || [[ -n $line ]]; do
+    ((line_no++))
+    [[ $line != *$'\r'* ]] || die "manifest has a carriage return on line $line_no"
+    if ((line_no == 1)); then
+      [[ $line == $'config_path\ttemplate_path\tcandidate_sha256\trevision' ]] || die 'invalid manifest header'
+      continue
+    fi
+    [[ -n $line ]] || die "blank manifest line $line_no"
+    config=''; template=''; candidate=''; revision=''; extra=''
+    IFS=$'\t' read -r config template candidate revision extra <<< "$line"
+    [[ -z $extra && -n $config && -n $template && -n $candidate && -n $revision ]] || die "invalid manifest row $line_no"
+    is_relative_path "$config" || die "invalid config path in manifest line $line_no"
+    is_relative_path "$template" || die "invalid template path in manifest line $line_no"
+    is_sha256 "$candidate" || die "invalid candidate hash in manifest line $line_no"
+    is_revision "$revision" || die "invalid revision in manifest line $line_no"
+    case $config in
+      "$FISH_CONFIG") id=fish ;;
+      "$WEZTERM_CONFIG") id=wezterm ;;
+      *) die "manifest contains an unsupported config path: $config" ;;
+    esac
+    [[ -z ${M_CAND[$id]+set} ]] || die "duplicate manifest config: $config"
+    [[ -z ${seen_templates[$template]+set} ]] || die "duplicate manifest template: $template"
+    seen_templates[$template]=1
+    M_CONFIG[$id]=$config
+    M_CAND[$id]=$candidate
+    M_REV[$id]=$revision
+    M_TEMPLATE_FILE[$id]=$(root_file "$template") || die "cannot resolve package template: $template"
+  done < "$path"
+
+  [[ $line_no -eq 3 ]] || die 'manifest must contain exactly two entries'
+  for id in "${IDS[@]}"; do
+    [[ -n ${M_CAND[$id]+set} ]] || die "manifest is missing the $id entry"
+    actual=$(hash_file "${M_TEMPLATE_FILE[$id]}") || die "cannot hash the $id template"
+    [[ $actual == "${M_CAND[$id]}" ]] || die "candidate hash does not match the $id template"
+  done
+}
+
+load_history() {
+  local path="$ROOT/history.tsv" line line_no=0 config hash revision extra id key
+
+  while IFS= read -r line || [[ -n $line ]]; do
+    ((line_no++))
+    [[ $line != *$'\r'* ]] || die "history has a carriage return on line $line_no"
+    if ((line_no == 1)); then
+      [[ $line == $'config_path\tsha256\trevision' ]] || die 'invalid history header'
+      continue
+    fi
+    [[ -n $line ]] || die "blank history line $line_no"
+    config=''; hash=''; revision=''; extra=''
+    IFS=$'\t' read -r config hash revision extra <<< "$line"
+    [[ -z $extra && -n $config && -n $hash && -n $revision ]] || die "invalid history row $line_no"
+    is_relative_path "$config" || die "invalid history config path on line $line_no"
+    is_sha256 "$hash" || die "invalid history hash on line $line_no"
+    is_revision "$revision" || die "invalid history revision on line $line_no"
+    case $config in
+      "$FISH_CONFIG") id=fish ;;
+      "$WEZTERM_CONFIG") id=wezterm ;;
+      *) die "history contains an unsupported config path: $config" ;;
+    esac
+    [[ -n ${M_CAND[$id]+set} ]] || die "history precedes its manifest entry: $config"
+    ((revision <= M_REV[$id])) || die "history revision is newer than the manifest: $config"
+    key="$config|$hash"
+    [[ -z ${HIST_HASH[$key]+set} ]] || die "duplicate history hash: $config"
+    [[ -z ${HIST_REV["$config|$revision"]+set} ]] || die "duplicate history revision: $config"
+    HIST_HASH[$key]=1
+    HIST_REV["$config|$revision"]=$hash
+  done < "$path"
+
+  [[ $line_no -gt 1 ]] || die 'history has no entries'
+  for id in "${IDS[@]}"; do
+    key="${M_CONFIG[$id]}|${M_CAND[$id]}"
+    [[ -n ${HIST_HASH[$key]+set} ]] || die "candidate is not trusted by history: $id"
+    [[ ${HIST_REV["${M_CONFIG[$id]}|${M_REV[$id]}"]-} == "${M_CAND[$id]}" ]] || die "candidate revision is not trusted by history: $id"
+  done
+}
+
+state_file_identity() {
+  STATE_DEV=$("$BIN_STAT" -c '%d' -- "$STATE_FILE") || return 1
+  STATE_INO=$("$BIN_STAT" -c '%i' -- "$STATE_FILE") || return 1
+}
+
+state_file_safe() {
+  safe_regular_file "$STATE_FILE"
+}
+
+# The /etc/skel seed uses exactly: schema=1, [fish], [wezterm], and each
+# section's mode, origin, applied_hash, candidate_hash, observation fields.
+# The seeded origin is managed state; pending_* sections are updater-only.
+load_state() {
+  local line section='' key value line_no=0 first=1
+  declare -A seen
+
+  if [[ ! -e $STATE_FILE && ! -L $STATE_FILE ]]; then
+    STATE_EXISTS=0
+    for id in "${IDS[@]}"; do
+      MODE[$id]='unmanaged'
+      ORIGIN[$id]='missing'
+      APPLIED[$id]='none'
+      STATE_CAND[$id]=${M_CAND[$id]}
+      OBSERVATION[$id]='missing'
+      PENDING[$id]=0
+      SKIP_PROCESS[$id]=0
+    done
+    return
+  fi
+  [[ ! -L $STATE_FILE ]] || die 'state file is a symlink'
+  state_file_safe || die 'state file is unsafe'
+  STATE_EXISTS=1
+  state_file_identity || die 'cannot inspect state file'
+
+  while IFS= read -r line || [[ -n $line ]]; do
+    ((line_no++))
+    [[ $line != *$'\r'* && -n $line ]] || die "malformed state line $line_no"
+    if ((first)); then
+      [[ $line == 'schema=1' ]] || die 'invalid state schema'
+      seen[schema]=1
+      first=0
+      continue
+    fi
+    if [[ $line =~ ^\[([a-z_]+)\]$ ]]; then
+      section=${BASH_REMATCH[1]}
+      case $section in
+        fish|wezterm|pending_fish|pending_wezterm) ;;
+        *) die "unknown state section: $section" ;;
+      esac
+      [[ -z ${seen[section:$section]+set} ]] || die "duplicate state section: $section"
+      seen[section:$section]=1
+      continue
+    fi
+    [[ -n $section && $line == *=* ]] || die "malformed state line $line_no"
+    key=${line%%=*}
+    value=${line#*=}
+    [[ -n $key && -n $value ]] || die "empty state field on line $line_no"
+    [[ -z ${seen[field:$section:$key]+set} ]] || die "duplicate state field: $section/$key"
+    seen[field:$section:$key]=1
+    case $section in
+      fish|wezterm)
+        case $key in
+          mode|origin|applied_hash|candidate_hash|observation) ;;
+          *) die "unknown state field: $section/$key" ;;
+        esac
+        case $key in
+          mode) MODE[$section]=$value ;;
+          origin) ORIGIN[$section]=$value ;;
+          applied_hash) APPLIED[$section]=$value ;;
+          candidate_hash) STATE_CAND[$section]=$value ;;
+          observation) OBSERVATION[$section]=$value ;;
+        esac
+        ;;
+      pending_fish|pending_wezterm)
+        id=${section#pending_}
+        case $key in
+          target|old_hash|new_hash|temp_path|old_dev|old_inode|old_mode) ;;
+          *) die "unknown state field: $section/$key" ;;
+        esac
+        PENDING[$id]=1
+        case $key in
+          target) P_TARGET[$id]=$value ;;
+          old_hash) P_OLD_HASH[$id]=$value ;;
+          new_hash) P_NEW_HASH[$id]=$value ;;
+          temp_path) P_TEMP[$id]=$value ;;
+          old_dev) P_OLD_DEV[$id]=$value ;;
+          old_inode) P_OLD_INO[$id]=$value ;;
+          old_mode) P_OLD_MODE[$id]=$value ;;
+        esac
+        ;;
+    esac
+  done < "$STATE_FILE"
+  ((first == 0)) || die 'empty state file'
+
+  for id in "${IDS[@]}"; do
+    local field
+    for field in mode origin applied_hash candidate_hash observation; do
+      [[ -n ${seen[field:$id:$field]+set} ]] || die "missing state field: $id/$field"
+    done
+    case ${MODE[$id]} in managed|unmanaged|declined) ;; *) die "invalid state mode: $id" ;; esac
+    case ${ORIGIN[$id]} in adopted|seeded|missing|unrecognized|unsafe|declined|user) ;; *) die "invalid state origin: $id" ;; esac
+    if [[ ${MODE[$id]} == managed ]]; then
+      [[ ${APPLIED[$id]} != none ]] || die "managed state has no applied hash: $id"
+      [[ ${ORIGIN[$id]} == adopted || ${ORIGIN[$id]} == seeded || ${ORIGIN[$id]} == user ]] || die "invalid managed state origin: $id"
+    else
+      [[ ${APPLIED[$id]} == none ]] || die "unmanaged state has an applied hash: $id"
+      if [[ ${MODE[$id]} == declined ]]; then
+        [[ ${ORIGIN[$id]} == declined || ${ORIGIN[$id]} == user ]] || die "invalid declined state origin: $id"
+      else
+        [[ ${ORIGIN[$id]} == missing || ${ORIGIN[$id]} == unrecognized || ${ORIGIN[$id]} == unsafe || ${ORIGIN[$id]} == user ]] || die "invalid unmanaged state origin: $id"
+      fi
+    fi
+    [[ -n ${HIST_HASH["${M_CONFIG[$id]}|${STATE_CAND[$id]}"]+set} ]] || die "untrusted state candidate hash: $id"
+    [[ ${APPLIED[$id]} == none || -n ${HIST_HASH["${M_CONFIG[$id]}|${APPLIED[$id]}"]+set} ]] || die "untrusted state applied hash: $id"
+    case ${OBSERVATION[$id]} in
+      adopted|seeded|current|updated|recovered|reconciled|missing|modified|unrecognized|unsafe|pending|declined|recognized) ;;
+      *) die "invalid state observation: $id" ;;
+    esac
+    PENDING[$id]=${PENDING[$id]:-0}
+    SKIP_PROCESS[$id]=0
+    if ((PENDING[$id])); then
+      [[ ${MODE[$id]} == managed && ${OBSERVATION[$id]} == pending ]] || die "invalid pending state: $id"
+      for field in target old_hash new_hash temp_path old_dev old_inode old_mode; do
+        case $field in
+          target) value=${P_TARGET[$id]-} ;;
+          old_hash) value=${P_OLD_HASH[$id]-} ;;
+          new_hash) value=${P_NEW_HASH[$id]-} ;;
+          temp_path) value=${P_TEMP[$id]-} ;;
+          old_dev) value=${P_OLD_DEV[$id]-} ;;
+          old_inode) value=${P_OLD_INO[$id]-} ;;
+          old_mode) value=${P_OLD_MODE[$id]-} ;;
+        esac
+        [[ -n $value ]] || die "missing pending state field: $id/$field"
+      done
+      [[ ${P_TARGET[$id]} == "$CONFIG_ROOT/${M_CONFIG[$id]}" ]] || die "invalid pending target: $id"
+      [[ ${P_OLD_HASH[$id]} == "${APPLIED[$id]}" && ${P_OLD_HASH[$id]} != "${P_NEW_HASH[$id]}" ]] || die "invalid pending hashes: $id"
+      [[ -n ${HIST_HASH["${M_CONFIG[$id]}|${P_NEW_HASH[$id]}"]+set} ]] || die "untrusted pending hash: $id"
+      [[ ${P_OLD_DEV[$id]} =~ ^[0-9]+$ && ${P_OLD_INO[$id]} =~ ^[0-9]+$ ]] || die "invalid pending identity: $id"
+      [[ ${P_OLD_MODE[$id]} =~ ^[0-7]{3,4}$ ]] || die "invalid pending mode: $id"
+      local target_dir temp_base temp_suffix
+      target_dir=${P_TARGET[$id]%/*}
+      temp_base=${P_TEMP[$id]##*/}
+      [[ ${P_TEMP[$id]} == "$target_dir/.veldmuis-$id."* ]] || die "invalid pending temporary path: $id"
+      temp_suffix=${P_TEMP[$id]#"$target_dir/.veldmuis-$id."}
+      [[ $temp_suffix =~ ^[A-Za-z0-9]{6}$ && $temp_base != */* ]] || die "invalid pending temporary path: $id"
+    fi
+  done
+}
+
+state_recheck() {
+  if ((STATE_EXISTS)); then
+    state_file_safe || return 1
+    [[ $("$BIN_STAT" -c '%d' -- "$STATE_FILE") == "$STATE_DEV" ]] || return 1
+    [[ $("$BIN_STAT" -c '%i' -- "$STATE_FILE") == "$STATE_INO" ]] || return 1
+  else
+    [[ ! -e $STATE_FILE && ! -L $STATE_FILE ]]
+  fi
+}
+
+render_state() {
+  local id
+
+  printf 'schema=1\n'
+  for id in "${IDS[@]}"; do
+    printf '[%s]\n' "$id"
+    printf 'mode=%s\n' "${MODE[$id]}"
+    printf 'origin=%s\n' "${ORIGIN[$id]}"
+    printf 'applied_hash=%s\n' "${APPLIED[$id]}"
+    printf 'candidate_hash=%s\n' "${STATE_CAND[$id]}"
+    printf 'observation=%s\n' "${OBSERVATION[$id]}"
+    if ((PENDING[$id])); then
+      printf '[pending_%s]\n' "$id"
+      printf 'target=%s\n' "${P_TARGET[$id]}"
+      printf 'old_hash=%s\n' "${P_OLD_HASH[$id]}"
+      printf 'new_hash=%s\n' "${P_NEW_HASH[$id]}"
+      printf 'temp_path=%s\n' "${P_TEMP[$id]}"
+      printf 'old_dev=%s\n' "${P_OLD_DEV[$id]}"
+      printf 'old_inode=%s\n' "${P_OLD_INO[$id]}"
+      printf 'old_mode=%s\n' "${P_OLD_MODE[$id]}"
+    fi
+  done
+}
+
+write_state() {
+  local temporary
+
+  state_recheck || die 'state changed while updater was running'
+  temporary=$("$BIN_MKTEMP" "$STATE_DIR/.state.ini.XXXXXX") || die 'cannot create temporary state file'
+  if ! render_state > "$temporary"; then
+    "$BIN_RM" -f -- "$temporary"
+    die 'cannot write temporary state file'
+  fi
+  "$BIN_CHMOD" 600 -- "$temporary" || { "$BIN_RM" -f -- "$temporary"; die 'cannot set state file mode'; }
+  sync_file "$temporary" || { "$BIN_RM" -f -- "$temporary"; die 'cannot sync temporary state file'; }
+  state_recheck || { "$BIN_RM" -f -- "$temporary"; die 'state changed before commit'; }
+  "$BIN_MV" -fT -- "$temporary" "$STATE_FILE" || { "$BIN_RM" -f -- "$temporary"; die 'cannot atomically replace state file'; }
+  sync_directory "$STATE_DIR" || die 'cannot sync state directory'
+  STATE_EXISTS=1
+  state_file_identity || die 'cannot inspect committed state file'
+}
+
+acquire_lock() {
+  local mode
+
+  LOCK_FILE="$STATE_FILE.lock"
+  create_private_lock_file "$LOCK_FILE" || die 'lock file is unsafe'
+  mode=$("$BIN_STAT" -c '%a' -- "$LOCK_FILE") || die 'cannot inspect lock file'
+  (( (8#$mode & 022) == 0 )) || die 'lock file is group/world writable'
+  exec {LOCK_FD}<> "$LOCK_FILE" || die 'cannot open lock file'
+  if ! "$BIN_FLOCK" -n "$LOCK_FD"; then
+    exec {LOCK_FD}>&-
+    LOCK_FD=''
+    die 'another updater is already running'
+  fi
+}
+
+create_private_lock_file() {
+  local path=$1 mode
+
+  if [[ ! -e $path && ! -L $path ]]; then
+    if ! (umask 077; set -C; : > "$path") 2>/dev/null; then
+      [[ -e $path && ! -L $path ]] || return 1
+    fi
+  fi
+  safe_regular_file "$path" || return 1
+  mode=$("$BIN_STAT" -c '%a' -- "$path") || return 1
+  (( (8#$mode & 022) == 0 ))
+}
+
+acquire_target_lock() {
+  local id=$1 target_dir=$2
+
+  TARGET_LOCK_FILE="$target_dir/.veldmuis-$id.lock"
+  create_private_lock_file "$TARGET_LOCK_FILE" || die "target lock is unsafe: $id"
+  exec {TARGET_LOCK_FD}<> "$TARGET_LOCK_FILE" || die "cannot open target lock: $id"
+  if ! "$BIN_FLOCK" -n "$TARGET_LOCK_FD"; then
+    exec {TARGET_LOCK_FD}>&-
+    TARGET_LOCK_FD=''
+    die "target is locked: $id"
+  fi
+}
+
+release_target_lock() {
+  if [[ -n $TARGET_LOCK_FD ]]; then
+    "$BIN_FLOCK" -u "$TARGET_LOCK_FD" 2>/dev/null || true
+    exec {TARGET_LOCK_FD}>&- 2>/dev/null || true
+    TARGET_LOCK_FD=''
+    TARGET_LOCK_FILE=''
+  fi
+}
+
+inspect_target() {
+  local id=$1 path="$CONFIG_ROOT/${M_CONFIG[$1]}" target_dir uid links
+
+  TARGET_KIND=''
+  TARGET_HASH=''
+  TARGET_UID=''
+  TARGET_LINKS=''
+  TARGET_MODE=''
+  TARGET_DEV=''
+  TARGET_INO=''
+  target_dir=${path%/*}
+  if ! validate_user_path_components "$target_dir" 0 target; then
+    TARGET_KIND=unsafe
+    return
+  fi
+  if [[ ! -e $path && ! -L $path ]]; then
+    TARGET_KIND=missing
+    return
+  fi
+  if [[ ! -d $target_dir || -L $target_dir ]]; then
+    TARGET_KIND=unsafe
+    return
+  fi
+  if [[ -L $path || ! -f $path || ! -r $path ]]; then
+    TARGET_KIND=unsafe
+    return
+  fi
+  uid=$("$BIN_STAT" -c '%u' -- "$path") || { TARGET_KIND=unsafe; return; }
+  links=$("$BIN_STAT" -c '%h' -- "$path") || { TARGET_KIND=unsafe; return; }
+  [[ $uid == "$UID_CURRENT" && $links == 1 ]] || { TARGET_KIND=unsafe; return; }
+  TARGET_UID=$uid
+  TARGET_LINKS=$links
+  TARGET_MODE=$("$BIN_STAT" -c '%a' -- "$path") || { TARGET_KIND=unsafe; return; }
+  TARGET_DEV=$("$BIN_STAT" -c '%d' -- "$path") || { TARGET_KIND=unsafe; return; }
+  TARGET_INO=$("$BIN_STAT" -c '%i' -- "$path") || { TARGET_KIND=unsafe; return; }
+  TARGET_HASH=$(hash_file "$path") || { TARGET_KIND=unsafe; return; }
+  if [[ -n ${HIST_HASH["${M_CONFIG[$id]}|$TARGET_HASH"]+set} ]]; then
+    TARGET_KIND=recognized
+  else
+    TARGET_KIND=unrecognized
+  fi
+}
+
+target_matches() {
+  local expected_hash=$1 expected_dev=$2 expected_ino=$3 expected_mode=$4
+
+  [[ $TARGET_KIND == recognized && $TARGET_HASH == "$expected_hash" ]] || return 1
+  [[ $TARGET_DEV == "$expected_dev" && $TARGET_INO == "$expected_ino" ]] || return 1
+  [[ $TARGET_MODE == "$expected_mode" && $TARGET_UID == "$UID_CURRENT" && $TARGET_LINKS == 1 ]]
+}
+
+temp_is_safe() {
+  safe_regular_file "$1"
+}
+
+clear_pending() {
+  local id=$1
+  PENDING[$id]=0
+  unset 'P_TARGET[$id]' 'P_OLD_HASH[$id]' 'P_NEW_HASH[$id]' 'P_TEMP[$id]' 'P_OLD_DEV[$id]' 'P_OLD_INO[$id]' 'P_OLD_MODE[$id]'
+}
+
+recover_pending() {
+  local id=$1 temp_hash target_dir target_observation old_hash temp_conflict=0 target_locked=0
+
+  ((PENDING[$id])) || return 0
+  target_dir="$CONFIG_ROOT/${M_CONFIG[$id]}"
+  target_dir=${target_dir%/*}
+  if validate_user_path_components "$target_dir" 0 target && [[ -d $target_dir && ! -L $target_dir ]]; then
+    acquire_target_lock "$id" "$target_dir"
+    target_locked=1
+  fi
+  old_hash=${P_OLD_HASH[$id]}
+  inspect_target "$id"
+  if [[ $TARGET_KIND == recognized && $TARGET_HASH == "${P_NEW_HASH[$id]}" ]]; then
+    if [[ -e ${P_TEMP[$id]} || -L ${P_TEMP[$id]} ]]; then
+      if temp_is_safe "${P_TEMP[$id]}"; then
+        "$BIN_RM" -f -- "${P_TEMP[$id]}" || die "cannot remove completed update temporary file: $id"
+      fi
+    fi
+    APPLIED[$id]=${P_NEW_HASH[$id]}
+    STATE_CAND[$id]=${M_CAND[$id]}
+    OBSERVATION[$id]=recovered
+    clear_pending "$id"
+    write_state
+    ((target_locked)) && release_target_lock
+    return 0
+  fi
+  if [[ $TARGET_KIND == recognized && $TARGET_HASH == "$old_hash" ]]; then
+    target_dir=${P_TARGET[$id]%/*}
+    if [[ ! -e ${P_TEMP[$id]} && ! -L ${P_TEMP[$id]} ]]; then
+      temp_conflict=1
+    elif temp_is_safe "${P_TEMP[$id]}"; then
+      temp_hash=''
+      temp_hash=$(hash_file "${P_TEMP[$id]}") || temp_conflict=1
+      if [[ $temp_hash != "${P_NEW_HASH[$id]}" ]]; then
+        temp_conflict=1
+      fi
+      "$BIN_RM" -f -- "${P_TEMP[$id]}" || die "cannot remove pending temporary file: $id"
+    else
+      temp_conflict=1
+    fi
+    if ((temp_conflict)); then
+      # A corrupt or missing temp is a conflict, not a reason to wedge the
+      # other target. The next normal run may safely retry from old_hash.
+      clear_pending "$id"
+      OBSERVATION[$id]=modified
+      SKIP_PROCESS[$id]=1
+      write_state
+      ((target_locked)) && release_target_lock
+      return 0
+    fi
+    clear_pending "$id"
+    OBSERVATION[$id]=adopted
+    write_state
+    ((target_locked)) && release_target_lock
+    [[ -d $target_dir && ! -L $target_dir ]] || die "target directory is unsafe: $id"
+    apply_update "$id" "$old_hash" "${M_CAND[$id]}"
+    return 0
+  fi
+  case $TARGET_KIND in
+    missing) target_observation=missing ;;
+    unsafe) target_observation=unsafe ;;
+    unrecognized) target_observation=modified ;;
+    *) target_observation=modified ;;
+  esac
+  OBSERVATION[$id]=$target_observation
+  clear_pending "$id"
+  SKIP_PROCESS[$id]=1
+  write_state
+  ((target_locked)) && release_target_lock
+}
+
+apply_update() {
+  local id=$1 old_hash=$2 new_hash=$3 target template target_dir temporary actual
+  local old_dev old_ino old_mode
+
+  target="$CONFIG_ROOT/${M_CONFIG[$id]}"
+  template=${M_TEMPLATE_FILE[$id]}
+  target_dir=${target%/*}
+  validate_user_path_components "$target_dir" 0 target || die "target directory is unsafe: $id"
+  [[ -d $target_dir && ! -L $target_dir ]] || die "target directory is unsafe: $id"
+  acquire_target_lock "$id" "$target_dir"
+  inspect_target "$id"
+  [[ $TARGET_KIND == recognized && $TARGET_HASH == "$old_hash" ]] || die "target changed before update: $id"
+  old_dev=$TARGET_DEV
+  old_ino=$TARGET_INO
+  old_mode=$TARGET_MODE
+  temporary=$("$BIN_MKTEMP" "$target_dir/.veldmuis-$id.XXXXXX") || die "cannot create temporary config: $id"
+  if ! "$BIN_CAT" -- "$template" > "$temporary"; then
+    "$BIN_RM" -f -- "$temporary"
+    die "cannot write temporary config: $id"
+  fi
+  "$BIN_CHMOD" --reference="$target" -- "$temporary" || { "$BIN_RM" -f -- "$temporary"; die "cannot preserve config mode: $id"; }
+  actual=$(hash_file "$temporary") || { "$BIN_RM" -f -- "$temporary"; die "cannot hash temporary config: $id"; }
+  [[ $actual == "$new_hash" ]] || { "$BIN_RM" -f -- "$temporary"; die "temporary config hash is invalid: $id"; }
+  temp_is_safe "$temporary" || { "$BIN_RM" -f -- "$temporary"; die "temporary config is unsafe: $id"; }
+  sync_file "$temporary" || { "$BIN_RM" -f -- "$temporary"; die "cannot sync temporary config: $id"; }
+
+  PENDING[$id]=1
+  P_TARGET[$id]=$target
+  P_OLD_HASH[$id]=$old_hash
+  P_NEW_HASH[$id]=$new_hash
+  P_TEMP[$id]=$temporary
+  P_OLD_DEV[$id]=$old_dev
+  P_OLD_INO[$id]=$old_ino
+  P_OLD_MODE[$id]=$old_mode
+  OBSERVATION[$id]=pending
+  write_state
+
+  # Bash has no pathname compare-and-swap; the user locks and final lstat/hash
+  # check below protect ordinary updater/user races, not a hostile rename race.
+  inspect_target "$id"
+  target_matches "$old_hash" "$old_dev" "$old_ino" "$old_mode" || die "target changed before replacement: $id"
+  temp_is_safe "$temporary" || die "temporary config changed before replacement: $id"
+  actual=$(hash_file "$temporary") || die "cannot recheck temporary config: $id"
+  [[ $actual == "$new_hash" ]] || die "temporary config changed before replacement: $id"
+  "$BIN_MV" -fT -- "$temporary" "$target" || die "cannot atomically replace config: $id"
+  sync_directory "$target_dir" || die "cannot sync target directory: $id"
+
+  APPLIED[$id]=$new_hash
+  STATE_CAND[$id]=${M_CAND[$id]}
+  OBSERVATION[$id]=updated
+  clear_pending "$id"
+  write_state
+  release_target_lock
+}
+
+enroll_without_state() {
+  local id
+
+  for id in "${IDS[@]}"; do
+    inspect_target "$id"
+    STATE_CAND[$id]=${M_CAND[$id]}
+    ENROLL_UPDATE[$id]=0
+    case $TARGET_KIND in
+      missing)
+        MODE[$id]=unmanaged; ORIGIN[$id]=missing; APPLIED[$id]=none; OBSERVATION[$id]=missing
+        ;;
+      unsafe)
+        MODE[$id]=unmanaged; ORIGIN[$id]=unsafe; APPLIED[$id]=none; OBSERVATION[$id]=unsafe
+        ;;
+      unrecognized)
+        MODE[$id]=unmanaged; ORIGIN[$id]=unrecognized; APPLIED[$id]=none; OBSERVATION[$id]=unrecognized
+        ;;
+      recognized)
+        MODE[$id]=managed; ORIGIN[$id]=adopted; APPLIED[$id]=$TARGET_HASH; OBSERVATION[$id]=adopted
+        if [[ $TARGET_HASH != "${M_CAND[$id]}" ]]; then
+          ENROLL_UPDATE[$id]=1
+        fi
+        ;;
+      *) die "internal target classification error: $id" ;;
+    esac
+    PENDING[$id]=0
+  done
+  write_state
+  for id in "${IDS[@]}"; do
+    if ((ENROLL_UPDATE[$id])); then
+      apply_update "$id" "${APPLIED[$id]}" "${M_CAND[$id]}"
+    fi
+  done
+}
+
+process_existing_state() {
+  local id=$1
+
+  STATE_CAND[$id]=${M_CAND[$id]}
+  case ${MODE[$id]} in
+    unmanaged)
+      inspect_target "$id"
+      case $TARGET_KIND in
+        missing) OBSERVATION[$id]=missing ;;
+        unsafe) OBSERVATION[$id]=unsafe ;;
+        unrecognized) OBSERVATION[$id]=unrecognized ;;
+        recognized) OBSERVATION[$id]=recognized ;;
+      esac
+      ;;
+    declined)
+      OBSERVATION[$id]=declined
+      ;;
+      managed)
+        inspect_target "$id"
+        case $TARGET_KIND in
+        missing) OBSERVATION[$id]=missing ;;
+        unsafe) OBSERVATION[$id]=unsafe ;;
+        recognized)
+          if [[ $TARGET_HASH == "${M_CAND[$id]}" ]]; then
+            if [[ $TARGET_HASH == "${APPLIED[$id]}" ]]; then
+              OBSERVATION[$id]=current
+            else
+              APPLIED[$id]=${M_CAND[$id]}
+              OBSERVATION[$id]=reconciled
+            fi
+          elif [[ $TARGET_HASH != "${APPLIED[$id]}" ]]; then
+            OBSERVATION[$id]=modified
+          else
+            apply_update "$id" "${APPLIED[$id]}" "${M_CAND[$id]}"
+          fi
+          ;;
+        unrecognized) OBSERVATION[$id]=modified ;;
+        *) die "internal target classification error: $id" ;;
+      esac
+      ;;
+    *) die "invalid loaded mode: $id" ;;
+  esac
+}
+
+cleanup() {
+  release_target_lock
+  if [[ -n $LOCK_FD ]]; then
+    "$BIN_FLOCK" -u "$LOCK_FD" 2>/dev/null || true
+    exec {LOCK_FD}>&- 2>/dev/null || true
+  fi
+}
+
+configure_user_paths() {
+  [[ -n ${HOME:-} ]] || die 'HOME is not set'
+  is_absolute_path "$HOME" || die 'HOME must be absolute'
+  [[ -d $HOME && ! -L $HOME ]] || die 'HOME is not a safe directory'
+  if [[ -n ${XDG_CONFIG_HOME+x} ]]; then
+    is_absolute_path "$XDG_CONFIG_HOME" || die 'XDG_CONFIG_HOME must be absolute'
+    CONFIG_ROOT=$XDG_CONFIG_HOME
+  else
+    CONFIG_ROOT="$HOME/.config"
+  fi
+  if [[ -e $CONFIG_ROOT || -L $CONFIG_ROOT ]]; then
+    [[ ! -L $CONFIG_ROOT && -d $CONFIG_ROOT ]] || die 'XDG config directory is not safe'
+  fi
+  validate_user_path_components "$CONFIG_ROOT" 0 config || die 'XDG config path has unsafe parents'
+  if [[ -n ${XDG_STATE_HOME+x} ]]; then
+    is_absolute_path "$XDG_STATE_HOME" || die 'XDG_STATE_HOME must be absolute'
+    STATE_DIR_BASE=$XDG_STATE_HOME
+  else
+    STATE_DIR_BASE="$HOME/.local/state"
+  fi
+  is_absolute_path "$STATE_DIR_BASE" || die 'state directory must be absolute'
+  if [[ -e $STATE_DIR_BASE || -L $STATE_DIR_BASE ]]; then
+    validate_user_path_components "$STATE_DIR_BASE" 0 state-base || die 'state base has unsafe parents'
+  fi
+}
+
+run_engine() {
+  local root=$1 test_mode=$2 id
+
+  ((UID_CURRENT != 0)) || die 'must not run as root'
+  TEST_ROOT_MODE=$test_mode
+  ROOT=$root
+  is_absolute_path "$ROOT" || die 'defaults root must be absolute'
+  configure_user_paths
+  validate_package_root
+
+  load_manifest
+  load_history
+
+  STATE_DIR="$STATE_DIR_BASE/veldmuis/user-defaults"
+  STATE_FILE="$STATE_DIR/state.ini"
+  ensure_dir_chain "$STATE_DIR"
+  acquire_lock
+  trap cleanup EXIT
+
+  load_state
+  if ((STATE_EXISTS)); then
+    for id in "${IDS[@]}"; do
+      recover_pending "$id"
+    done
+    for id in "${IDS[@]}"; do
+      if ((SKIP_PROCESS[$id])); then
+        continue
+      fi
+      process_existing_state "$id"
+    done
+    write_state
+  else
+    enroll_without_state
+  fi
+}
+
+main() {
+  run_engine "$PRODUCTION_ROOT" 0
+}
+
+veldmuis_user_defaults_test_run() {
+  [[ $# -eq 1 ]] || return 2
+  run_engine "$1" 1
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  main "$@"
+fi
