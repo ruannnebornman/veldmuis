@@ -1,6 +1,6 @@
 pkgname=veldmuis-calamares-config
 pkgver=20260308
-pkgrel=47
+pkgrel=48
 pkgdesc="Veldmuis Calamares configuration and bootstrap scripts"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -33,7 +33,7 @@ _payload_sha256sums=(
   "f806f0a882d022d9e05ac2ad9f807a626abd8c6b205b8dd1c3fc03e7ca720282  modules/locale.conf"
   "b2d927beede0c097c51e2b86dc986ad3b892b0852072837b1fbd101525d37433  modules/partition.conf"
   "6ce527f16f583c0b45c69d1a58f76cf014264392ffa122b50385cab482eab06c  modules/services-systemd.conf"
-  "4732765b6efe628548371d2682cb411faa2aaa7f2d50452372c6cbb3f76bb853  modules/users.conf"
+  "6835cb9c4b2b2849a91d2288f582bf9d2ffb6caf3727ef1dc9413ef5a49b8414  modules/users.conf"
   "b2894e23003e8631071e36ef2c06e47c6f7e55934732eb9aa6496fea4c1ba082  modules/veldmuis-boot-finalize.conf"
   "d763bcfba44f4e1ec07180aba26f2c78dcaec31a162017327f8f90061f9d0d5b  modules/veldmuis-bootstrap.conf"
   "1bb6f23540d98894ee7a55be77754da4faa71a0a4b412dd68f2ece8424ad9603  modules/welcome.conf"
