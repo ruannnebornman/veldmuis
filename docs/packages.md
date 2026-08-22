@@ -173,7 +173,7 @@ syncthing
 ```
 
 `veldmuis-sync` also installs Syncthing user-service integration, a setup
-helper, and Firefox policy for the local Syncthing UI.
+helper, and a one-time editable Firefox bookmark for the local Syncthing UI.
 
 `veldmuis-development`:
 
