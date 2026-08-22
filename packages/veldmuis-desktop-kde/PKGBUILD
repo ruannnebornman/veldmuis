@@ -1,12 +1,16 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=14
-pkgdesc="KDE Plasma desktop metapackage for Veldmuis Linux"
+pkgrel=17
+pkgdesc="KDE Plasma desktop package for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
 license=("MIT")
+# Increment independently when a managed user-default template changes.
+veldmuis_user_defaults_revision=1
+_source_root="${PWD}"
 depends=(
   "veldmuis-base"
+  "veldmuis-branding"
   "plasma-desktop"
   "plasma-workspace"
   "systemsettings"
@@ -22,7 +26,9 @@ depends=(
   "kde-gtk-config"
   "powerdevil"
   "power-profiles-daemon"
-  "konsole"
+  "wezterm"
+  "fish"
+  "atuin"
   "firefox"
   "dolphin"
   "ark"
@@ -50,7 +56,126 @@ depends=(
   "breeze"
   "breeze-gtk"
 )
+source=(
+  "config.fish"
+  "wezterm.lua"
+  "veldmuis-user-defaults-update"
+  "veldmuis-user-defaults-update.desktop"
+  "user-defaults-history.tsv"
+)
+sha256sums=(
+  "b1334e5dd9cfb14f3d588f57a940204a5d7b0a5d60e512e6f22be8a6003c579c"
+  "c8ce0765e4a13c5f828ea140526c14416ad7651f9dccd5749289941fad4b16d4"
+  "64c36fa9744bab566725059aa3efa55a4eab72e5bd6a08ca93c4f090c960c405"
+  "8ecb87dcf1719f7171cc612c38082cd39fb4f5c6491579c64227f897cd5cb9ea"
+  "2b4d3b631908b88d8b16923cc31bb92969a650a0f1402a56fc5fd23631ccc543"
+)
 
 package() {
-  :
+  local defaults_root="${pkgdir}/usr/share/veldmuis/user-defaults/v1"
+  local fish_hash wezterm_hash actual staged_actual expected source_file staged_file index
+  local config_path history_hash history_revision history_extra line_no=0
+  local history_key
+  local fish_history_found=0 wezterm_history_found=0
+  declare -A history_revisions=() history_hashes=()
+  local -a package_sources=(
+    "config.fish"
+    "wezterm.lua"
+    "veldmuis-user-defaults-update"
+    "veldmuis-user-defaults-update.desktop"
+    "user-defaults-history.tsv"
+  )
+
+  # makepkg stages local sources as symlinks; validate originals and staged hashes.
+  for index in "${!package_sources[@]}"; do
+    source_file="${package_sources[$index]}"
+    staged_file="${srcdir}/${source_file}"
+    source_file="${_source_root}/${source_file}"
+    [[ ! -L "${source_file}" && -f "${source_file}" ]] || {
+      printf 'invalid package source: %s\n' "${source_file}" >&2
+      return 1
+    }
+    actual=$(sha256sum -- "${source_file}") || return 1
+    actual=${actual%% *}
+    expected="${sha256sums[$index]}"
+    [[ ${actual} == "${expected}" ]] || {
+      printf 'package source checksum mismatch: %s\n' "${source_file}" >&2
+      return 1
+    }
+    [[ -f "${staged_file}" ]] || return 1
+    staged_actual=$(sha256sum -- "${staged_file}") || return 1
+    [[ ${staged_actual%% *} == "${actual}" ]] || return 1
+    if ((index == 0)); then
+      fish_hash=${actual}
+    elif ((index == 1)); then
+      wezterm_hash=${actual}
+    fi
+  done
+
+  while IFS= read -r source_file || [[ -n "${source_file}" ]]; do
+    line_no=$((line_no + 1))
+    [[ "${source_file}" != *$'\r'* && -n "${source_file}" ]] || return 1
+    if ((line_no == 1)); then
+      [[ "${source_file}" == $'config_path\tsha256\trevision' ]] || return 1
+      continue
+    fi
+    config_path=''; history_hash=''; history_revision=''; history_extra=''
+    IFS=$'\t' read -r config_path history_hash history_revision history_extra <<< "${source_file}"
+    [[ -z "${history_extra}" && -n "${config_path}" && -n "${history_hash}" && -n "${history_revision}" ]] || return 1
+    [[ "${config_path}" == fish/config.fish || "${config_path}" == wezterm/wezterm.lua ]] || return 1
+    [[ "${history_hash}" =~ ^[0-9a-f]{64} && "${history_revision}" =~ ^[1-9][0-9]{0,8}$ ]] || return 1
+    ((history_revision <= veldmuis_user_defaults_revision)) || return 1
+    history_key="${config_path}|${history_revision}"
+    [[ -z "${history_revisions[$history_key]+set}" ]] || return 1
+    history_revisions[$history_key]=1
+    history_key="${config_path}|${history_hash}"
+    [[ -z "${history_hashes[$history_key]+set}" ]] || return 1
+    history_hashes[$history_key]=1
+    if [[ "${config_path}" == fish/config.fish && "${history_hash}" == "${fish_hash}" && "${history_revision}" == "${veldmuis_user_defaults_revision}" ]]; then
+      fish_history_found=1
+    fi
+    if [[ "${config_path}" == wezterm/wezterm.lua && "${history_hash}" == "${wezterm_hash}" && "${history_revision}" == "${veldmuis_user_defaults_revision}" ]]; then
+      wezterm_history_found=1
+    fi
+  done < "${srcdir}/user-defaults-history.tsv"
+  ((line_no > 1 && fish_history_found && wezterm_history_found)) || return 1
+
+  install -Dm644 "${srcdir}/config.fish" \
+    "${pkgdir}/etc/skel/.config/fish/config.fish"
+  install -Dm644 "${srcdir}/wezterm.lua" \
+    "${pkgdir}/etc/skel/.config/wezterm/wezterm.lua"
+  install -Dm755 "${srcdir}/veldmuis-user-defaults-update" \
+    "${pkgdir}/usr/lib/veldmuis/veldmuis-user-defaults-update"
+  install -Dm644 "${srcdir}/veldmuis-user-defaults-update.desktop" \
+    "${pkgdir}/etc/xdg/autostart/veldmuis-user-defaults-update.desktop"
+  install -Dm644 "${srcdir}/config.fish" \
+    "${defaults_root}/templates/fish/config.fish"
+  install -Dm644 "${srcdir}/wezterm.lua" \
+    "${defaults_root}/templates/wezterm/wezterm.lua"
+  install -d "${defaults_root}"
+  printf '%s\n' \
+    $'config_path\ttemplate_path\tcandidate_sha256\trevision' \
+    "fish/config.fish"$'\t'"templates/fish/config.fish"$'\t'"${fish_hash}"$'\t'"${veldmuis_user_defaults_revision}" \
+    "wezterm/wezterm.lua"$'\t'"templates/wezterm/wezterm.lua"$'\t'"${wezterm_hash}"$'\t'"${veldmuis_user_defaults_revision}" \
+    > "${defaults_root}/manifest.tsv"
+  install -Dm644 "${srcdir}/user-defaults-history.tsv" \
+    "${defaults_root}/history.tsv"
+  install -d -m700 "${pkgdir}/etc/skel/.local/state/veldmuis/user-defaults"
+  printf '%s\n' \
+    'schema=1' \
+    '[fish]' \
+    'mode=managed' \
+    'origin=seeded' \
+    "applied_hash=${fish_hash}" \
+    "candidate_hash=${fish_hash}" \
+    'observation=seeded' \
+    '[wezterm]' \
+    'mode=managed' \
+    'origin=seeded' \
+    "applied_hash=${wezterm_hash}" \
+    "candidate_hash=${wezterm_hash}" \
+    'observation=seeded' \
+    > "${pkgdir}/etc/skel/.local/state/veldmuis/user-defaults/state.ini"
+  chmod 600 "${pkgdir}/etc/skel/.local/state/veldmuis/user-defaults/state.ini"
+  install -d "${pkgdir}/etc/skel/.local/bin"
 }
