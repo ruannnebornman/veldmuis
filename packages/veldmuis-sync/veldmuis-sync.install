@@ -3,6 +3,10 @@
 hosts_path="etc/hosts"
 hosts_alias="syncthing.localhost"
 hosts_line="127.0.0.1 ${hosts_alias}"
+firefox_distribution_path="usr/lib/firefox/distribution/distribution.ini"
+firefox_bookmarks_path="usr/share/veldmuis/veldmuis-sync-firefox-bookmarks.ini"
+firefox_bookmarks_marker="# Veldmuis one-time Firefox bookmark"
+firefox_bookmarks_pref="bookmarks.initialized.pref=distribution.veldmuis.bookmarksProcessed"
 
 ensure_hosts_alias() {
   [ -r "${hosts_path}" ] || return 0
@@ -24,8 +28,25 @@ ensure_hosts_alias() {
   printf '\n%s\n' "${hosts_line}" >> "${hosts_path}"
 }
 
+install_firefox_bookmark() {
+  [ -r "${firefox_distribution_path}" ] || return 0
+  [ -r "${firefox_bookmarks_path}" ] || return 0
+  grep -Fq "${firefox_bookmarks_marker}" "${firefox_distribution_path}" && return 0
+
+  grep -q '^\[Global\]$' "${firefox_distribution_path}" || return 0
+  if grep -q '^bookmarks\.initialized\.pref=' "${firefox_distribution_path}"; then
+    return 0
+  fi
+
+  sed -i "/^\[Global\]\$/a\\${firefox_bookmarks_pref}" \
+    "${firefox_distribution_path}" || return 1
+  printf '\n%s\n' "${firefox_bookmarks_marker}" >> "${firefox_distribution_path}"
+  cat "${firefox_bookmarks_path}" >> "${firefox_distribution_path}"
+}
+
 post_install() {
   ensure_hosts_alias
+  install_firefox_bookmark
 }
 
 post_upgrade() {

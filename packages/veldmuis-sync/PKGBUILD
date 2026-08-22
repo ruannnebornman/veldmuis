@@ -1,6 +1,6 @@
 pkgname=veldmuis-sync
 pkgver=20260628
-pkgrel=3
+pkgrel=4
 pkgdesc="Optional file synchronization metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -8,22 +8,23 @@ license=("MIT")
 install="${pkgname}.install"
 depends=(
   "bash"
+  "firefox"
   "syncthing"
 )
 source=(
-  "firefox-policies.json"
+  "firefox-bookmarks.ini"
   "veldmuis-syncthing.conf"
   "veldmuis-syncthing-setup"
 )
 sha256sums=(
-  "6f736a0970bc2d80920a860442d5076b5617de10f7b7c5fb95b48597859f64af"
+  "01b37c36099dd902d9254e4b9ede9def336e71ac2f3eb36dedafe882b37d90d2"
   "792f44575c0cf41d6ee6e769d64781c23f958315c49f4eed397f6af5640d0da3"
   "6f32b48b876c63529020832fb8f70b5a0b84187277a9e9509e3930d387c73e6d"
 )
 
 package() {
-  install -Dm644 "${srcdir}/firefox-policies.json" \
-    "${pkgdir}/usr/lib/firefox/distribution/policies.json"
+  install -Dm644 "${srcdir}/firefox-bookmarks.ini" \
+    "${pkgdir}/usr/share/veldmuis/veldmuis-sync-firefox-bookmarks.ini"
   install -Dm755 "${srcdir}/veldmuis-syncthing-setup" \
     "${pkgdir}/usr/bin/veldmuis-syncthing-setup"
   install -Dm644 "${srcdir}/veldmuis-syncthing.conf" \
