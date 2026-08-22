@@ -8,6 +8,7 @@ lock_file="${VELDMUIS_AUR_LOCK_FILE:-${script_dir}/aur-packages.lock}"
 resolved_file="${VELDMUIS_AUR_RESOLVED_REFS_FILE:-}"
 report_file="${VELDMUIS_AUR_UPDATE_REPORT:-}"
 work_root="${VELDMUIS_AUR_AUDIT_ROOT:-${RUNNER_TEMP:-/tmp}/veldmuis-aur-audit}"
+aur_repo_root="${VELDMUIS_AUR_REPO_ROOT:-}"
 
 declare -A accepted_refs=()
 declare -A candidate_refs=()
@@ -26,7 +27,8 @@ Usage:
   audit-aur-update.sh --resolved-refs PATH --report PATH [--work-root PATH]
 
 The report compares resolved AUR commits with the accepted lock and classifies
-recipe or privileged-package changes as high risk.
+recipe or privileged-package changes as high risk. NVIDIA candidates receive a
+low classification only for an allowlisted metadata-only PKGBUILD diff.
 EOF
 }
 
@@ -39,7 +41,9 @@ write_output() {
 }
 
 set_highest_risk() {
-  [[ "$1" == high ]] && highest_risk=high
+  if [[ "$1" == high ]]; then
+    highest_risk=high
+  fi
 }
 
 read_refs() {
@@ -64,7 +68,117 @@ read_refs() {
 }
 
 aur_url() {
-  printf 'https://aur.archlinux.org/%s.git' "$1"
+  if [[ -n "${aur_repo_root}" ]]; then
+    printf '%s/%s' "${aur_repo_root%/}" "$1"
+  else
+    printf 'https://aur.archlinux.org/%s.git' "$1"
+  fi
+}
+
+is_nvidia_package_base() {
+  [[ "${1,,}" == *nvidia* ]]
+}
+
+is_safe_metadata_assignment() {
+  local line="$1"
+  local command_substitution=$'\x24('
+  local backtick=$'\x60'
+
+  [[ "${line}" =~ ^[[:space:]]*(pkgver|pkgrel|epoch|source|sha256sums|b2sums|md5sums|validpgpkeys)(\[[^]]+\])?[[:space:]]*= ]] || return 1
+  case "${line}" in
+    *"${command_substitution}"*|*"${backtick}"*|*';'*|*'|'*|*'&'*|*'<'*|*'>'*)
+      return 1
+      ;;
+  esac
+}
+
+is_safe_metadata_continuation() {
+  local line="$1"
+  local command_substitution=$'\x24('
+  local backtick=$'\x60'
+
+  case "${line}" in
+    *"${command_substitution}"*|*"${backtick}"*|*';'*|*'|'*|*'&'*|*'<'*|*'>'*)
+      return 1
+      ;;
+  esac
+
+  [[ "${line}" =~ ^[[:space:]]*\" ]] ||
+    [[ "${line}" =~ ^[[:space:]]*\' ]] ||
+    [[ "${line}" =~ ^[[:space:]]*\)[[:space:]]*$ ]] ||
+    [[ "${line}" =~ ^[[:space:]]*\\[[:space:]]*$ ]]
+}
+
+metadata_context_after_line() {
+  local line="$1"
+  local context="$2"
+
+  if [[ "${line}" =~ ^[[:space:]]*(source|sha256sums|b2sums|md5sums|validpgpkeys)(\[[^]]+\])?[[:space:]]*=.*\([[:space:]]*$ ]]; then
+    printf 'array'
+    return 0
+  fi
+
+  if [[ "${line}" =~ ^[[:space:]]*[[:alpha:]_][[:alnum:]_]*= ]]; then
+    printf '%s' ''
+    return 0
+  fi
+
+  if [[ -n "${context}" && "${line}" =~ ^[[:space:]]*\)[[:space:]]*$ ]]; then
+    printf '%s' ''
+    return 0
+  fi
+
+  printf '%s' "${context}"
+}
+
+nvidia_metadata_diff_is_safe() {
+  local repo_path="$1"
+  local old_ref="$2"
+  local new_ref="$3"
+  local line content old_context new_context
+  local -a diff_lines=()
+
+  mapfile -t diff_lines < <(
+    git -C "${repo_path}" diff --no-ext-diff --no-renames --unified=3 \
+      "${old_ref}" "${new_ref}" -- PKGBUILD
+  )
+  ((${#diff_lines[@]} > 0)) || return 1
+
+  old_context=''
+  new_context=''
+  for line in "${diff_lines[@]}"; do
+    case "${line}" in
+      'diff --git '*|'index '*|'+++ '*|'--- '*|'@@ '*)
+        old_context=''
+        new_context=''
+        continue
+        ;;
+      +*)
+        content="${line:1}"
+        if ! is_safe_metadata_assignment "${content}" &&
+          { [[ -z "${new_context}" ]] || ! is_safe_metadata_continuation "${content}"; }; then
+          return 1
+        fi
+        new_context="$(metadata_context_after_line "${content}" "${new_context}")"
+        ;;
+      -*)
+        content="${line:1}"
+        if ! is_safe_metadata_assignment "${content}" &&
+          { [[ -z "${old_context}" ]] || ! is_safe_metadata_continuation "${content}"; }; then
+          return 1
+        fi
+        old_context="$(metadata_context_after_line "${content}" "${old_context}")"
+        ;;
+      ' '*|\\\ No\ newline\ at\ end\ of\ file)
+        content="${line:1}"
+        old_context="$(metadata_context_after_line "${content}" "${old_context}")"
+        new_context="$(metadata_context_after_line "${content}" "${new_context}")"
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  done
 }
 
 classify_change() {
@@ -77,6 +191,8 @@ classify_change() {
   local reason
   local -a changed_paths=()
   local -a risk_reasons=()
+  local nvidia_package=0
+  local routine_metadata_change=0
 
   mapfile -t changed_paths < <(
     git -C "${repo_path}" diff --name-only "${old_ref}" "${new_ref}"
@@ -86,18 +202,33 @@ classify_change() {
     updates_available=true
   fi
 
-  if [[ "${package_base}" == *nvidia* ]]; then
-    package_risk=high
-    risk_reasons+=("proprietary NVIDIA package input requires review")
+  if is_nvidia_package_base "${package_base}"; then
+    nvidia_package=1
+    if nvidia_metadata_diff_is_safe "${repo_path}" "${old_ref}" "${new_ref}"; then
+      routine_metadata_change=1
+    else
+      package_risk=high
+      risk_reasons+=("NVIDIA update changes more than approved metadata")
+    fi
   fi
 
   for path in "${changed_paths[@]}"; do
     case "${path}" in
-      PKGBUILD|*.install|*.hook|*.service|*systemd*|*pacman*|*.patch|*.run)
+      PKGBUILD)
+        if ((nvidia_package == 0 || routine_metadata_change == 0)); then
+          package_risk=high
+          risk_reasons+=("build recipe changed outside the approved metadata-only policy")
+        fi
+        ;;
+      *.install|*.hook|*.service|*systemd*|*pacman*|*.patch|*.run)
         package_risk=high
         risk_reasons+=("privileged or executable build input changed: ${path}")
         ;;
       *)
+        if ((nvidia_package == 1)); then
+          package_risk=high
+          risk_reasons+=("NVIDIA update changed an unapproved input: ${path}")
+        fi
         ;;
     esac
   done
@@ -113,6 +244,9 @@ classify_change() {
     printf 'Accepted ref: %s\n' "${old_ref}"
     printf 'Candidate ref: %s\n' "${new_ref}"
     printf 'Risk: %s\n' "${package_risk}"
+    if ((routine_metadata_change)) && [[ "${package_risk}" == low ]]; then
+      printf 'Classification: automated metadata-only NVIDIA policy\n'
+    fi
     if ((${#risk_reasons[@]} > 0)); then
       printf 'Risk reasons:\n'
       for reason in "${risk_reasons[@]}"; do
@@ -177,7 +311,7 @@ main() {
     printf '# AUR Update Candidate\n\n'
     printf 'Generated at: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'Accepted lock: %s\n' "${lock_file#"${repo_root}"/}"
-    printf 'Risk policy: recipe, executable, privileged, and proprietary NVIDIA changes require review.\n'
+    printf 'Risk policy: routine NVIDIA metadata-only changes may pass automated checks; recipe, executable, privileged, and other unapproved changes require review.\n'
   } >"${report_file}"
 
   for package_base in "${package_bases[@]}"; do
@@ -206,4 +340,6 @@ main() {
   fi
 }
 
-main "$@"
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  main "$@"
+fi
