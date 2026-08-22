@@ -42,6 +42,21 @@ the package repo build.
 9. `development/restore-known-good-nvidia-packages.sh` restores that cache when
    the active AUR build path cannot produce a complete package set.
 
+## Update Review Policy
+
+The scheduled AUR review can move a routine update through the automated path
+when the candidate changes only an allowlisted version, source, checksum, or
+signing-key metadata assignment and its history remains a descendant of the
+accepted lock. The build, package-set, license, payload-scan, signature, and
+repository checks still run for that candidate.
+
+Changes to build logic, dependencies, install or service files, privileged
+paths, other package inputs, non-descendant history, or scan results remain on
+the manual review path. This classification describes the changed recipe
+surface only; it does not assert that an AUR source is trustworthy. The signed
+package repository refresh remains separately controlled by the normal
+protected integration workflow.
+
 The signing key must never be passed to either package build container. The
 signing stage may read completed package artifacts but must not execute
 PKGBUILDs or have network access.
