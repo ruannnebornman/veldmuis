@@ -73,6 +73,7 @@ run_as_test_user() {
 run_updater() {
   if [[ $CONFIG_MODE == custom ]]; then
     run_as_test_user \
+      -u XDG_CONFIG_HOME \
       HOME="$CASE_HOME" \
       XDG_STATE_HOME="$STATE_BASE" \
       XDG_CONFIG_HOME="$CUSTOM_CONFIG_ROOT" \
@@ -80,6 +81,7 @@ run_updater() {
        /bin/bash -c "source \"\$1\"; veldmuis_user_defaults_test_run \"\$2\"" _ "$RUN_UPDATER" "$DEFAULTS_ROOT"
   else
     run_as_test_user \
+      -u XDG_CONFIG_HOME \
       HOME="$CASE_HOME" \
       XDG_STATE_HOME="$STATE_BASE" \
       PATH=/nonexistent \
