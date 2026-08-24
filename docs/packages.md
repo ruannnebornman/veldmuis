@@ -36,6 +36,7 @@ veldmuis-common
 veldmuis-boot
 veldmuis-displaymanager
 veldmuis-desktop-kde
+veldmuis-terminal
 veldmuis-multimedia
 veldmuis-branding
 ```
@@ -140,6 +141,19 @@ strawberry
 ```
 
 It also installs the Veldmuis `mpv` configuration.
+
+## Terminal
+
+`veldmuis-terminal` is an independently installable terminal stack. It provides:
+
+- WezTerm.
+- Fish and Atuin.
+- Seeded Fish and WezTerm configuration under `/etc/skel`.
+- The managed user-defaults updater and its versioned templates.
+
+The default `veldmuis-desktop` target depends on this package, but the KDE
+desktop package does not. This allows terminal defaults to be installed or
+updated independently of the larger desktop application set.
 
 ## Branding
 

@@ -4,10 +4,11 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
-package_dir="${repo_root}/packages/veldmuis-desktop-kde"
+package_dir="${repo_root}/packages/veldmuis-terminal"
 temp_root="$(mktemp -d -t veldmuis-managed-defaults-package.XXXXXX)"
 pkgdir="${temp_root}/pkg"
-history_rel="packages/veldmuis-desktop-kde/user-defaults-history.tsv"
+history_rel="packages/veldmuis-terminal/user-defaults-history.tsv"
+legacy_history_rel="packages/veldmuis-desktop-kde/user-defaults-history.tsv"
 
 cleanup() {
   rm -rf -- "${temp_root}"
@@ -21,7 +22,7 @@ expected_wezterm_hash=${expected_wezterm_hash%% *}
 
 (
   cd "${package_dir}"
-  # shellcheck source=packages/veldmuis-desktop-kde/PKGBUILD
+  # shellcheck source=packages/veldmuis-terminal/PKGBUILD
   source ./PKGBUILD
   srcdir="${package_dir}" package
 )
@@ -69,7 +70,9 @@ base_ref="${GITHUB_BASE_REF:-main}"
 previous_history="${temp_root}/previous-history.tsv"
 history_header=$'config_path\tsha256\trevision'
 if git -C "${repo_root}" show "origin/${base_ref}:${history_rel}" > "${previous_history}" 2>/dev/null || \
-   git -C "${repo_root}" show "${base_ref}:${history_rel}" > "${previous_history}" 2>/dev/null; then
+   git -C "${repo_root}" show "${base_ref}:${history_rel}" > "${previous_history}" 2>/dev/null || \
+   git -C "${repo_root}" show "origin/${base_ref}:${legacy_history_rel}" > "${previous_history}" 2>/dev/null || \
+   git -C "${repo_root}" show "${base_ref}:${legacy_history_rel}" > "${previous_history}" 2>/dev/null; then
   while IFS= read -r history_line || [[ -n "${history_line}" ]]; do
     [[ -n "${history_line}" && "${history_line}" != "${history_header}" ]] || continue
     grep -Fqx "${history_line}" "${package_dir}/user-defaults-history.tsv" || {
