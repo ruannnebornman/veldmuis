@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=18
+pkgrel=19
 pkgdesc="KDE Plasma desktop package for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -23,7 +23,6 @@ depends=(
   "kde-gtk-config"
   "powerdevil"
   "power-profiles-daemon"
-  "konsole"
   "firefox"
   "dolphin"
   "ark"
