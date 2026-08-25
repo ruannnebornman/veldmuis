@@ -24,7 +24,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       BUILDER_USER: builder
       BUILDER_HOME: /home/builder
-      GNUPGHOME: ${{ runner.temp }}/veldmuis-candidate-gnupg
+      GNUPGHOME: /home/builder/.gnupg
       VELDMUIS_AUR_ENABLE_FALLBACK: false
       VELDMUIS_AUR_UPDATE_GROUP: nvidia-580xx
       VELDMUIS_AUR_UPDATE_BRANCH: automation/aur-update/nvidia-580xx
@@ -140,11 +140,13 @@ jobs:
         run: |
           set -euo pipefail
           evidence_report="${RUNNER_TEMP}/veldmuis-aur-candidate-evidence.md"
-          printf '# Review base commit\n\n%s\n' "${REVIEW_BASE_SHA}" > "${evidence_report}"
-          printf '\n---\n\n' >> "${evidence_report}"
-          cat "${SCAN_REPORT}" >> "${evidence_report}"
-          printf '\n---\n\n' >> "${evidence_report}"
-          cat "${AUDIT_REPORT}" >> "${evidence_report}"
+          {
+            printf '# Review base commit\n\n%s\n' "${REVIEW_BASE_SHA}"
+            printf '\n---\n\n'
+            cat "${SCAN_REPORT}"
+            printf '\n---\n\n'
+            cat "${AUDIT_REPORT}"
+          } > "${evidence_report}"
           risk=low
           [[ "${{ steps.audit.outputs.risk }}" == high || "${{ steps.scan.outputs.risk }}" == high ]] && risk=high
           printf '\nfinal_risk=%s\n' "${risk}" >> "${GITHUB_OUTPUT}"

@@ -384,6 +384,7 @@ prepare_builder_image() {
   printf '%s\n' \
     "FROM ${builder_base_digest}" \
     'RUN sed -i '\''/^\#\[multilib\]/{s/^#//; n; s/^#//;}'\'' /etc/pacman.conf' \
+    'RUN if ! grep -q '\''^\[multilib\]'\'' /etc/pacman.conf; then printf '\''\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n'\'' >> /etc/pacman.conf; fi && grep -q '\''^\[multilib\]'\'' /etc/pacman.conf' \
     "RUN pacman -Syu --noconfirm --needed ${package_list} && pacman -Scc --noconfirm" \
     | docker build --tag "${builder_image}" -
 
