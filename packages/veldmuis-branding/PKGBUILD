@@ -10,11 +10,13 @@ source=(
   "rat1.png"
   "kdeglobals"
   "kwalletrc"
+  "gwenviewrc"
 )
 sha256sums=(
   "8755243103bbdf5a27cec8196defa4a33a74328c696c1503f72aebce68f0c1b7"
   "e894ed60e6eabdb6d19692d79516f9a7307c1384a6b4697d08ec6408cb399150"
   "10512740e425d40a16d6d3dee52e5b87301b60446649a56c98237be9aeb6bdf7"
+  "bf383e3df5779778f2c3a47302a1a6feaa007e1e8486a2de497ed8ec51cc839f"
 )
 _payload_sha256sums=(
   "b8ef66c8b922a4ae6b510dc45ab573d5b6fc0d485a80ee1034eab33b03357a5e  veldmuis-wallpaper/metadata.json"
@@ -37,6 +39,8 @@ package() {
     "${pkgdir}/etc/xdg/kdeglobals"
   install -Dm644 "${srcdir}/kwalletrc" \
     "${pkgdir}/etc/xdg/kwalletrc"
+  install -Dm644 "${srcdir}/gwenviewrc" \
+    "${pkgdir}/etc/xdg/gwenviewrc"
   install -Dm644 "${_source_root}/veldmuis-wallpaper/metadata.json" \
     "${pkgdir}/usr/share/wallpapers/VeldmuisDawn/metadata.json"
   install -Dm644 "${_source_root}/veldmuis-wallpaper/contents/images/1920x1080.png" \
