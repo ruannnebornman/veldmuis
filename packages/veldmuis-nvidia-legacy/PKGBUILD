@@ -1,6 +1,6 @@
 pkgname=veldmuis-nvidia-legacy
 pkgver=20260619
-pkgrel=3
+pkgrel=4
 pkgdesc="Legacy NVIDIA 580xx support metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -23,7 +23,7 @@ source=(
   "nvidia-580xx-package-set.sh"
 )
 sha256sums=(
-  "f3abcceac3c154c73111039d802b22a54b3090bc364dd706bd52452006c0a953"
+  "32260bdd3847610ef7f97d28bfe664df76ec4cc0b127f2f75ad09b8c3aee8a87"
 )
 
 package() {
