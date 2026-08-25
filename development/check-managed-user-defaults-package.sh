@@ -34,6 +34,8 @@ state_path="${pkgdir}/etc/skel/.local/state/veldmuis/user-defaults/state.ini"
 test -x "${pkgdir}/usr/lib/veldmuis/veldmuis-user-defaults-update"
 test "$(stat -c '%a' "${pkgdir}/usr/lib/veldmuis/veldmuis-user-defaults-update")" = 755
 test "$(stat -c '%a' "${pkgdir}/etc/xdg/autostart/veldmuis-user-defaults-update.desktop")" = 644
+test "$(stat -c '%a' "${pkgdir}/etc/profile.d/veldmuis-terminal-wsl.sh")" = 644
+test "$(stat -c '%a' "${pkgdir}/usr/share/fish/vendor_conf.d/veldmuis-terminal-wsl.fish")" = 644
 test "$(stat -c '%a' "${state_path}")" = 600
 
 grep -Fqx "fish/config.fish$(printf '\t')templates/fish/config.fish$(printf '\t')${expected_fish_hash}$(printf '\t')1" \
@@ -46,6 +48,10 @@ grep -Fqx "candidate_hash=${expected_fish_hash}" "${state_path}"
 grep -Fqx "candidate_hash=${expected_wezterm_hash}" "${state_path}"
 grep -Fqx 'Exec=/usr/lib/veldmuis/veldmuis-user-defaults-update' \
   "${pkgdir}/etc/xdg/autostart/veldmuis-user-defaults-update.desktop"
+grep -Fqx '  /usr/lib/veldmuis/veldmuis-user-defaults-update --seed >/dev/null 2>&1 &' \
+  "${pkgdir}/etc/profile.d/veldmuis-terminal-wsl.sh"
+grep -Fqx '        /usr/lib/veldmuis/veldmuis-user-defaults-update --seed >/dev/null 2>&1 &' \
+  "${pkgdir}/usr/share/fish/vendor_conf.d/veldmuis-terminal-wsl.fish"
 
 mkdir -p "${temp_root}/home/.config/fish" "${temp_root}/home/.config/wezterm"
 mkdir -p "${temp_root}/state/veldmuis/user-defaults"
