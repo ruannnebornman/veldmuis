@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          packages/veldmuis-desktop-kde/test-veldmuis-user-defaults-update.sh
+          packages/veldmuis-terminal/test-veldmuis-user-defaults-update.sh
 
       - name: Check managed user defaults package payload
         shell: bash

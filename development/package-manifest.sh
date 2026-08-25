@@ -14,6 +14,7 @@ veldmuis_core_package_order=(
   "veldmuis-common"
   "veldmuis-boot"
   "veldmuis-displaymanager"
+  "veldmuis-terminal"
   "veldmuis-desktop-kde"
   "veldmuis-development"
   "veldmuis-gaming"
