@@ -1,6 +1,6 @@
 pkgname=veldmuis-terminal
 pkgver=20260306
-pkgrel=1
+pkgrel=2
 pkgdesc="Default terminal stack and user defaults for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -12,6 +12,9 @@ depends=(
   "wezterm"
   "fish"
   "atuin"
+  "libgit2"
+  "mesa"
+  "libglvnd"
 )
 source=(
   "config.fish"
@@ -19,13 +22,17 @@ source=(
   "veldmuis-user-defaults-update"
   "veldmuis-user-defaults-update.desktop"
   "user-defaults-history.tsv"
+  "veldmuis-terminal-wsl.fish"
+  "veldmuis-terminal-wsl.sh"
 )
 sha256sums=(
   "b1334e5dd9cfb14f3d588f57a940204a5d7b0a5d60e512e6f22be8a6003c579c"
   "c8ce0765e4a13c5f828ea140526c14416ad7651f9dccd5749289941fad4b16d4"
-  "64c36fa9744bab566725059aa3efa55a4eab72e5bd6a08ca93c4f090c960c405"
+  "1a942c54418b6c20915bbb9c4d08c8523e68ed401fa8a74afbb7097b34f22e9e"
   "8ecb87dcf1719f7171cc612c38082cd39fb4f5c6491579c64227f897cd5cb9ea"
   "2b4d3b631908b88d8b16923cc31bb92969a650a0f1402a56fc5fd23631ccc543"
+  "fa7f2d0f1f5dd1275ed97a03b5c5fa4d7c5f626ff6dee869e759cdabe24ba7b8"
+  "f9bc94489ae6403c19d4e75ae9f53cd58b1218857ce0701f1096c02c127f18c6"
 )
 
 package() {
@@ -41,6 +48,8 @@ package() {
     "veldmuis-user-defaults-update"
     "veldmuis-user-defaults-update.desktop"
     "user-defaults-history.tsv"
+    "veldmuis-terminal-wsl.fish"
+    "veldmuis-terminal-wsl.sh"
   )
 
   # makepkg stages local sources as symlinks; validate originals and staged hashes.
@@ -116,6 +125,10 @@ package() {
     > "${defaults_root}/manifest.tsv"
   install -Dm644 "${srcdir}/user-defaults-history.tsv" \
     "${defaults_root}/history.tsv"
+  install -Dm644 "${srcdir}/veldmuis-terminal-wsl.fish" \
+    "${pkgdir}/usr/share/fish/vendor_conf.d/veldmuis-terminal-wsl.fish"
+  install -Dm644 "${srcdir}/veldmuis-terminal-wsl.sh" \
+    "${pkgdir}/etc/profile.d/veldmuis-terminal-wsl.sh"
   install -d -m700 "${pkgdir}/etc/skel/.local/state/veldmuis/user-defaults"
   printf '%s\n' \
     'schema=1' \

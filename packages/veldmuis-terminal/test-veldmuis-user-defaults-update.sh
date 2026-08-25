@@ -14,6 +14,7 @@ readonly CASE_HOME="$TEST_ROOT/home"
 readonly STATE_BASE="$TEST_ROOT/state"
 readonly OUTSIDE_FILE="$TEST_ROOT/outside.txt"
 RUN_UPDATER="$UPDATER"
+RUN_MODE=normal
 
 TEST_USER=${USER:-}
 TEST_UID=${EUID:-0}
@@ -71,22 +72,19 @@ run_as_test_user() {
 }
 
 run_updater() {
+  local mode_arg=''
+  local -a config_env=(-u XDG_CONFIG_HOME)
+  [[ $RUN_MODE == seed ]] && mode_arg=--seed
   if [[ $CONFIG_MODE == custom ]]; then
-    run_as_test_user \
-      -u XDG_CONFIG_HOME \
-      HOME="$CASE_HOME" \
-      XDG_STATE_HOME="$STATE_BASE" \
-      XDG_CONFIG_HOME="$CUSTOM_CONFIG_ROOT" \
-      PATH=/nonexistent \
-       /bin/bash -c "source \"\$1\"; veldmuis_user_defaults_test_run \"\$2\"" _ "$RUN_UPDATER" "$DEFAULTS_ROOT"
-  else
-    run_as_test_user \
-      -u XDG_CONFIG_HOME \
-      HOME="$CASE_HOME" \
-      XDG_STATE_HOME="$STATE_BASE" \
-      PATH=/nonexistent \
-       /bin/bash -c "source \"\$1\"; veldmuis_user_defaults_test_run \"\$2\"" _ "$RUN_UPDATER" "$DEFAULTS_ROOT"
+    config_env=(XDG_CONFIG_HOME="$CUSTOM_CONFIG_ROOT")
   fi
+  run_as_test_user \
+    "${config_env[@]}" \
+    HOME="$CASE_HOME" \
+    XDG_STATE_HOME="$STATE_BASE" \
+    PATH=/nonexistent \
+     /bin/bash -c "source \"\$1\"; if [[ \"\$2\" == --seed ]]; then veldmuis_user_defaults_test_run --seed \"\$3\"; else veldmuis_user_defaults_test_run \"\$3\"; fi" \
+     _ "$RUN_UPDATER" "$mode_arg" "$DEFAULTS_ROOT"
 }
 
 config_root() {
@@ -344,13 +342,33 @@ test_seeded_state() {
   write_managed_state seeded "$FISH_ONE_HASH" "$FISH_ONE_HASH" "$WEZTERM_ONE_HASH" "$WEZTERM_ONE_HASH"
   fish_inode=$(stat -c '%i' -- "$fish_path")
   wez_inode=$(stat -c '%i' -- "$wez_path")
+  RUN_MODE=seed
   run_updater || fail 'seeded-state case failed'
+  RUN_MODE=normal
   assert_eq "$(stat -c '%i' -- "$fish_path")" "$fish_inode" 'seeded fish file was rewritten'
   assert_eq "$(stat -c '%i' -- "$wez_path")" "$wez_inode" 'seeded WezTerm file was rewritten'
   assert_state fish origin seeded
   assert_state fish applied_hash "$FISH_ONE_HASH"
   assert_state fish observation current
   assert_state wezterm origin seeded
+}
+
+test_seed_without_state() {
+  local fish_path wez_path
+  reset_case
+  RUN_MODE=seed
+  fish_path=$(config_path fish/config.fish)
+  wez_path=$(config_path wezterm/wezterm.lua)
+  write_user_file "$fish_path" "$FISH_CUSTOM"
+  run_updater || fail 'seed-without-state case failed'
+  assert_file_content "$fish_path" "$FISH_ONE"
+  assert_file_content "$wez_path" "$WEZTERM_ONE"
+  assert_state fish mode managed
+  assert_state fish origin seeded
+  assert_state fish applied_hash "$FISH_ONE_HASH"
+  assert_state wezterm origin seeded
+  compgen -G "${fish_path}.bak.*" >/dev/null || fail 'seed did not preserve the existing fish config'
+  RUN_MODE=normal
 }
 
 test_changed_managed_file_and_independent_update() {
@@ -572,13 +590,14 @@ if ((EUID == 0)); then
     exit 0
   fi
 else
-  printf 'SKIP: root invocation requires a root runner\n'
+  printf 'SKIP: root invocation requires a root runner; running functional cases as the current user\n'
 fi
 
 test_current_hash_adoption
 test_custom_xdg_config
 test_historical_update
 test_seeded_state
+test_seed_without_state
 test_changed_managed_file_and_independent_update
 test_managed_missing
 test_unrecognized_and_symlink_target

@@ -150,6 +150,14 @@ It also installs the Veldmuis `mpv` configuration.
 - Fish and Atuin.
 - Seeded Fish and WezTerm configuration under `/etc/skel`.
 - The managed user-defaults updater and its versioned templates.
+- The OpenGL and Git runtime libraries required by WezTerm on minimal systems,
+  including WSL2/WSLg.
+
+On WSL2/WSLg, interactive Bash login shells and Fish sessions run a one-time
+default seeding pass for existing accounts. Unrecognized existing config files
+are backed up before replacement; unsafe paths are left unmanaged. The first
+shell session performs the seed, so launch WezTerm again afterward if its
+per-user configuration did not exist yet.
 
 The default `veldmuis-desktop` target depends on this package, but the KDE
 desktop package does not. This allows terminal defaults to be installed or

@@ -7,6 +7,7 @@ PATH=/usr/bin:/bin
 export PATH
 readonly BIN_CAT=/usr/bin/cat
 readonly BIN_CHMOD=/usr/bin/chmod
+readonly BIN_CP=/usr/bin/cp
 readonly BIN_FLOCK=/usr/bin/flock
 readonly BIN_MKDIR=/usr/bin/mkdir
 readonly BIN_MKTEMP=/usr/bin/mktemp
@@ -40,6 +41,7 @@ TARGET_LOCK_FILE=''
 TARGET_LOCK_FD=''
 ROOT=''
 TEST_ROOT_MODE=0
+SEED_MODE=0
 
 die() {
   printf '%s: %s\n' "$PROGRAM" "$*" >&2
@@ -718,6 +720,161 @@ apply_update() {
   release_target_lock
 }
 
+backup_seed_target() {
+  local target=$1 backup
+
+  backup=$("$BIN_MKTEMP" "${target}.bak.XXXXXX") || return 1
+  if ! "$BIN_CP" -a -- "$target" "$backup"; then
+    "$BIN_RM" -f -- "$backup"
+    return 1
+  fi
+  safe_regular_file "$backup" || {
+    "$BIN_RM" -f -- "$backup"
+    return 1
+  }
+  printf '%s' "$backup"
+}
+
+seed_replace_target() {
+  local id=$1 old_kind=$2 old_hash=$3 old_dev=$4 old_ino=$5 old_mode=$6
+  local target template target_dir temporary actual
+
+  target="$CONFIG_ROOT/${M_CONFIG[$id]}"
+  template=${M_TEMPLATE_FILE[$id]}
+  target_dir=${target%/*}
+  temporary=$("$BIN_MKTEMP" "$target_dir/.veldmuis-$id.XXXXXX") || return 1
+  if ! "$BIN_CAT" -- "$template" > "$temporary"; then
+    "$BIN_RM" -f -- "$temporary"
+    return 1
+  fi
+  if [[ $old_kind == missing ]]; then
+    "$BIN_CHMOD" 644 -- "$temporary" || { "$BIN_RM" -f -- "$temporary"; return 1; }
+  else
+    "$BIN_CHMOD" --reference="$target" -- "$temporary" || {
+      "$BIN_RM" -f -- "$temporary"
+      return 1
+    }
+  fi
+  actual=$(hash_file "$temporary") || { "$BIN_RM" -f -- "$temporary"; return 1; }
+  [[ $actual == "${M_CAND[$id]}" ]] || { "$BIN_RM" -f -- "$temporary"; return 1; }
+  temp_is_safe "$temporary" || { "$BIN_RM" -f -- "$temporary"; return 1; }
+  sync_file "$temporary" || { "$BIN_RM" -f -- "$temporary"; return 1; }
+
+  inspect_target "$id"
+  if [[ $old_kind == missing ]]; then
+    [[ $TARGET_KIND == missing ]] || { "$BIN_RM" -f -- "$temporary"; return 1; }
+  else
+    [[ $TARGET_KIND == "$old_kind" && $TARGET_HASH == "$old_hash" ]] || {
+      "$BIN_RM" -f -- "$temporary"
+      return 1
+    }
+    [[ $TARGET_DEV == "$old_dev" && $TARGET_INO == "$old_ino" && $TARGET_MODE == "$old_mode" ]] || {
+      "$BIN_RM" -f -- "$temporary"
+      return 1
+    }
+  fi
+  "$BIN_MV" -fT -- "$temporary" "$target" || { "$BIN_RM" -f -- "$temporary"; return 1; }
+  sync_directory "$target_dir" || return 1
+}
+
+seed_target() {
+  local id=$1 target target_dir old_kind old_hash old_dev old_ino old_mode
+
+  target="$CONFIG_ROOT/${M_CONFIG[$id]}"
+  target_dir=${target%/*}
+  SEED_RESULT=failed
+  validate_user_path_components "$target_dir" 1 target || return 1
+  [[ -d $target_dir && ! -L $target_dir ]] || return 1
+  acquire_target_lock "$id" "$target_dir"
+  inspect_target "$id"
+  old_kind=$TARGET_KIND
+  old_hash=$TARGET_HASH
+  old_dev=$TARGET_DEV
+  old_ino=$TARGET_INO
+  old_mode=$TARGET_MODE
+
+  case $old_kind in
+    unsafe)
+      release_target_lock
+      return 1
+      ;;
+    recognized)
+      if [[ $old_hash == "${M_CAND[$id]}" ]]; then
+        SEED_RESULT=adopted
+        release_target_lock
+        return 0
+      fi
+      ;;
+    unrecognized)
+      backup_seed_target "$target" >/dev/null || {
+        release_target_lock
+        return 1
+      }
+      ;;
+    missing) ;;
+    *)
+      release_target_lock
+      return 1
+      ;;
+  esac
+
+  if ! seed_replace_target "$id" "$old_kind" "$old_hash" "$old_dev" "$old_ino" "$old_mode"; then
+    release_target_lock
+    return 1
+  fi
+  SEED_RESULT=seeded
+  release_target_lock
+}
+
+seed_without_state() {
+  local id target_kind
+
+  for id in "${IDS[@]}"; do
+    STATE_CAND[$id]=${M_CAND[$id]}
+    if seed_target "$id"; then
+      MODE[$id]=managed
+      ORIGIN[$id]=$SEED_RESULT
+      APPLIED[$id]=${M_CAND[$id]}
+      if [[ $SEED_RESULT == adopted ]]; then
+        OBSERVATION[$id]=adopted
+      else
+        OBSERVATION[$id]=seeded
+      fi
+    else
+      inspect_target "$id"
+      target_kind=$TARGET_KIND
+      MODE[$id]=unmanaged
+      APPLIED[$id]=none
+      case $target_kind in
+        unsafe)
+          ORIGIN[$id]=unsafe
+          OBSERVATION[$id]=unsafe
+          ;;
+        unrecognized)
+          ORIGIN[$id]=unrecognized
+          OBSERVATION[$id]=unrecognized
+          ;;
+        missing)
+          ORIGIN[$id]=missing
+          OBSERVATION[$id]=missing
+          ;;
+        recognized)
+          MODE[$id]=managed
+          ORIGIN[$id]=adopted
+          APPLIED[$id]=$TARGET_HASH
+          OBSERVATION[$id]=adopted
+          ;;
+        *)
+          ORIGIN[$id]=unsafe
+          OBSERVATION[$id]=unsafe
+          ;;
+      esac
+    fi
+    PENDING[$id]=0
+  done
+  write_state
+}
+
 enroll_without_state() {
   local id
 
@@ -862,16 +1019,29 @@ run_engine() {
       process_existing_state "$id"
     done
     write_state
+  elif ((SEED_MODE)); then
+    seed_without_state
   else
     enroll_without_state
   fi
 }
 
 main() {
+  case ${1-} in
+    '') ;;
+    --seed) SEED_MODE=1 ;;
+    *) die "usage: $PROGRAM [--seed]" ;;
+  esac
+  [[ $# -le 1 ]] || die "usage: $PROGRAM [--seed]"
   run_engine "$PRODUCTION_ROOT" 0
 }
 
 veldmuis_user_defaults_test_run() {
+  SEED_MODE=0
+  if [[ ${1-} == --seed ]]; then
+    SEED_MODE=1
+    shift
+  fi
   [[ $# -eq 1 ]] || return 2
   run_engine "$1" 1
 }
