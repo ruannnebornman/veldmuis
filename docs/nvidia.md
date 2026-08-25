@@ -78,18 +78,34 @@ development/nvidia-580xx-package-flow.md
 
 The current automation:
 
-- Resolves AUR refs in locked or latest mode.
+- Resolves AUR refs from the committed lock file by default; latest refs are an
+  explicit update path.
 - Builds AUR packages without the Veldmuis signing key.
 - Validates the expected package names and license metadata.
+- Records the checked-out `PKGBUILD` and pre-build source-input hashes.
 - Signs packages only in a later network-disabled signing stage.
 - Publishes the signed package set through `veldmuis-extra`.
 - Publishes a known-good NVIDIA package cache after successful non-fallback
   builds.
 - Can restore the known-good NVIDIA package set if a fresh AUR build fails.
+- Allows routine NVIDIA AUR updates to continue through the automated path when
+  the audited diff changes only an allowlisted version, source, checksum, or
+  signing-key metadata assignment in `PKGBUILD`.
+- Keeps recipe logic, dependency, install, privileged-path, and payload-scan
+  changes on the manual review path.
 
-These controls reduce risk, but they do not remove the upstream risk of AUR
-source changes, proprietary NVIDIA packaging, DKMS rebuild failures, or rolling
-kernel incompatibility.
+These controls reduce risk, but they do not remove the upstream risk. The AUR
+`PKGBUILD` and NVIDIA source archives are third-party inputs; Veldmuis does not
+claim to have performed a full source audit or an independent byte-for-byte
+rebuild before signing them. A locked ref makes an update reviewable, not
+trusted by itself. DKMS rebuild failures and rolling-kernel incompatibility
+remain possible.
+
+The metadata-only classification is an automation rule, not a claim that the
+upstream source is trusted. Every candidate still uses the locked AUR commit,
+the isolated build, package-set and license validation, payload scan, and later
+network-disabled signing controls. A successful candidate remains subject to
+the repository's normal protected integration path.
 
 ## Update Precautions
 

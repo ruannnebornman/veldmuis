@@ -1,6 +1,11 @@
 name: Package Repo Refresh
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - development/aur-packages.lock
   schedule:
     # 12:17 Africa/Johannesburg. GitHub cron uses UTC.
     - cron: "17 10 * * *"
@@ -11,14 +16,6 @@ on:
         required: false
         type: boolean
         default: false
-      aur_ref_mode:
-        description: AUR ref mode to build
-        required: false
-        type: choice
-        options:
-          - latest
-          - locked
-        default: latest
       simulate_aur_failure:
         description: Simulate an AUR build failure to test known-good fallback
         required: false
@@ -49,7 +46,7 @@ jobs:
       CF_R2_PACKAGE_BUCKET: ${{ vars.CF_R2_PACKAGE_BUCKET }}
       PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
-      VELDMUIS_AUR_REF_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.aur_ref_mode || 'latest' }}
+      VELDMUIS_AUR_REF_MODE: locked
       VELDMUIS_PACKAGE_REFRESH_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
       VELDMUIS_AUR_ENABLE_FALLBACK: true
       VELDMUIS_SIMULATE_AUR_BUILD_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_aur_failure && 'true' || 'false' }}
@@ -159,7 +156,7 @@ jobs:
           CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
-          ./development/publish-known-good-nvidia-packages.sh
+          ./development/publish-known-good-nvidia-packages.sh --publish-only
 
       - name: Write package refresh summary
         shell: bash

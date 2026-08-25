@@ -119,3 +119,24 @@ a one-command swap.
 Do not add an old primary fingerprint to `veldmuis-revoked` or begin signing
 with a replacement primary until the transition path has been tested end to
 end.
+
+## Suspected Compromise Runbook
+
+If the signing subkey or a published package is suspected to be compromised:
+
+1. Stop release and package-refresh workflows and disable publication paths.
+2. Preserve workflow logs, package files, manifests, and repository state. Mark
+   the last known-good release tag, commit, package database, and signed
+   manifest.
+3. Use the offline primary key to revoke the affected signing subkey. Do not do
+   this from a potentially compromised CI environment.
+4. Publish a notice through the official repository and website, identify the
+   affected release range, and tell users not to update from the affected
+   package repository until recovery instructions are available.
+5. Prepare and test a replacement signing subkey or authenticated key
+   transition, update the public keyring, and verify package and manifest
+   signatures from a clean environment before resuming publication.
+
+The exact affected range and recovery steps must be recorded in the security
+notice. Treat the old signing material as compromised until the transition is
+complete.

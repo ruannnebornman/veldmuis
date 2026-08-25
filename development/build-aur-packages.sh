@@ -12,6 +12,7 @@ work_root="${VELDMUIS_AUR_WORK_ROOT:-${repo_root}/artifacts/aur-packages/work}"
 package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
 manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
 ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+dependency_installer="${VELDMUIS_AUR_DEPENDENCY_INSTALLER:-}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
 [[ -r "${nvidia_package_set}" ]] || {
@@ -23,7 +24,14 @@ nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/v
 
 package_bases=("${veldmuis_nvidia_580xx_aur_package_bases[@]}")
 
+declare -A official_build_dependency_roots=()
+for dependency in "${veldmuis_nvidia_580xx_official_build_dependency_roots[@]}"; do
+  official_build_dependency_roots["${dependency}"]=1
+done
+
 declare -A resolved_refs=()
+declare -A source_input_hashes=()
+declare -a source_input_entries=()
 
 log() {
   printf '[build-aur-packages] %s\n' "$*"
@@ -190,9 +198,90 @@ install_built_dependencies() {
     nvidia-580xx-utils)
       package_path="$(latest_built_package "${build_dir}" "nvidia-580xx-utils")"
       log "Installing build dependency from local artifact: $(basename "${package_path}")"
-      sudo pacman -U --noconfirm --needed "${package_path}"
+      if [[ -n "${dependency_installer}" ]]; then
+        sudo "${dependency_installer}"
+      else
+        sudo pacman -U --noconfirm --needed "${package_path}"
+      fi
       ;;
   esac
+}
+
+dependency_package_name() {
+  local dependency="$1"
+
+  printf '%s' "${dependency%%[<>=]*}"
+}
+
+check_isolated_build_dependencies() {
+  local package_base="$1"
+  local srcinfo dependency dependency_name
+  local -A dependency_specs=()
+  local -A missing_dependencies=()
+
+  srcinfo="$(makepkg --printsrcinfo)" || \
+    die "Unable to inspect SRCINFO for ${package_base}"
+
+  while IFS= read -r dependency; do
+    [[ -n "${dependency}" ]] || continue
+    dependency_name="$(dependency_package_name "${dependency}")"
+
+    if [[ -n "${official_build_dependency_roots[${dependency_name}]:-}" ]]; then
+      dependency_specs["${dependency}"]=1
+    elif [[ -n "${resolved_refs[${dependency_name}]:-}" || "${dependency_name}" == "${package_base}" ]]; then
+      :
+    else
+      die "Unapproved AUR build dependency for ${package_base}: ${dependency}"
+    fi
+  done < <(
+    printf '%s\n' "${srcinfo}" | awk '
+      $1 == "pkgbase" && $2 == "=" {
+        in_pkgbase = 1
+        next
+      }
+      $1 == "pkgname" && $2 == "=" {
+        in_pkgbase = 0
+        next
+      }
+      in_pkgbase && ($1 == "depends" || $1 == "makedepends" || $1 == "checkdepends") && $2 == "=" {
+        print $3
+      }
+    '
+  )
+
+  for dependency in "${!dependency_specs[@]}"; do
+    if ! pacman -T "${dependency}" >/dev/null 2>&1; then
+      dependency_name="$(dependency_package_name "${dependency}")"
+      missing_dependencies["${dependency_name}"]=1
+    fi
+  done
+
+  if ((${#missing_dependencies[@]} > 0)); then
+    die "Missing isolated AUR build dependencies for ${package_base}: ${!missing_dependencies[*]}"
+  fi
+}
+
+record_source_inputs() {
+  local package_base="$1"
+  local build_dir="$2"
+  local source_path source_name source_hash
+  local found=0
+
+  while IFS= read -r -d '' source_path; do
+    source_name="${source_path##*/}"
+    case "${source_name}" in
+      *.pkg.tar.*|*.log|*.sig)
+        continue
+        ;;
+    esac
+
+    source_hash="$(sha256sum "${source_path}" | awk '{print $1}')"
+    source_input_entries+=("${package_base}"$'\t'"${source_name}")
+    source_input_hashes["${package_base}:${source_name}"]="${source_hash}"
+    found=1
+  done < <(find "${build_dir}" -maxdepth 1 -type f -print0 | sort -z)
+
+  ((found == 1)) || die "No source inputs found for ${package_base}"
 }
 
 package_info_value() {
@@ -308,7 +397,17 @@ build_package_base() {
   log "Building ${package_base}"
   (
     cd "${build_dir}"
-    makepkg --syncdeps --noconfirm --cleanbuild --force
+    SRCDEST="${build_dir}" makepkg --verifysource --noconfirm
+  )
+  record_source_inputs "${package_base}" "${build_dir}"
+  (
+    cd "${build_dir}"
+    if [[ -n "${dependency_installer}" ]]; then
+      check_isolated_build_dependencies "${package_base}"
+      SRCDEST="${build_dir}" makepkg --nodeps --noconfirm --cleanbuild --force
+    else
+      SRCDEST="${build_dir}" makepkg --syncdeps --noconfirm --cleanbuild --force
+    fi
   )
 
   copy_package_outputs "${package_base}" "${build_dir}"
@@ -317,7 +416,7 @@ build_package_base() {
 
 write_manifest() {
   local manifest_tmp="${manifest_path}.tmp"
-  local package_base package_path
+  local package_base package_path source_entry source_name source_hash source_package_base
 
   {
     printf 'built_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -332,6 +431,15 @@ write_manifest() {
         "${package_base}" \
         "${resolved_refs[${package_base}]}" \
         "$(aur_url "${package_base}")"
+    done
+
+    printf '\n[source_inputs]\n'
+    for source_entry in "${source_input_entries[@]}"; do
+      IFS=$'\t' read -r source_package_base source_name <<< "${source_entry}"
+      source_hash="${source_input_hashes[${source_package_base}:${source_name}]:-}"
+      [[ -n "${source_hash}" ]] || die "Source input hash is missing for ${source_package_base}/${source_name}"
+      printf '%s\t%s\t%s\n' \
+        "${source_package_base}" "${source_name}" "${source_hash}"
     done
 
     printf '\n[package_files]\n'
@@ -398,6 +506,9 @@ main() {
   require_cmd date
   require_cmd find
   require_cmd makepkg
+  if [[ -n "${dependency_installer}" ]]; then
+    require_cmd pacman
+  fi
   require_cmd sha256sum
   require_cmd sort
   require_cmd sudo

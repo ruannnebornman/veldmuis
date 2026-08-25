@@ -16,6 +16,17 @@ support:
 Veldmuis does not currently have official outside affiliations, community
 platforms, fundraising pages, or alternate download mirrors.
 
+A Discord community is planned, and a Twitter/X account is being prepared. No
+official invite or handle has been published yet. Until a channel is listed in
+this document, treat similarly named accounts, download pages, mirrors, and
+direct messages as unofficial. Do not provide signing keys, passwords, or
+recovery material through them.
+
+The project is maintained by Ruanne Bornman. The maintainer's personal site
+(https://ruannebornman.com/) identifies the maintainer and links to this
+repository, but it is not a download channel. Project trust is carried by the
+signed release workflow described below, not by any individual's reputation.
+
 ## Current Signing Key
 
 The current Veldmuis release signing key is packaged in
@@ -132,13 +143,16 @@ Include = /etc/pacman.d/veldmuis-mirrorlist
 
 The live ISO and Calamares bootstrap use the same Veldmuis-specific policy.
 Arch repositories retain their upstream-compatible database-signature policy.
+Pacman checks package and repository signatures automatically under this policy;
+do not bypass it with `SigLevel = Never` or an untrusted replacement keyring.
 
 ## AUR-Derived Packages
 
 The NVIDIA 580xx packages are built from configured AUR package bases,
 validated as package artifacts, and then signed into the Veldmuis package
-repository. The release build records the exact resolved refs in its AUR-input
-manifest.
+repository. The release build records the exact resolved refs, the AUR
+`PKGBUILD` hashes, and pre-build source-input hashes in its AUR-input and
+build-input manifests.
 
 The AUR build stage does not receive the signing key. Signing happens later in
 a network-disabled stage after artifact validation. See
@@ -166,11 +180,15 @@ or malicious-package samples in a public issue. Public issues are suitable for
 non-sensitive security improvements and already-public defects only.
 
 Please include affected versions, impact, reproduction details, and a safe way
-to validate the report. The project aims to acknowledge a private report within
-seven calendar days. Investigation and remediation time depends on severity and
-maintainer availability; this is a coordination target, not a commercial
-service-level guarantee. The reporter will be told when public disclosure is
-appropriate.
+to validate the report. The project aims to acknowledge a private report as
+soon as practical — within seven days when possible. Investigation and
+remediation time depends on severity and maintainer availability; this is a
+coordination target, not a commercial service-level guarantee. The reporter
+will be told when public disclosure is appropriate.
+
+There is currently no separately published project PGP key or alternate
+encrypted reporting address. Use the private GitHub form rather than sending
+sensitive material to an address or account found elsewhere.
 
 For suspected signing-key compromise or a malicious package, the maintainer
 will preserve evidence, stop affected publication paths, identify the last
@@ -183,5 +201,8 @@ and provide explicit recovery instructions before normal publication resumes.
 - Arch repository inputs are not pinned to an Arch Linux Archive snapshot, so
   byte-for-byte rebuilds are not currently guaranteed.
 - The NVIDIA 580xx path depends on AUR-derived package sources.
+- Build-input manifests authenticate the recorded refs, source hashes, and build
+  metadata; they do not constitute a source audit or a byte-for-byte
+  reproducibility guarantee.
 - Veldmuis is a small project with a narrow support scope, not a general-purpose
   commercial Linux distribution.

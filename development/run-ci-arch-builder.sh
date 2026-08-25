@@ -14,6 +14,7 @@ builder_base_digest=""
 builder_image_id=""
 docker_version=""
 trusted_support_root=""
+nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
 common_packages=(
   archlinux-keyring
@@ -54,6 +55,7 @@ usage() {
   cat <<'EOF'
 Usage:
   run-ci-arch-builder.sh packages
+  run-ci-arch-builder.sh candidate
   run-ci-arch-builder.sh iso
   run-ci-arch-builder.sh offline-iso
 
@@ -100,7 +102,7 @@ is_true() {
 
 validate_target() {
   case "$1" in
-    packages|iso|offline-iso) ;;
+    packages|candidate|iso|offline-iso) ;;
     *)
       usage >&2
       die "Unsupported build target: $1"
@@ -118,6 +120,20 @@ validate_stage() {
   esac
 }
 
+load_nvidia_package_set() {
+  [[ -r "${nvidia_package_set}" ]] || \
+    die "NVIDIA package set not readable: ${nvidia_package_set}"
+  # shellcheck source=packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
+  . "${nvidia_package_set}"
+
+  declare -p veldmuis_nvidia_580xx_official_build_dependency_roots >/dev/null 2>&1 || \
+    die "Approved NVIDIA build-dependency roots are unavailable"
+  ((${#veldmuis_nvidia_580xx_official_build_dependency_roots[@]} > 0)) || \
+    die "Approved NVIDIA build-dependency roots are empty"
+}
+
+load_nvidia_package_set
+
 run_as_builder() {
   local command="$1"
   su "${BUILDER_USER}" -c "cd '${container_workspace}' && ${command}"
@@ -133,11 +149,32 @@ prepare_builder_user() {
   install -d -m 700 -o "${BUILDER_USER}" -g "${BUILDER_USER}" "${GNUPGHOME}"
 
   if [[ "${allow_pacman}" == "1" ]]; then
+    [[ -x "${container_support_root}/development/install-aur-build-dependency.sh" ]] || \
+      die "Restricted AUR dependency installer is missing"
+    require_cmd visudo
     install -d -m 0750 /etc/sudoers.d
-    printf '%s ALL=(ALL:ALL) NOPASSWD: /usr/bin/pacman\n' "${BUILDER_USER}" \
-      > /etc/sudoers.d/veldmuis-builder-pacman
-    chmod 0440 /etc/sudoers.d/veldmuis-builder-pacman
+    local sudoers_file="/etc/sudoers.d/veldmuis-builder-aur-dependency"
+    printf '%s ALL=(root) NOPASSWD: %s\n' "${BUILDER_USER}" \
+      "${container_support_root}/development/install-aur-build-dependency.sh \"\"" \
+      > "${sudoers_file}"
+    chmod 0440 "${sudoers_file}"
+    visudo -cf "${sudoers_file}"
   fi
+}
+
+validate_aur_dependency_roots() {
+  local dependency
+  local -a missing_dependencies=()
+
+  require_cmd pacman
+  for dependency in "${veldmuis_nvidia_580xx_official_build_dependency_roots[@]}"; do
+    if ! pacman -T "${dependency}" >/dev/null 2>&1; then
+      missing_dependencies+=("${dependency}")
+    fi
+  done
+
+  ((${#missing_dependencies[@]} == 0)) || \
+    die "Approved NVIDIA build-dependency roots are missing: ${missing_dependencies[*]}"
 }
 
 import_signing_key() {
@@ -189,15 +226,17 @@ run_aur_build_stage() {
   require_env HOST_UID
   require_env HOST_GID
 
+  validate_aur_dependency_roots
   prepare_builder_user 1
 
   local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
   local aur_ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+  local aur_dependency_installer="${container_support_root}/development/install-aur-build-dependency.sh"
   local aur_build_status=0
   local build_aur_command
   local override_name
 
-  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}")"
+  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") VELDMUIS_AUR_DEPENDENCY_INSTALLER=$(shell_quote "${aur_dependency_installer}")"
   for override_name in \
     VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS \
     VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS \
@@ -245,6 +284,7 @@ run_signing_stage() {
   run_as_builder "${container_support_root}/development/build-aur-packages.sh --validate-only"
   import_signing_key
   run_as_builder "GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_KEY_FPR_FILE=$(shell_quote "${VELDMUIS_KEY_FPR_FILE}") ${container_support_root}/development/build-local-repo.sh"
+  run_as_builder "GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_KEY_FPR_FILE=$(shell_quote "${VELDMUIS_KEY_FPR_FILE}") ${container_support_root}/development/publish-known-good-nvidia-packages.sh --prepare-only"
   chown_output_paths "${container_workspace}/repos"
 }
 
@@ -323,7 +363,7 @@ prepare_trusted_support() {
 
 prepare_builder_image() {
   local target="$1"
-  local -a packages=("${common_packages[@]}")
+  local -a packages=("${common_packages[@]}" "${veldmuis_nvidia_580xx_official_build_dependency_roots[@]}")
   local package_list=""
 
   if [[ "${target}" == "iso" || "${target}" == "offline-iso" ]]; then
@@ -484,9 +524,11 @@ run_build_in_containers() {
   require_env BUILDER_USER
   require_env BUILDER_HOME
   require_env GNUPGHOME
-  require_env VELDMUIS_KEY_FPR_FILE
-  require_env VELDMUIS_GPG_PRIVATE_KEY
-  require_env VELDMUIS_GPG_FPR
+  if [[ "${target}" != candidate ]]; then
+    require_env VELDMUIS_KEY_FPR_FILE
+    require_env VELDMUIS_GPG_PRIVATE_KEY
+    require_env VELDMUIS_GPG_FPR
+  fi
   require_env RUNNER_TEMP
 
   if [[ "${target}" == "iso" || "${target}" == "offline-iso" ]]; then
@@ -502,7 +544,9 @@ run_build_in_containers() {
   prepare_builder_image "${target}"
   run_container_stage packages "${target}"
   run_container_stage aur "${target}"
-  run_container_stage sign "${target}"
+  if [[ "${target}" != candidate ]]; then
+    run_container_stage sign "${target}"
+  fi
 
   if [[ "${target}" == "offline-iso" ]]; then
     run_container_stage offline-download "${target}"

@@ -10,7 +10,9 @@ manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.man
 work_root="${VELDMUIS_KNOWN_GOOD_WORK_ROOT:-${repo_root}/artifacts/aur-packages/known-good-work}"
 known_good_url="${VELDMUIS_KNOWN_GOOD_NVIDIA_URL:-}"
 known_good_manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
+known_good_manifest_signature_name="${known_good_manifest_name}.sig"
 failed_ref_mode="${VELDMUIS_AUR_REF_MODE:-unknown}"
+package_keyring="${VELDMUIS_PACKAGE_KEYRING:-${repo_root}/packages/veldmuis-keyring/veldmuis.gpg}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
 [[ -r "${nvidia_package_set}" ]] || {
@@ -122,6 +124,24 @@ parse_package_bases() {
   ' "${manifest_file}"
 }
 
+parse_source_inputs() {
+  local manifest_file="$1"
+
+  awk '
+    /^\[source_inputs\]$/ {
+      in_source_inputs = 1
+      next
+    }
+    /^\[/ {
+      in_source_inputs = 0
+      next
+    }
+    in_source_inputs && NF >= 2 && $1 !~ /^#/ {
+      print
+    }
+  ' "${manifest_file}"
+}
+
 ensure_expected_package_set() {
   local package_name package_path
 
@@ -136,10 +156,44 @@ ensure_expected_package_set() {
   done
 }
 
+verify_package_signatures() {
+  local package_path signature_path
+
+  while IFS= read -r package_path; do
+    signature_path="${package_path}.sig"
+    [[ -r "${signature_path}" ]] || die "Known-good package signature missing: ${signature_path}"
+    gpgv --keyring "${package_keyring}" "${signature_path}" "${package_path}" >/dev/null 2>&1 || \
+      die "Known-good package signature is invalid: ${package_path}"
+  done < <(
+    find "${package_dir}" -maxdepth 1 -type f \
+      -name '*.pkg.tar.zst' \
+      ! -name '*-debug-*.pkg.tar.zst' \
+      | sort -V
+  )
+}
+
+verify_known_good_manifest() {
+  local known_good_manifest="$1"
+  local known_good_signature="$2"
+
+  [[ -r "${known_good_manifest}" ]] || die "Known-good manifest is missing: ${known_good_manifest}"
+  [[ -r "${known_good_signature}" ]] || die "Known-good manifest signature is missing: ${known_good_signature}"
+  gpgv --keyring "${package_keyring}" "${known_good_signature}" "${known_good_manifest}" >/dev/null 2>&1 || \
+    die "Known-good manifest signature is invalid"
+
+  [[ "$(manifest_value "${known_good_manifest}" schema_version)" == "2" ]] || \
+    die "Known-good manifest schema_version must be 2"
+  [[ "$(manifest_value "${known_good_manifest}" signing_fingerprint)" =~ ^[0-9A-Fa-f]{40}$ ]] || \
+    die "Known-good manifest is missing signing_fingerprint"
+}
+
 restore_packages() {
   local known_good_manifest="${work_root}/${known_good_manifest_name}"
+  local known_good_signature="${work_root}/${known_good_manifest_signature_name}"
   local source_aur_manifest
   local source_aur_manifest_path
+  local expected_source_hash actual_source_hash
+  local known_good_manifest_sha256
   local expected_hash file_name output_path actual_hash
 
   rm -rf "${work_root}" "${package_dir}"
@@ -147,6 +201,9 @@ restore_packages() {
 
   log "Downloading known-good manifest: ${known_good_url}/${known_good_manifest_name}"
   download_file "${known_good_url}/${known_good_manifest_name}" "${known_good_manifest}"
+  log "Downloading known-good manifest signature: ${known_good_url}/${known_good_manifest_signature_name}"
+  download_file "${known_good_url}/${known_good_manifest_signature_name}" "${known_good_signature}"
+  verify_known_good_manifest "${known_good_manifest}" "${known_good_signature}"
 
   source_aur_manifest="$(manifest_value "${known_good_manifest}" source_aur_manifest)"
   [[ -n "${source_aur_manifest}" ]] || die "Known-good manifest is missing source_aur_manifest"
@@ -155,6 +212,13 @@ restore_packages() {
 
   log "Downloading source AUR manifest: ${known_good_url}/${source_aur_manifest}"
   download_file "${known_good_url}/${source_aur_manifest}" "${source_aur_manifest_path}"
+  expected_source_hash="$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
+  [[ "${expected_source_hash}" =~ ^[0-9a-fA-F]{64}$ ]] || \
+    die "Known-good manifest has an invalid source AUR manifest checksum"
+  actual_source_hash="$(sha256sum "${source_aur_manifest_path}" | awk '{print $1}')"
+  [[ "${actual_source_hash}" == "${expected_source_hash}" ]] || \
+    die "Source AUR manifest checksum does not match known-good manifest"
+  known_good_manifest_sha256="$(sha256sum "${known_good_manifest}" | awk '{print $1}')"
 
   while read -r expected_hash file_name; do
     safe_file_name "${file_name}" || die "Unsafe package file name in known-good manifest: ${file_name}"
@@ -181,12 +245,14 @@ restore_packages() {
   done < <(parse_signature_files "${known_good_manifest}")
 
   ensure_expected_package_set
-  write_fallback_manifest "${known_good_manifest}" "${source_aur_manifest_path}"
+  verify_package_signatures
+  write_fallback_manifest "${known_good_manifest}" "${known_good_manifest_sha256}" "${source_aur_manifest_path}"
 }
 
 write_fallback_manifest() {
   local known_good_manifest="$1"
-  local source_aur_manifest_path="$2"
+  local known_good_manifest_sha256="$2"
+  local source_aur_manifest_path="$3"
   local manifest_tmp="${manifest_path}.tmp"
   local package_path
 
@@ -196,10 +262,14 @@ write_fallback_manifest() {
     printf 'fallback_used=true\n'
     printf 'failed_ref_mode=%s\n' "${failed_ref_mode}"
     printf 'known_good_manifest_url=%s/%s\n' "${known_good_url}" "${known_good_manifest_name}"
+    printf 'known_good_manifest_sha256=%s\n' "${known_good_manifest_sha256}"
     printf 'known_good_created_at_utc=%s\n' "$(manifest_value "${known_good_manifest}" created_at_utc)"
+    printf 'source_aur_manifest_sha256=%s\n' "$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
     printf 'package_dir=%s\n' "${package_dir}"
     printf '\n[package_bases]\n'
     parse_package_bases "${source_aur_manifest_path}"
+    printf '\n[source_inputs]\n'
+    parse_source_inputs "${source_aur_manifest_path}"
     printf '\n[package_files]\n'
     while IFS= read -r package_path; do
       sha256sum "${package_path}" | awk -v file_name="${package_path##*/}" '{print $1 "\t" file_name}'
@@ -218,8 +288,10 @@ main() {
   require_cmd curl
   require_cmd date
   require_cmd find
+  require_cmd gpgv
   require_cmd sha256sum
   require_cmd sort
+  [[ -r "${package_keyring}" ]] || die "Package keyring not readable: ${package_keyring}"
 
   configure_known_good_url
   restore_packages

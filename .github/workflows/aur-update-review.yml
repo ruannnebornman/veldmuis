@@ -1,0 +1,175 @@
+name: AUR Update Review
+
+on:
+  schedule:
+    # 12:07 Africa/Johannesburg. GitHub cron uses UTC.
+    - cron: "7 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: veldmuis-aur-update-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: Review AUR Updates
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILDER_USER: builder
+      BUILDER_HOME: /home/builder
+      GNUPGHOME: ${{ runner.temp }}/veldmuis-candidate-gnupg
+      VELDMUIS_AUR_ENABLE_FALLBACK: false
+      VELDMUIS_AUR_UPDATE_GROUP: nvidia-580xx
+      VELDMUIS_AUR_UPDATE_BRANCH: automation/aur-update/nvidia-580xx
+    steps:
+      - name: Check out main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/heads/main
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
+      - name: Resolve AUR latest refs
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolved_refs="${RUNNER_TEMP}/veldmuis-aur-resolved-refs.txt"
+          base_sha="$(git rev-parse HEAD)"
+          VELDMUIS_AUR_REF_MODE=latest \
+            ./development/build-aur-packages.sh --resolve-only \
+            | sort > "${resolved_refs}"
+          printf 'base_sha=%s\n' "${base_sha}" >> "${GITHUB_OUTPUT}"
+          printf 'resolved_refs=%s\n' "${resolved_refs}" >> "${GITHUB_OUTPUT}"
+
+      - name: Audit AUR changes
+        id: audit
+        shell: bash
+        env:
+          VELDMUIS_AUR_RESOLVED_REFS_FILE: ${{ steps.resolve.outputs.resolved_refs }}
+          VELDMUIS_AUR_UPDATE_REPORT: ${{ runner.temp }}/veldmuis-aur-update-report.md
+        run: |
+          set -euo pipefail
+          ./development/audit-aur-update.sh \
+            --resolved-refs "${VELDMUIS_AUR_RESOLVED_REFS_FILE}" \
+            --report "${VELDMUIS_AUR_UPDATE_REPORT}"
+
+      - name: Stop when AUR inputs are current
+        if: steps.audit.outputs.updates_available != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "${VELDMUIS_AUR_UPDATE_REPORT}"
+
+      - name: Prepare candidate lock
+        if: steps.audit.outputs.updates_available == 'true'
+        id: candidate_lock
+        shell: bash
+        env:
+          VELDMUIS_AUR_RESOLVED_REFS_FILE: ${{ steps.resolve.outputs.resolved_refs }}
+        run: |
+          set -euo pipefail
+          candidate_lock="${RUNNER_TEMP}/veldmuis-aur-candidate.lock"
+          cp development/aur-packages.lock "${candidate_lock}"
+          VELDMUIS_AUR_LOCK_FILE="${candidate_lock}" \
+            ./development/update-aur-lock.sh \
+            --resolved-refs "${VELDMUIS_AUR_RESOLVED_REFS_FILE}" \
+            --lock-file "${candidate_lock}"
+          printf 'candidate_lock=%s\n' "${candidate_lock}" >> "${GITHUB_OUTPUT}"
+
+      - name: Pin candidate build to audited refs
+        if: steps.audit.outputs.updates_available == 'true'
+        shell: bash
+        env:
+          VELDMUIS_AUR_RESOLVED_REFS_FILE: ${{ steps.resolve.outputs.resolved_refs }}
+        run: |
+          set -euo pipefail
+          while read -r package_base ref; do
+            suffix="$(printf '%s' "${package_base}" | tr '[:lower:]-' '[:upper:]_')"
+            printf 'VELDMUIS_AUR_REF_%s=%s\n' "${suffix}" "${ref}" >> "${GITHUB_ENV}"
+          done < "${VELDMUIS_AUR_RESOLVED_REFS_FILE}"
+          printf 'VELDMUIS_AUR_REF_MODE=locked\n' >> "${GITHUB_ENV}"
+
+      - name: Build candidate packages without signing credentials
+        if: steps.audit.outputs.updates_available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/run-ci-arch-builder.sh candidate
+
+      - name: Validate candidate package set
+        if: steps.audit.outputs.updates_available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/build-aur-packages.sh --validate-only
+
+      - name: Scan candidate package payload
+        if: steps.audit.outputs.updates_available == 'true'
+        id: scan
+        shell: bash
+        env:
+          VELDMUIS_AUR_SCAN_REPORT: ${{ runner.temp }}/veldmuis-aur-package-scan.md
+        run: |
+          set -euo pipefail
+          ./development/scan-aur-candidate.sh \
+            --report "${VELDMUIS_AUR_SCAN_REPORT}" \
+            --source-root artifacts/aur-packages/work
+
+      - name: Combine candidate evidence
+        if: steps.audit.outputs.updates_available == 'true'
+        id: evidence
+        shell: bash
+        env:
+          AUDIT_REPORT: ${{ steps.audit.outputs.report_file }}
+          SCAN_REPORT: ${{ steps.scan.outputs.report_file }}
+          REVIEW_BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          evidence_report="${RUNNER_TEMP}/veldmuis-aur-candidate-evidence.md"
+          printf '# Review base commit\n\n%s\n' "${REVIEW_BASE_SHA}" > "${evidence_report}"
+          printf '\n---\n\n' >> "${evidence_report}"
+          cat "${SCAN_REPORT}" >> "${evidence_report}"
+          printf '\n---\n\n' >> "${evidence_report}"
+          cat "${AUDIT_REPORT}" >> "${evidence_report}"
+          risk=low
+          [[ "${{ steps.audit.outputs.risk }}" == high || "${{ steps.scan.outputs.risk }}" == high ]] && risk=high
+          printf '\nfinal_risk=%s\n' "${risk}" >> "${GITHUB_OUTPUT}"
+          printf 'evidence_report=%s\n' "${evidence_report}" >> "${GITHUB_OUTPUT}"
+
+      - name: Preserve candidate evidence
+        if: steps.audit.outputs.updates_available == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aur-update-${{ github.run_id }}
+          path: |
+            ${{ steps.evidence.outputs.evidence_report }}
+            ${{ steps.audit.outputs.report_file }}
+            ${{ steps.scan.outputs.report_file }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or update candidate pull request
+        if: steps.audit.outputs.updates_available == 'true'
+        shell: bash
+        env:
+          VELDMUIS_AUR_CANDIDATE_LOCK: ${{ steps.candidate_lock.outputs.candidate_lock }}
+          VELDMUIS_AUR_UPDATE_REPORT: ${{ steps.evidence.outputs.evidence_report }}
+          VELDMUIS_AUR_UPDATE_RISK: ${{ steps.evidence.outputs.final_risk }}
+          VELDMUIS_AUR_REVIEW_BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          ./development/manage-aur-update-pr.sh
