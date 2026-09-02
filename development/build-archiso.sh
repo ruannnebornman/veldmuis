@@ -142,6 +142,28 @@ validate_offline_repository() {
   }
 }
 
+validate_embedded_repository() {
+  local repo_name="$1"
+  local repo_dir="${repo_file_root}/${repo_name}/os/x86_64"
+  local database_path="${repo_dir}/${repo_name}.db.tar.gz"
+  local signature_path="${database_path}.sig"
+
+  [[ -s "${database_path}" ]] || {
+    echo "Embedded Veldmuis repository database not found: ${repo_name}" >&2
+    exit 1
+  }
+  [[ -s "${signature_path}" ]] || {
+    echo "Embedded Veldmuis repository database signature not found: ${repo_name}" >&2
+    exit 1
+  }
+
+  gpgv --keyring "${veldmuis_keyring_root}/veldmuis.gpg" \
+    "${signature_path}" "${database_path}" || {
+    echo "Embedded Veldmuis repository database signature is invalid: ${repo_name}" >&2
+    exit 1
+  }
+}
+
 cleanup_mounts_under() {
   local mount_root="$1"
   local -a mountpoints=()
@@ -257,6 +279,7 @@ require_cmd find
 require_cmd findmnt
 require_cmd umount
 require_cmd gpg
+require_cmd gpgv
 require_cmd date
 require_cmd awk
 require_cmd du
@@ -297,8 +320,11 @@ for keyring_file in veldmuis.gpg veldmuis-trusted veldmuis-revoked; do
   fi
 done
 
+for repo_name in veldmuis-core veldmuis-extra; do
+  validate_embedded_repository "${repo_name}"
+done
+
 if [[ "${iso_mode}" == "offline" ]]; then
-  require_cmd gpgv
   validate_offline_repository
 fi
 
