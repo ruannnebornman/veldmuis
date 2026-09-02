@@ -144,24 +144,54 @@ validate_offline_repository() {
 
 validate_embedded_repository() {
   local repo_name="$1"
-  local repo_dir="${repo_file_root}/${repo_name}/os/x86_64"
-  local database_path="${repo_dir}/${repo_name}.db.tar.gz"
-  local signature_path="${database_path}.sig"
+  local repo_dir="${2:-${repo_file_root}/${repo_name}/os/x86_64}"
+  local database_path=""
+  local signature_path=""
+  local database_found=0
 
-  [[ -s "${database_path}" ]] || {
+  for database_path in \
+    "${repo_dir}/${repo_name}.db.tar.gz" \
+    "${repo_dir}/${repo_name}.db"
+  do
+    [[ -e "${database_path}" ]] || continue
+    database_found=1
+    signature_path="${database_path}.sig"
+
+    [[ -s "${database_path}" ]] || {
+      echo "Embedded Veldmuis repository database is empty: ${database_path}" >&2
+      exit 1
+    }
+    [[ -s "${signature_path}" ]] || {
+      echo "Embedded Veldmuis repository database signature not found: ${signature_path}" >&2
+      exit 1
+    }
+
+    gpgv --keyring "${veldmuis_keyring_root}/veldmuis.gpg" \
+      "${signature_path}" "${database_path}" || {
+      echo "Embedded Veldmuis repository database signature is invalid: ${database_path}" >&2
+      exit 1
+    }
+  done
+
+  (( database_found == 1 )) || {
     echo "Embedded Veldmuis repository database not found: ${repo_name}" >&2
     exit 1
   }
-  [[ -s "${signature_path}" ]] || {
-    echo "Embedded Veldmuis repository database signature not found: ${repo_name}" >&2
+}
+
+normalize_embedded_repository_aliases() {
+  local repo_name="$1"
+  local repo_dir="${embedded_repo_root}/${repo_name}/os/x86_64"
+  local database_path="${repo_dir}/${repo_name}.db.tar.gz"
+  local signature_path="${database_path}.sig"
+
+  [[ -s "${database_path}" && -s "${signature_path}" ]] || {
+    echo "Embedded Veldmuis repository source pair is incomplete: ${repo_name}" >&2
     exit 1
   }
 
-  gpgv --keyring "${veldmuis_keyring_root}/veldmuis.gpg" \
-    "${signature_path}" "${database_path}" || {
-    echo "Embedded Veldmuis repository database signature is invalid: ${repo_name}" >&2
-    exit 1
-  }
+  install -m0644 "${database_path}" "${repo_dir}/${repo_name}.db"
+  install -m0644 "${signature_path}" "${repo_dir}/${repo_name}.db.sig"
 }
 
 cleanup_mounts_under() {
@@ -320,10 +350,6 @@ for keyring_file in veldmuis.gpg veldmuis-trusted veldmuis-revoked; do
   fi
 done
 
-for repo_name in veldmuis-core veldmuis-extra; do
-  validate_embedded_repository "${repo_name}"
-done
-
 if [[ "${iso_mode}" == "offline" ]]; then
   validate_offline_repository
 fi
@@ -350,6 +376,13 @@ rm -rf "${embedded_repo_root}"
 install -d -m0755 "${embedded_repo_root}"
 for repo_name in veldmuis-core veldmuis-extra; do
   cp -a "${repo_file_root}/${repo_name}" "${embedded_repo_root}/${repo_name}"
+done
+for repo_name in veldmuis-core veldmuis-extra; do
+  normalize_embedded_repository_aliases "${repo_name}"
+done
+for repo_name in veldmuis-core veldmuis-extra; do
+  validate_embedded_repository \
+    "${repo_name}" "${embedded_repo_root}/${repo_name}/os/x86_64"
 done
 if [[ "${iso_mode}" == "offline" ]]; then
   cp -a "${repo_file_root}/veldmuis-offline" \
