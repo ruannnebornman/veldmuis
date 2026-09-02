@@ -1,6 +1,6 @@
 pkgname=veldmuis-terminal
 pkgver=20260306
-pkgrel=2
+pkgrel=3
 pkgdesc="Default terminal stack and user defaults for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -10,6 +10,7 @@ veldmuis_user_defaults_revision=1
 _source_root="${PWD}"
 depends=(
   "wezterm"
+  "ttf-nerd-fonts-symbols-mono"
   "fish"
   "atuin"
   "libgit2"
