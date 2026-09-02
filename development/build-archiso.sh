@@ -145,21 +145,36 @@ validate_offline_repository() {
 validate_embedded_repository() {
   local repo_name="$1"
   local repo_dir="${repo_file_root}/${repo_name}/os/x86_64"
-  local database_path="${repo_dir}/${repo_name}.db.tar.gz"
-  local signature_path="${database_path}.sig"
+  local database_path=""
+  local signature_path=""
+  local database_found=0
 
-  [[ -s "${database_path}" ]] || {
+  for database_path in \
+    "${repo_dir}/${repo_name}.db.tar.gz" \
+    "${repo_dir}/${repo_name}.db"
+  do
+    [[ -e "${database_path}" ]] || continue
+    database_found=1
+    signature_path="${database_path}.sig"
+
+    [[ -s "${database_path}" ]] || {
+      echo "Embedded Veldmuis repository database is empty: ${database_path}" >&2
+      exit 1
+    }
+    [[ -s "${signature_path}" ]] || {
+      echo "Embedded Veldmuis repository database signature not found: ${signature_path}" >&2
+      exit 1
+    }
+
+    gpgv --keyring "${veldmuis_keyring_root}/veldmuis.gpg" \
+      "${signature_path}" "${database_path}" || {
+      echo "Embedded Veldmuis repository database signature is invalid: ${database_path}" >&2
+      exit 1
+    }
+  done
+
+  (( database_found == 1 )) || {
     echo "Embedded Veldmuis repository database not found: ${repo_name}" >&2
-    exit 1
-  }
-  [[ -s "${signature_path}" ]] || {
-    echo "Embedded Veldmuis repository database signature not found: ${repo_name}" >&2
-    exit 1
-  }
-
-  gpgv --keyring "${veldmuis_keyring_root}/veldmuis.gpg" \
-    "${signature_path}" "${database_path}" || {
-    echo "Embedded Veldmuis repository database signature is invalid: ${repo_name}" >&2
     exit 1
   }
 }
