@@ -88,7 +88,7 @@ validate_offline_repository() {
     die "Embedded offline repository manifest checksum is invalid."
 
   expected_count="$(offline_build_value offline_package_count)"
-  actual_count="$(awk 'END { print NR > 0 ? NR - 1 : 0 }' "${offline_manifest}")"
+  actual_count="$(awk 'END { print (NR > 0 ? NR - 1 : 0) }' "${offline_manifest}")"
   [[ "${expected_count}" =~ ^[1-9][0-9]*$ && "${actual_count}" == "${expected_count}" ]] || \
     die "Embedded offline repository package count is invalid."
 
