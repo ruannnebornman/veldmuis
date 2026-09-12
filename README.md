@@ -169,7 +169,6 @@ current signing-key details.
 - `veldmuis-common`
 - `veldmuis-boot`
 - `veldmuis-displaymanager`
-- `veldmuis-terminal`
 - `veldmuis-desktop-kde`
 - `veldmuis-multimedia`
 - `veldmuis-branding`
@@ -182,6 +181,7 @@ Optional package groups include:
 - `veldmuis-downloads`
 - `veldmuis-sync`
 - `veldmuis-nvidia-legacy`
+- `veldmuis-kaazrot` (personal overlay, installer checkbox only)
 
 Infrastructure and installer packages include:
 

@@ -1,0 +1,58 @@
+pkgname=veldmuis-kaazrot
+pkgver=20260913
+pkgrel=1
+pkgdesc="Personal customizations overlay for kaazrot (terminal, editor, agent defaults)"
+arch=("any")
+url="https://github.com/ruannnebornman/veldmuis"
+license=("MIT")
+depends=(
+  "wezterm"
+  "fish"
+  "atuin"
+)
+install=veldmuis-kaazrot.install
+source=(
+  "veldmuis-kaazrot-apply"
+  "fish-config.fish"
+  "wezterm.lua"
+  "opencode-AGENTS.md"
+  "opencode-opencode.jsonc"
+  "opencode-tui.jsonc"
+  "opencode-ctrl-c-interrupt.mjs"
+  "opencode-wezterm-attention.mjs"
+  "opencode-wezterm-sessions.mjs"
+)
+sha256sums=(
+  "a82b9958445bb885fa2854240eee8aabf996136dc0ad3d2a3c746b4976aee0f0"
+  "cebb24ab5b09d41bfeacd21f1712f9f7ccf5c4418a288a20f67f6fd956894d4d"
+  "010716747713e94d5416e5be651252ddcfae7919c5dfb9978196a8abd58c0fd1"
+  "07c2dc2bb9d18d71c9f000e3cf12d27ceb4667a30e9ea7e6ef3280d22aa0c198"
+  "21ce0ea8260020fce054c2d67b8141d362e2dcef53007ac861982d5b29bc2a63"
+  "5b4e239647ab0ed0c6f45fba3427d4492b855ff043a029853836a7b2ee43b50c"
+  "df82f8bba7fade6ff8851aa58c1b804e844526b5a860af5fe27b0aedbd952543"
+  "4253cb4d0cc1b6c50b220a929bb35730004675b0db6e9481356e616b2eb42854"
+  "f47d5b48aa2555cc7834f6621b89b05b14f21b53326f8c2968257cb92f04d423"
+)
+
+package() {
+  local templates_root="${pkgdir}/usr/share/veldmuis-kaazrot/templates"
+
+  install -Dm755 "${srcdir}/veldmuis-kaazrot-apply" \
+    "${pkgdir}/usr/bin/veldmuis-kaazrot-apply"
+  install -Dm644 "${srcdir}/fish-config.fish" \
+    "${templates_root}/fish/config.fish"
+  install -Dm644 "${srcdir}/wezterm.lua" \
+    "${templates_root}/wezterm/wezterm.lua"
+  install -Dm644 "${srcdir}/opencode-AGENTS.md" \
+    "${templates_root}/opencode/AGENTS.md"
+  install -Dm644 "${srcdir}/opencode-opencode.jsonc" \
+    "${templates_root}/opencode/opencode.jsonc"
+  install -Dm644 "${srcdir}/opencode-tui.jsonc" \
+    "${templates_root}/opencode/tui.jsonc"
+  install -Dm644 "${srcdir}/opencode-ctrl-c-interrupt.mjs" \
+    "${templates_root}/opencode/opencode-ctrl-c-interrupt.mjs"
+  install -Dm644 "${srcdir}/opencode-wezterm-attention.mjs" \
+    "${templates_root}/opencode/opencode-wezterm-attention.mjs"
+  install -Dm644 "${srcdir}/opencode-wezterm-sessions.mjs" \
+    "${templates_root}/opencode/opencode-wezterm-sessions.mjs"
+}

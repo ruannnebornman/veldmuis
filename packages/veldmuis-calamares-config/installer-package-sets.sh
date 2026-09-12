@@ -75,3 +75,13 @@ declare -ag veldmuis_installer_sync_packages=(
 declare -ag veldmuis_installer_development_packages=(
   veldmuis-development
 )
+
+declare -ag veldmuis_installer_kaazrot_packages=(
+  veldmuis-kaazrot
+)
+
+# The installer always provides exactly one terminal: the personal overlay
+# stack when kaazrot is selected, plain konsole otherwise.
+declare -ag veldmuis_installer_terminal_packages=(
+  konsole
+)

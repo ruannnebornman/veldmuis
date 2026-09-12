@@ -9,6 +9,7 @@ gaming_choice="no-gaming"
 downloads_choice="no-downloads"
 sync_choice="no-sync"
 development_choice="no-development"
+kaazrot_choice="no-kaazrot"
 live_repo_root="/opt/veldmuis/repo"
 installer_package_sets="/usr/lib/veldmuis/installer-package-sets.sh"
 tmp_pacman_conf=""
@@ -149,6 +150,20 @@ normalize_development_choice() {
   esac
 }
 
+normalize_kaazrot_choice() {
+  case "${kaazrot_choice}" in
+    no-kaazrot|kaazrot)
+      ;;
+    "")
+      kaazrot_choice="no-kaazrot"
+      ;;
+    *)
+      log "Unknown kaazrot choice '${kaazrot_choice}', defaulting to no-kaazrot"
+      kaazrot_choice="no-kaazrot"
+      ;;
+  esac
+}
+
 normalize_extras_choice() {
   local extra
   local -a extras=()
@@ -157,6 +172,7 @@ normalize_extras_choice() {
   downloads_choice="no-downloads"
   sync_choice="no-sync"
   development_choice="no-development"
+  kaazrot_choice="no-kaazrot"
 
   [[ -n "${extras_choice}" ]] || return 0
 
@@ -174,6 +190,9 @@ normalize_extras_choice() {
         ;;
       code)
         development_choice="code"
+        ;;
+      kaazrot)
+        kaazrot_choice="kaazrot"
         ;;
       "")
         ;;
@@ -430,6 +449,24 @@ selected_development_packages() {
   esac
 }
 
+selected_kaazrot_packages() {
+  case "${kaazrot_choice}" in
+    kaazrot)
+      printf '%s\n' "${veldmuis_installer_kaazrot_packages[@]}"
+      ;;
+  esac
+}
+
+selected_terminal_packages() {
+  case "${kaazrot_choice}" in
+    kaazrot)
+      ;;
+    *)
+      printf '%s\n' "${veldmuis_installer_terminal_packages[@]}"
+      ;;
+  esac
+}
+
 initial_target_packages() {
   local package
   local -a packages=("${veldmuis_installer_base_packages[@]}")
@@ -464,6 +501,16 @@ initial_target_packages() {
     packages+=("${package}")
   done < <(selected_development_packages)
 
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(selected_kaazrot_packages)
+
+  while IFS= read -r package; do
+    [[ -n "${package}" ]] || continue
+    packages+=("${package}")
+  done < <(selected_terminal_packages)
+
   printf '%s\n' "${packages[@]}"
 }
 
@@ -497,6 +544,7 @@ main() {
   normalize_downloads_choice
   normalize_sync_choice
   normalize_development_choice
+  normalize_kaazrot_choice
   write_pacman_conf
   prepare_target_root
 
@@ -521,6 +569,7 @@ main() {
   log "Selected downloads choice: ${downloads_choice}"
   log "Selected sync choice: ${sync_choice}"
   log "Selected development choice: ${development_choice}"
+  log "Selected kaazrot choice: ${kaazrot_choice}"
 
   log "Bootstrap complete"
 }

@@ -10,7 +10,6 @@ depends=(
   "veldmuis-boot"
   "veldmuis-displaymanager"
   "veldmuis-desktop-kde"
-  "veldmuis-terminal"
   "veldmuis-multimedia"
   "veldmuis-branding"
 )

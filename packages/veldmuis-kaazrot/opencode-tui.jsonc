@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": [
+    "file:///home/kaazrot/.config/opencode/opencode-ctrl-c-interrupt.mjs"
+  ],
+  "keybinds": {
+    "app_exit": "ctrl+d,<leader>q",
+    "input_clear": "none",
+    "session_interrupt": "ctrl+c,escape"
+  }
+}

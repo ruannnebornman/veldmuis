@@ -3,6 +3,72 @@ local config = wezterm.config_builder()
 
 config.default_prog = { '/usr/bin/fish' }
 
+config.keys = {
+  {
+    key = 'Backspace',
+    mods = 'CTRL',
+    action = wezterm.action.SendString '\x17',
+  },
+}
+
+local detached_origin_prefix = 'detached_origin_'
+
+local function move_pane_out(window, pane)
+  local pane_id = tostring(pane:pane_id())
+  local source_window = pane:window()
+  local origin_key = detached_origin_prefix .. pane_id
+
+  wezterm.GLOBAL[origin_key] = source_window:window_id()
+
+  local ok, _, stderr = wezterm.run_child_process {
+    'wezterm', 'cli', 'move-pane-to-new-tab',
+    '--pane-id', pane_id,
+    '--new-window',
+    '--workspace', source_window:get_workspace(),
+  }
+
+  if not ok then
+    wezterm.GLOBAL[origin_key] = nil
+    window:toast_notification('WezTerm', 'Could not move pane: ' .. tostring(stderr), nil, 5000)
+  end
+end
+
+local function move_pane_back(window, pane)
+  local pane_id = tostring(pane:pane_id())
+  local origin_key = detached_origin_prefix .. pane_id
+  local origin_window_id = wezterm.GLOBAL[origin_key]
+
+  if not origin_window_id then
+    window:toast_notification('WezTerm', 'No original window found', nil, 3000)
+    return
+  end
+
+  local ok, _, stderr = wezterm.run_child_process {
+    'wezterm', 'cli', 'move-pane-to-new-tab',
+    '--pane-id', pane_id,
+    '--window-id', tostring(origin_window_id),
+  }
+
+  if ok then
+    wezterm.GLOBAL[origin_key] = nil
+  else
+    window:toast_notification('WezTerm', 'Could not move pane back: ' .. tostring(stderr), nil, 5000)
+  end
+end
+
+-- < and > are the shifted comma and period keys on a US keyboard.
+table.insert(config.keys, {
+  key = ',',
+  mods = 'CTRL|SHIFT',
+  action = wezterm.action_callback(move_pane_out),
+})
+
+table.insert(config.keys, {
+  key = '.',
+  mods = 'CTRL|SHIFT',
+  action = wezterm.action_callback(move_pane_back),
+})
+
 config.colors = {
   background = '#1b120d',
   foreground = '#f3d7a0',
@@ -47,13 +113,74 @@ config.colors = {
   },
 }
 
--- Session restore: autosave workspace state and restore it on startup.
--- Fully automatic, no keybindings: periodic saves every 30 seconds plus
--- saves on focus loss and on tab/pane structure changes. Restored panes
--- return to their saved working directory with scrollback; panes that were
--- running opencode relaunch it, resuming the exact session when a
--- pane-to-session snapshot is present and otherwise continuing the
--- folder's last session.
+local attention_title_prefix = '__OPENCODE_ATTENTION__:'
+local attention_seen = {}
+
+local function attention_value(tab_info)
+  local tab_title = tab_info.tab_title
+  if type(tab_title) ~= 'string' or tab_title:sub(1, #attention_title_prefix) ~= attention_title_prefix then
+    return nil, nil
+  end
+
+  local value = tab_title:sub(#attention_title_prefix + 1)
+  if value:sub(1, 5) == 'done:' then
+    return value, 'done'
+  elseif value:sub(1, 6) == 'error:' then
+    return value, 'error'
+  end
+
+  return nil, nil
+end
+
+local function normal_title(tab_info)
+  if tab_info.active_pane and tab_info.active_pane.title then
+    return tab_info.active_pane.title
+  end
+  return tab_info.tab_title or ''
+end
+
+wezterm.on('format-tab-title', function(tab_info)
+  local title = normal_title(tab_info)
+  local value, kind = attention_value(tab_info)
+
+  if not value then
+    return { { Text = title } }
+  end
+
+  local tab_id = tab_info.tab_id
+  if tab_info.is_active then
+    attention_seen[tab_id] = value
+    return { { Text = title } }
+  end
+
+  if attention_seen[tab_id] == value then
+    return { { Text = title } }
+  end
+
+  local background, foreground, marker
+  if kind == 'done' then
+    background = '#f6b73c'
+    foreground = '#1b120d'
+    marker = '● Done'
+  else
+    background = '#d94a38'
+    foreground = '#fff0c7'
+    marker = '! Attention'
+  end
+
+  return {
+    { Background = { Color = background } },
+    { Foreground = { Color = foreground } },
+    { Text = ' ' .. marker .. ' ' .. title .. ' ' },
+  }
+end)
+
+-- Session restore: autosave workspace state, restore on startup.
+-- Fully automatic, no keybindings: periodic saves every 30s plus saves on
+-- focus loss and on tab/pane structure changes.
+-- Exact opencode session resume (including several tabs on the same folder)
+-- via the opencode-wezterm-sessions.mjs plugin, which records pane ->
+-- session mappings that are joined here at save time.
 local resurrect = wezterm.plugin.require('https://github.com/StephenGemin/resurrect.wezterm')
 local resurrect_state_dir = (os.getenv('XDG_STATE_HOME') or (wezterm.home_dir .. '/.local/state'))
   .. '/wezterm/resurrect/'
@@ -97,8 +224,8 @@ end
 -- Ordered list of { cwd, session } matching restore order. Rebuilt after
 -- every workspace save by zipping the just-written state (preorder:
 -- node, right, bottom) with the live mux panes in the same order.
--- The pairwise zip stops at the first cwd mismatch so skewed saves degrade
--- to plain restores instead of attaching wrong sessions.
+-- Pairwise zip stops at the first cwd mismatch so skewed saves degrade to
+-- plain restores instead of attaching wrong sessions.
 local function rebuild_session_snapshot(state_path)
   local ok = pcall(function()
     local state = read_json_file(state_path)
@@ -197,6 +324,8 @@ local function on_pane_restore(pane_tree)
       and valid_session_id(entry.session) then
       pane_tree.pane:send_text('opencode --session ' .. entry.session .. '\r\n')
     else
+      -- No exact session recorded (e.g. opencode started before the
+      -- tracker plugin was installed): resume the folder's last session.
       pane_tree.pane:send_text('opencode --continue\r\n')
     end
   else

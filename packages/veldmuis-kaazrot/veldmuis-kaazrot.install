@@ -1,0 +1,11 @@
+#!/bin/sh
+
+post_install() {
+  printf '%s\n' \
+    'veldmuis-kaazrot ships personal templates only.' \
+    'Run `veldmuis-kaazrot-apply` to copy them into $HOME (existing files are backed up).'
+}
+
+post_upgrade() {
+  post_install
+}
