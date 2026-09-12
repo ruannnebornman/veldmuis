@@ -1,0 +1,18 @@
+_veldmuis_enable_max_performance() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+
+  if systemctl enable cpu-max-performance.service >/dev/null 2>&1; then
+    return 0
+  fi
+
+  printf '%s\n' \
+    "Could not enable cpu-max-performance.service automatically; enable it before rebooting."
+}
+
+post_install() {
+  _veldmuis_enable_max_performance
+}
+
+post_upgrade() {
+  _veldmuis_enable_max_performance
+}
