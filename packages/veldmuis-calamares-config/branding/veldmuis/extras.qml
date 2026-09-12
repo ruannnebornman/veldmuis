@@ -35,6 +35,9 @@ Rectangle {
         if (code.checked) {
             selected.push("code")
         }
+        if (kaazrot.checked) {
+            selected.push("kaazrot")
+        }
         chooserConfig.packageChoice = selected.join(",")
     }
 
@@ -51,6 +54,7 @@ Rectangle {
         qbittorrent.checked = selected.indexOf("qbittorrent") >= 0
         syncthing.checked = selected.indexOf("syncthing") >= 0
         code.checked = selected.indexOf("code") >= 0
+        kaazrot.checked = selected.indexOf("kaazrot") >= 0
         syncing = false
     }
 
@@ -337,6 +341,71 @@ Rectangle {
                     Text {
                         width: parent.width
                         text: qsTr("Code - OSS")
+                        color: "#c9b8aa"
+                        font.pixelSize: 14
+                        elide: Text.ElideRight
+                    }
+                }
+
+                onToggled: root.updateSelection()
+            }
+
+            CheckBox {
+                id: kaazrot
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                hoverEnabled: true
+                text: ""
+
+                indicator: Rectangle {
+                    width: 28
+                    height: 28
+                    x: 18
+                    y: (kaazrot.height - height) / 2
+                    radius: 5
+                    color: kaazrot.checked ? "#e59c3f" : "#201411"
+                    border.color: kaazrot.checked ? "#f5b85f" : "#80604d"
+                    border.width: 2
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 12
+                        height: 12
+                        radius: 3
+                        color: "#201411"
+                        visible: kaazrot.checked
+                    }
+                }
+
+                background: Rectangle {
+                    radius: 6
+                    color: kaazrot.checked ? "#3a271d"
+                                        : (kaazrot.hovered ? "#32211c" : "#2a1b17")
+                    border.color: kaazrot.checked ? "#e59c3f" : "#5a3a2a"
+                    border.width: kaazrot.checked ? 2 : 1
+                }
+
+                Column {
+                    anchors.left: kaazrot.indicator.right
+                    anchors.leftMargin: 16
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+
+                    Text {
+                        width: parent.width
+                        text: qsTr("Personal overlay")
+                        color: "#fff6ed"
+                        font.pixelSize: 17
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: qsTr("kaazrot terminal, editor, and agent defaults")
                         color: "#c9b8aa"
                         font.pixelSize: 14
                         elide: Text.ElideRight

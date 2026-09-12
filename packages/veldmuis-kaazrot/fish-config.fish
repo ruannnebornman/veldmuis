@@ -1,6 +1,5 @@
 set -g fish_greeting
-
-fish_add_path -g "$HOME/.local/bin"
+fish_add_path /home/kaazrot/.local/android/platform-tools
 
 function fish_prompt
     set -l path_parts (string split '/' -- $PWD)
@@ -16,6 +15,6 @@ function fish_prompt
     set_color normal
 end
 
-if status is-interactive; and type -q atuin
-    atuin init fish --disable-up-arrow --disable-ai | source
+if status is-interactive
+    atuin init fish | source
 end

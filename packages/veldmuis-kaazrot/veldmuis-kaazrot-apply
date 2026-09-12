@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+#
+# Apply kaazrot personal customizations from the veldmuis-kaazrot package
+# templates into $HOME. Existing files are never lost: differing files are
+# backed up next to the original with a timestamp suffix before replacement.
+#
+# Fish and WezTerm entries tracked by the retired veldmuis-terminal updater are
+# flipped to mode=unmanaged so nothing restores distro defaults over them.
+
+set -euo pipefail
+
+templates_root="/usr/share/veldmuis-kaazrot/templates"
+state_file="${HOME}/.local/state/veldmuis/user-defaults/state.ini"
+stamp="$(date +%Y%m%d-%H%M%S)"
+
+log() {
+  printf '[veldmuis-kaazrot-apply] %s\n' "$*"
+}
+
+die() {
+  printf '[veldmuis-kaazrot-apply] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+install_file() {
+  local src="$1" dest="$2" backup=""
+
+  [[ -f "${src}" ]] || die "Package template is missing: ${src}"
+  mkdir -p -- "$(dirname -- "${dest}")"
+
+  if [[ ! -e "${dest}" ]]; then
+    install -Dm644 -- "${src}" "${dest}"
+    log "installed ${dest}"
+  elif cmp -s -- "${src}" "${dest}"; then
+    log "unchanged ${dest}"
+  else
+    backup="${dest}.bak-${stamp}"
+    cp -a -- "${dest}" "${backup}"
+    install -Dm644 -- "${src}" "${dest}"
+    log "replaced ${dest} (backup at ${backup})"
+  fi
+}
+
+release_managed_entry() {
+  local id="$1" tmp=""
+
+  [[ -f "${state_file}" ]] || return 0
+  grep -Eq "^\[${id}\]$" "${state_file}" || return 0
+
+  tmp="$(mktemp)"
+  awk -v id="${id}" '
+    /^\[.+\]$/ { section = substr($0, 2, length($0) - 2) }
+    section == id && /^mode=/ { print "mode=unmanaged"; next }
+    section == id && /^origin=/ { print "origin=user"; next }
+    section == id && /^applied_hash=/ { print "applied_hash=none"; next }
+    section == id && /^observation=/ { print "observation=user"; next }
+    { print }
+  ' "${state_file}" >"${tmp}"
+  cat -- "${tmp}" >"${state_file}"
+  rm -f -- "${tmp}"
+  log "released [${id}] from legacy user-defaults management"
+}
+
+main() {
+  [[ -d "${templates_root}" ]] || die "Templates are missing: ${templates_root}"
+
+  install_file "${templates_root}/fish/config.fish" "${HOME}/.config/fish/config.fish"
+  install_file "${templates_root}/wezterm/wezterm.lua" "${HOME}/.config/wezterm/wezterm.lua"
+  install_file "${templates_root}/opencode/AGENTS.md" "${HOME}/.config/opencode/AGENTS.md"
+  install_file "${templates_root}/opencode/opencode.jsonc" "${HOME}/.config/opencode/opencode.jsonc"
+  install_file "${templates_root}/opencode/tui.jsonc" "${HOME}/.config/opencode/tui.jsonc"
+  install_file "${templates_root}/opencode/opencode-ctrl-c-interrupt.mjs" "${HOME}/.config/opencode/opencode-ctrl-c-interrupt.mjs"
+  install_file "${templates_root}/opencode/opencode-wezterm-attention.mjs" "${HOME}/.config/opencode/opencode-wezterm-attention.mjs"
+  install_file "${templates_root}/opencode/opencode-wezterm-sessions.mjs" "${HOME}/.config/opencode/opencode-wezterm-sessions.mjs"
+
+  release_managed_entry fish
+  release_managed_entry wezterm
+
+  if ! command -v opencode >/dev/null 2>&1 && [[ ! -x "${HOME}/.opencode/bin/opencode" ]]; then
+    log "opencode is not installed; run its installer, then restart it to pick up the config"
+  fi
+
+  log "done"
+}
+
+main "$@"

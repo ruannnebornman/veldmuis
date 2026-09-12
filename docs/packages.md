@@ -36,7 +36,6 @@ veldmuis-common
 veldmuis-boot
 veldmuis-displaymanager
 veldmuis-desktop-kde
-veldmuis-terminal
 veldmuis-multimedia
 veldmuis-branding
 ```
@@ -144,24 +143,11 @@ It also installs the Veldmuis `mpv` configuration.
 
 ## Terminal
 
-`veldmuis-terminal` is an independently installable terminal stack. It provides:
-
-- WezTerm.
-- Fish and Atuin.
-- Seeded Fish and WezTerm configuration under `/etc/skel`.
-- The managed user-defaults updater and its versioned templates.
-- The OpenGL and Git runtime libraries required by WezTerm on minimal systems,
-  including WSL2/WSLg.
-
-On WSL2/WSLg, interactive Bash login shells and Fish sessions run a one-time
-default seeding pass for existing accounts. Unrecognized existing config files
-are backed up before replacement; unsafe paths are left unmanaged. The first
-shell session performs the seed, so launch WezTerm again afterward if its
-per-user configuration did not exist yet.
-
-The default `veldmuis-desktop` target depends on this package, but the KDE
-desktop package does not. This allows terminal defaults to be installed or
-updated independently of the larger desktop application set.
+Veldmuis ships no terminal emulator in its metapackages. The Calamares
+installer always provides exactly one: plain `konsole` by default, or the
+`veldmuis-kaazrot` overlay stack (WezTerm, Fish, Atuin plus personal configs)
+when the personal overlay checkbox is selected. Manual `veldmuis-desktop`
+installs outside the installer need a terminal emulator of choice.
 
 ## Branding
 
@@ -203,6 +189,18 @@ helper, and a one-time editable Firefox bookmark for the local Syncthing UI.
 code
 github-cli
 ```
+
+`veldmuis-kaazrot`:
+
+```text
+veldmuis-kaazrot
+```
+
+`veldmuis-kaazrot` is a personal overlay, not a general application group.
+It ships kaazrot terminal, editor, and agent-default templates plus the
+`veldmuis-kaazrot-apply` helper, which copies them into `$HOME` (backing up
+differing files) and releases Fish and WezTerm from legacy distro user-defaults
+management. It is unchecked by default in the installer.
 
 ## Graphics Choices
 
@@ -251,7 +249,7 @@ It then adds:
 
 - CPU microcode for detected AMD or Intel CPUs.
 - The selected graphics package set.
-- Optional gaming, download, sync, and development metapackages.
+- Optional gaming, download, sync, development, and personal metapackages.
 
 Current ISO behavior: Veldmuis repositories are embedded in the ISO, while
 Arch packages are still resolved from Arch mirrors during installation.
