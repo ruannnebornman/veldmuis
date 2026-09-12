@@ -40,7 +40,7 @@ test "$(stat -c '%a' "${state_path}")" = 600
 
 grep -Fqx "fish/config.fish$(printf '\t')templates/fish/config.fish$(printf '\t')${expected_fish_hash}$(printf '\t')1" \
   "${manifest_path}"
-grep -Fqx "wezterm/wezterm.lua$(printf '\t')templates/wezterm/wezterm.lua$(printf '\t')${expected_wezterm_hash}$(printf '\t')1" \
+grep -Fqx "wezterm/wezterm.lua$(printf '\t')templates/wezterm/wezterm.lua$(printf '\t')${expected_wezterm_hash}$(printf '\t')2" \
   "${manifest_path}"
 grep -Fqx "applied_hash=${expected_fish_hash}" "${state_path}"
 grep -Fqx "applied_hash=${expected_wezterm_hash}" "${state_path}"
