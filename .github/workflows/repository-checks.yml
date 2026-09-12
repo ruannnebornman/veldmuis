@@ -70,50 +70,6 @@ jobs:
           set -euo pipefail
           ./development/check-release-publisher.sh
 
-      - name: Check installer package-set seed
-        shell: bash
-        run: |
-          set -euo pipefail
-          source ./packages/veldmuis-calamares-config/installer-package-sets.sh
-
-          ((${#veldmuis_offline_seed_packages[@]} > 0)) || {
-            echo "Offline installer package seed is empty" >&2
-            exit 1
-          }
-
-          declare -A seen=()
-          for package_name in "${veldmuis_offline_seed_packages[@]}"; do
-            [[ -n "${package_name}" ]] || {
-              echo "Offline installer package seed contains an empty entry" >&2
-              exit 1
-            }
-            [[ -z "${seen[${package_name}]:-}" ]] || {
-              echo "Duplicate offline installer seed package: ${package_name}" >&2
-              exit 1
-            }
-            seen["${package_name}"]=1
-          done
-
-          echo "Validated ${#seen[@]} offline installer seed packages"
-
-      - name: Check offline manifest package counter
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          counter="development/count-offline-manifest-packages.awk"
-          empty_count="$(printf 'header\n' | awk -f "${counter}")"
-          populated_count="$(printf 'header\none\ntwo\n' | awk -f "${counter}")"
-
-          [[ "${empty_count}" == "0" ]] || {
-            echo "Empty offline manifest count is invalid: ${empty_count}" >&2
-            exit 1
-          }
-          [[ "${populated_count}" == "2" ]] || {
-            echo "Populated offline manifest count is invalid: ${populated_count}" >&2
-            exit 1
-          }
-
       - name: Check Calamares package source checksums
         shell: bash
         run: |

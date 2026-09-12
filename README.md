@@ -68,10 +68,7 @@ metapackages.
 
 The current ISO embeds the signed Veldmuis package repositories used by the
 installer. Arch packages are still resolved from Arch mirrors during
-installation, so the public image remains a network installer. A full offline
-candidate build and size-measurement path is documented in
-[Building Packages And ISOs](docs/building.md); it is not yet the public release
-path.
+installation, so the public image is a network installer.
 
 ## Official Links
 
@@ -114,7 +111,6 @@ changing disk partitions.
 Current installer channels:
 
 - Network installer: https://downloads.veldmuislinux.org/iso/channels/network.json
-- Offline installer: https://downloads.veldmuislinux.org/iso/channels/offline.json
 - Network signed manifest: https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt
 - Network manifest signature: https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
 
@@ -219,9 +215,7 @@ without cluttering the default install.
 
 **Why is it a network installer?**
 The public image resolves Arch packages from Arch mirrors during installation,
-so the download stays small and current. An offline candidate build is
-documented in [Building Packages And ISOs](docs/building.md) but is not yet the
-public release path.
+so the download stays small and current.
 
 **Why is Secure Boot not supported?**
 The install path targets UEFI with systemd-boot and Secure Boot disabled. This

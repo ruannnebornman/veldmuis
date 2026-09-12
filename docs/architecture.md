@@ -30,15 +30,8 @@ branding assets.
 repos/
   veldmuis-core/os/x86_64/
   veldmuis-extra/os/x86_64/
-  veldmuis-offline/os/x86_64/
   manifests/
 ```
-
-`veldmuis-offline` is created only for full offline ISO candidates. It contains
-unchanged official Arch package files and upstream signatures resolved from one
-dated Arch Linux Archive snapshot. Its repository database is signed with the
-Veldmuis release key. It is an ISO input, not part of the hosted Veldmuis
-package repository.
 
 Package files and repository databases are signed with the Veldmuis release
 signing key. The public package repository is published by
@@ -63,11 +56,8 @@ the signed Veldmuis repositories under:
 ```
 
 The ISO profile is UEFI-only and uses systemd-boot loader entries. The live
-session exposes Calamares as the graphical installer.
-
-Offline candidates include `/etc/veldmuis/offline-install` in the live root.
-That marker selects a local-only Calamares pacman configuration. Builds without
-the marker retain the current network-installer behavior.
+session exposes Calamares as the graphical installer, which installs over the
+network.
 
 ## Installer Layer
 
@@ -87,19 +77,15 @@ Installer choices can add graphics-specific packages and optional application
 groups such as gaming, downloads, sync, and development.
 
 The shared selection definition is
-`packages/veldmuis-calamares-config/installer-package-sets.sh`. Both Calamares
-and the offline repository builder consume it, and the offline validator checks
-every individual and maximal selection with container networking disabled.
+`packages/veldmuis-calamares-config/installer-package-sets.sh`.
 
 ## Release Layer
 
-The package repository has its own workflow. Scheduled network-installer
-releases call the offline-installer workflow after network publication;
-manual installer releases remain independently dispatchable. Installer
-workflows resolve an exact `main` commit, build in isolated Arch containers,
-and create authenticated release metadata in a network-disabled signing stage.
-They publish release-specific ISO objects before advancing a small
-installer-specific channel document.
+The package repository has its own workflow. Scheduled and manual
+installer releases resolve an exact `main` commit, build in isolated Arch
+containers, and create authenticated release metadata in a network-disabled
+signing stage. They publish release-specific ISO objects before advancing the
+small network channel document.
 
 GitHub releases keep release notes, the signed manifest and signature,
 checksum, package inventory, SPDX SBOM, build inputs, and resolved AUR inputs.
@@ -107,7 +93,6 @@ The current channel paths are:
 
 ```text
 https://downloads.veldmuislinux.org/iso/channels/network.json
-https://downloads.veldmuislinux.org/iso/channels/offline.json
 ```
 
 Channel manifests point users to immutable artifacts under
