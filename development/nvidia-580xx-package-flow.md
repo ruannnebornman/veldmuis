@@ -38,7 +38,8 @@ the package repo build.
 7. `development/publish-r2-package-repo.sh` publishes the pacman repositories
    and includes the AUR manifest, including resolved refs and source hashes.
 8. `development/publish-known-good-nvidia-packages.sh` updates the known-good
-   NVIDIA package cache after a successful non-fallback build.
+   NVIDIA package cache after a successful non-fallback build, then prunes
+   cached objects the new manifest no longer references.
 9. `development/restore-known-good-nvidia-packages.sh` restores that cache when
    the active AUR build path cannot produce a complete package set.
 
