@@ -78,8 +78,8 @@ development/nvidia-580xx-package-flow.md
 
 The current automation:
 
-- Resolves AUR refs from the committed lock file by default; latest refs are an
-  explicit update path.
+- Resolves AUR refs from the committed lock file by default; the scheduled
+  package refresh may pin audited latest refs for routine updates.
 - Builds AUR packages without the Veldmuis signing key.
 - Validates the expected package names and license metadata.
 - Records the checked-out `PKGBUILD` and pre-build source-input hashes.
@@ -88,11 +88,12 @@ The current automation:
 - Publishes a known-good NVIDIA package cache after successful non-fallback
   builds.
 - Can restore the known-good NVIDIA package set if a fresh AUR build fails.
-- Allows routine NVIDIA AUR updates to continue through the automated path when
-  the audited diff changes only an allowlisted version, source, checksum, or
-  signing-key metadata assignment in `PKGBUILD`.
+- Publishes routine NVIDIA AUR updates without waiting for a lock pull request
+  when the audited diff changes only an allowlisted version, source, checksum,
+  or signing-key metadata assignment in `PKGBUILD`, then opens a quiet lock
+  sync for the baseline.
 - Keeps recipe logic, dependency, install, privileged-path, and payload-scan
-  changes on the manual review path.
+  changes on the manual review path with a labeled, assigned pull request.
 
 These controls reduce risk, but they do not remove the upstream risk. The AUR
 `PKGBUILD` and NVIDIA source archives are third-party inputs; Veldmuis does not
@@ -102,7 +103,7 @@ trusted by itself. DKMS rebuild failures and rolling-kernel incompatibility
 remain possible.
 
 The metadata-only classification is an automation rule, not a claim that the
-upstream source is trusted. Every candidate still uses the locked AUR commit,
+upstream source is trusted. Every candidate still uses pinned AUR commits,
 the isolated build, package-set and license validation, payload scan, and later
 network-disabled signing controls. A successful candidate remains subject to
 the repository's normal protected integration path.

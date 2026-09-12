@@ -11,6 +11,8 @@ risk="${VELDMUIS_AUR_UPDATE_RISK:-high}"
 group_name="${VELDMUIS_AUR_UPDATE_GROUP:-nvidia-580xx}"
 branch_name="${VELDMUIS_AUR_UPDATE_BRANCH:-automation/aur-update/${group_name}}"
 pr_title="${VELDMUIS_AUR_UPDATE_TITLE:-Update ${group_name} AUR inputs}"
+labels="${VELDMUIS_AUR_UPDATE_LABELS:-}"
+assignees="${VELDMUIS_AUR_UPDATE_ASSIGNEES:-}"
 
 die() {
   printf '[manage-aur-update-pr] ERROR: %s\n' "$*" >&2
@@ -26,6 +28,11 @@ Environment:
   VELDMUIS_AUR_CANDIDATE_LOCK  Candidate lock file to publish in the PR branch.
   VELDMUIS_AUR_UPDATE_REPORT   Candidate evidence report.
   VELDMUIS_AUR_UPDATE_RISK     low or high.
+  VELDMUIS_AUR_UPDATE_LABELS   Optional comma-separated labels for high-risk PRs.
+  VELDMUIS_AUR_UPDATE_ASSIGNEES
+                               Optional comma-separated assignees for high-risk PRs.
+                               Labels and assignees are only applied to high-risk
+                               PRs; low-risk sync PRs stay quiet.
 EOF
 }
 
@@ -73,11 +80,41 @@ write_pr_body() {
     printf '\n## Review Gate\n\n'
     if [[ "${risk}" == high ]]; then
       printf 'This candidate is high risk. Do not merge until the AUR diff, package scan, and build evidence have been reviewed.\n'
+      printf '\nNo routine package refresh will publish these refs until this PR reaches main.\n'
     else
-      printf 'This candidate passed the low-risk automated policy. The maintainer may merge it after required checks pass.\n'
+      printf 'Routine low-risk sync. The scheduled package refresh publishes these refs without waiting for this PR; merging aligns the lock baseline with the published manifest.\n'
     fi
-    printf '\nThe lock update is the accepted provenance boundary. The production package workflow must rebuild the exact SHA after this PR reaches main.\n'
   } >"${body_file}"
+}
+
+apply_pr_attention() {
+  local pr_number="$1"
+  local label trimmed_labels trimmed_assignees
+  local -a label_list=()
+
+  # Quiet by design for low-risk sync PRs. High-risk PRs get labels and
+  # assignees so the maintainer is notified through normal hosting alerts.
+  # Reviewer requests and ready-state changes are intentionally left to the
+  # maintainer through the hosting interface.
+  [[ "${risk}" == high ]] || return 0
+
+  trimmed_labels="$(printf '%s' "${labels}" | tr -d '[:space:]')"
+  if [[ -n "${trimmed_labels}" ]]; then
+    IFS=',' read -r -a label_list <<< "${trimmed_labels}"
+    for label in "${label_list[@]}"; do
+      [[ -n "${label}" ]] || continue
+      if ! gh pr edit "${pr_number}" --add-label "${label}" >/dev/null; then
+        printf '[manage-aur-update-pr] WARNING: Unable to apply label %s to #%s\n' "${label}" "${pr_number}" >&2
+      fi
+    done
+  fi
+
+  trimmed_assignees="$(printf '%s' "${assignees}" | tr -d '[:space:]')"
+  if [[ -n "${trimmed_assignees}" ]]; then
+    if ! gh pr edit "${pr_number}" --add-assignee "${trimmed_assignees}" >/dev/null; then
+      printf '[manage-aur-update-pr] WARNING: Unable to assign #%s to %s\n' "${pr_number}" "${trimmed_assignees}" >&2
+    fi
+  fi
 }
 
 main() {
@@ -136,6 +173,7 @@ main() {
   if [[ -n "${pr_number}" ]]; then
     gh pr comment "${pr_number}" --body-file "${report_file}" >/dev/null
     gh pr edit "${pr_number}" --title "${pr_title}" --body-file "${body_file}" >/dev/null
+    apply_pr_attention "${pr_number}"
     if [[ "${risk}" == high ]]; then
       is_draft="$(gh pr view "${pr_number}" --json isDraft --jq '.isDraft')"
       if [[ "${is_draft}" != true ]]; then
@@ -155,6 +193,7 @@ main() {
     fi
     pr_url="$(gh pr create "${create_args[@]}")"
     pr_number="$(gh pr view "${pr_url}" --json number --jq '.number')"
+    apply_pr_attention "${pr_number}"
   fi
 
   gh workflow run repository-checks.yml \
@@ -163,9 +202,10 @@ main() {
     >/dev/null
 
   if [[ "${risk}" == high ]]; then
+    printf '::warning::High-risk AUR update requires review: #%s\n' "${pr_number}"
     printf '[manage-aur-update-pr] High-risk PR requires review: #%s\n' "${pr_number}"
   else
-    printf '[manage-aur-update-pr] Low-risk PR is ready for maintainer merge: #%s\n' "${pr_number}"
+    printf '[manage-aur-update-pr] Low-risk lock sync PR is ready: #%s\n' "${pr_number}"
   fi
 
   write_output pr_number "${pr_number}"
