@@ -86,7 +86,7 @@ The current automation:
 - Signs packages only in a later network-disabled signing stage.
 - Publishes the signed package set through `veldmuis-extra`.
 - Publishes a known-good NVIDIA package cache after successful non-fallback
-  builds.
+  builds, then prunes cached objects the new manifest no longer references.
 - Can restore the known-good NVIDIA package set if a fresh AUR build fails.
 - Publishes routine NVIDIA AUR updates without waiting for a lock pull request
   when the audited diff changes only an allowlisted version, source, checksum,

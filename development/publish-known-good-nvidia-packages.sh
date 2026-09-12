@@ -44,6 +44,7 @@ signing_fingerprint=""
 fallback_skip=0
 source_aur_manifest_name=""
 source_aur_manifest_sha256=""
+prune_dry_run="${KNOWN_GOOD_PRUNE_DRY_RUN:-0}"
 
 log() {
   printf '[publish-known-good-nvidia-packages] %s\n' "$*"
@@ -64,9 +65,12 @@ Usage:
   publish-known-good-nvidia-packages.sh
   publish-known-good-nvidia-packages.sh --prepare-only
   publish-known-good-nvidia-packages.sh --publish-only
+  publish-known-good-nvidia-packages.sh --prune-only
 
 --prepare-only creates and validates the known-good stage without AWS access.
 --publish-only validates an existing stage and uploads it without a private key.
+--prune-only deletes cached objects the prepared stage manifest no longer
+references, keeping the manifest, its signature, and the referenced files.
 EOF
 }
 
@@ -84,6 +88,10 @@ parse_args() {
       --publish-only)
         [[ "${operation}" == publish ]] || die "Only one operation may be selected"
         operation="publish-only"
+        ;;
+      --prune-only)
+        [[ "${operation}" == publish ]] || die "Only one operation may be selected"
+        operation="prune-only"
         ;;
       -h|--help)
         usage
@@ -435,6 +443,93 @@ verify_known_good() {
   done < <(find "${stage_dir}" -maxdepth 1 -type f -printf '%f\n' | sort)
 }
 
+is_prune_dry_run() {
+  [[ "${prune_dry_run}" == "1" || "${prune_dry_run}" == "true" ]]
+}
+
+collect_keep_files() {
+  local manifest_file="$1"
+  local source_manifest=""
+
+  printf '%s\n' "${manifest_name}"
+  printf '%s.sig\n' "${manifest_name}"
+  source_manifest="$(manifest_value "${manifest_file}" source_aur_manifest)"
+  [[ -n "${source_manifest}" ]] || die "Prepared known-good manifest is missing source_aur_manifest"
+  printf '%s\n' "${source_manifest}"
+  parse_package_files "${manifest_file}" | awk '{ print $2 }'
+  parse_signature_files "${manifest_file}" | awk '{ print $2 }'
+}
+
+list_remote_keys() {
+  aws s3api list-objects-v2 \
+    --bucket "${bucket}" \
+    --prefix "${prefix}/" \
+    --query 'Contents[].Key' \
+    --output text
+}
+
+prune_superseded_known_good() {
+  local manifest_path="${stage_dir}/${manifest_name}"
+  local -A keep_files=()
+  local remote_output=""
+  local remote_key=""
+  local file_name=""
+  local -a remote_keys=()
+  local -a stale_keys=()
+  local delete_count=0
+
+  [[ -r "${manifest_path}" ]] || die "Prepared known-good manifest is missing: ${manifest_path}"
+  # The keep-list is only trustworthy when the prepared manifest verifies, so
+  # validate before deleting anything.
+  verify_local_stage
+
+  while IFS= read -r file_name; do
+    [[ -n "${file_name}" ]] || continue
+    keep_files["${file_name}"]=1
+  done < <(collect_keep_files "${manifest_path}")
+  ((${#keep_files[@]} > 0)) || die "Known-good keep-list is empty, refusing to prune"
+
+  remote_output="$(list_remote_keys)"
+  mapfile -t remote_keys < <(printf '%s' "${remote_output}" | tr '[:space:]' '\n' | awk 'NF && $1 != "None"')
+  ((${#remote_keys[@]} > 0)) || die "Known-good bucket listing is empty, refusing to prune"
+
+  for remote_key in "${remote_keys[@]}"; do
+    [[ "${remote_key}" == "${prefix}/"* ]] || \
+      die "Known-good object outside cache prefix: ${remote_key}"
+    file_name="${remote_key#"${prefix}/"}"
+    safe_file_name "${file_name}" || die "Unsafe known-good object name: ${remote_key}"
+    [[ -n "${keep_files[${file_name}]:-}" ]] && continue
+    stale_keys+=("${remote_key}")
+  done
+
+  if is_prune_dry_run; then
+    for remote_key in ${stale_keys[@]+"${stale_keys[@]}"}; do
+      log "DRY RUN: would delete superseded known-good object: ${remote_key}"
+    done
+    log "DRY RUN: would keep ${#keep_files[@]} known-good objects"
+    return 0
+  fi
+
+  for remote_key in ${stale_keys[@]+"${stale_keys[@]}"}; do
+    log "Deleting superseded known-good object: ${remote_key}"
+    aws s3api delete-object \
+      --bucket "${bucket}" \
+      --key "${remote_key}" \
+      --endpoint-url "${endpoint}" >/dev/null
+    delete_count=$((delete_count + 1))
+  done
+
+  remote_output="$(list_remote_keys)"
+  mapfile -t remote_keys < <(printf '%s' "${remote_output}" | tr '[:space:]' '\n' | awk 'NF && $1 != "None"')
+  for remote_key in ${remote_keys[@]+"${remote_keys[@]}"}; do
+    file_name="${remote_key#"${prefix}/"}"
+    [[ -n "${keep_files[${file_name}]:-}" ]] || \
+      die "Superseded known-good object remains: ${remote_key}"
+  done
+
+  log "Pruned ${delete_count} superseded objects, kept ${#keep_files[@]} known-good objects"
+}
+
 prepare_known_good() {
   [[ -d "${package_dir}" ]] || die "Package artifact directory not found: ${package_dir}"
   [[ -d "${signed_package_dir}" ]] || die "Signed package directory not found: ${signed_package_dir}"
@@ -489,6 +584,30 @@ publish_prepared_known_good() {
   verify_known_good
 }
 
+prune_prepared_known_good() {
+  local prepared_manifest="${stage_dir}/${manifest_name}"
+  local stage_aur_manifest=""
+
+  [[ -d "${stage_dir}" ]] || die "Known-good stage directory not found: ${stage_dir}"
+  [[ -r "${prepared_manifest}" ]] || die "Prepared known-good manifest is missing: ${prepared_manifest}"
+  stage_aur_manifest="$(manifest_value "${prepared_manifest}" source_aur_manifest)"
+  safe_file_name "${stage_aur_manifest}" || \
+    die "Unsafe source_aur_manifest in prepared known-good manifest: ${stage_aur_manifest}"
+  [[ -r "${stage_dir}/${stage_aur_manifest}" ]] || \
+    die "Prepared source AUR manifest is missing: ${stage_dir}/${stage_aur_manifest}"
+
+  if is_fallback_manifest "${stage_dir}/${stage_aur_manifest}"; then
+    log "Skipping known-good prune because prepared package set came from fallback"
+    fallback_skip=1
+    return 0
+  fi
+
+  require_cmd aws
+  configure_credentials
+  configure_endpoint
+  prune_superseded_known_good
+}
+
 main() {
   parse_args "$@"
 
@@ -521,6 +640,17 @@ main() {
         exit 0
       fi
       log "Published known-good NVIDIA package set"
+      ;;
+    prune-only)
+      if [[ -r "${aur_manifest_path}" ]] && is_fallback_manifest "${aur_manifest_path}"; then
+        log "Skipping known-good prune because current package set came from fallback"
+        exit 0
+      fi
+      prune_prepared_known_good
+      if ((fallback_skip == 1)); then
+        exit 0
+      fi
+      log "Pruned superseded known-good NVIDIA cache objects"
       ;;
     publish)
       require_cmd aws

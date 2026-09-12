@@ -278,4 +278,94 @@ if grep -q -- '--delete' "${aws_log}"; then
   exit 1
 fi
 
+prune_fake_bin="${temp_root}/prune-bin"
+prune_aws_log="${temp_root}/prune-aws.log"
+prune_state="${temp_root}/prune-state.txt"
+mkdir -p "${prune_fake_bin}"
+
+cat > "${prune_fake_bin}/aws" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "${AWS_LOG}"
+if [[ "${1:-}" == "s3api" && "${2:-}" == "list-objects-v2" ]]; then
+  cat "${AWS_STATE}"
+elif [[ "${1:-}" == "s3api" && "${2:-}" == "delete-object" ]]; then
+  key=""
+  prev=""
+  for arg in "$@"; do
+    if [[ "${prev}" == "--key" ]]; then
+      key="${arg}"
+    fi
+    prev="${arg}"
+  done
+  grep -vxF "${key}" "${AWS_STATE}" > "${AWS_STATE}.tmp" || true
+  mv -f "${AWS_STATE}.tmp" "${AWS_STATE}"
+fi
+EOF
+chmod +x "${prune_fake_bin}/aws"
+
+run_prune() {
+  env "${publisher_env[@]}" \
+    "PATH=${prune_fake_bin}:${PATH}" \
+    "AWS_LOG=${prune_aws_log}" \
+    "AWS_STATE=${prune_state}" \
+    AWS_ACCESS_KEY_ID=fixture-access \
+    AWS_SECRET_ACCESS_KEY=fixture-secret \
+    CF_R2_PACKAGE_BUCKET=fixture-packages \
+    CF_R2_ENDPOINT_URL=https://objects.example.invalid \
+    "${repo_root}/development/publish-known-good-nvidia-packages.sh" --prune-only
+}
+
+write_keep_state() {
+  : > "${prune_state}"
+  while IFS= read -r file_name; do
+    printf '_known-good/nvidia-580xx/current/%s\n' "${file_name}"
+  done < <(find "${stage_dir}" -maxdepth 1 -type f -printf '%f\n' | sort) >> "${prune_state}"
+}
+
+reset_stage
+write_keep_state
+{
+  printf '_known-good/nvidia-580xx/current/nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst\n'
+  printf '_known-good/nvidia-580xx/current/nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst.sig\n'
+  printf '_known-good/nvidia-580xx/current/veldmuis-aur-packages-0000000000000000000000000000000000000000000000000000000000000000.manifest.txt\n'
+} >> "${prune_state}"
+: > "${prune_aws_log}"
+run_prune >/dev/null
+while IFS= read -r file_name; do
+  printf '_known-good/nvidia-580xx/current/%s\n' "${file_name}"
+done < <(find "${stage_dir}" -maxdepth 1 -type f -printf '%f\n' | sort) > "${temp_root}/expected-keep.txt"
+cmp -s "${temp_root}/expected-keep.txt" <(sort "${prune_state}") || {
+  printf '[check-known-good-nvidia-cache] ERROR: Prune kept an unexpected object set\n' >&2
+  exit 1
+}
+for stale_name in \
+  nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst \
+  nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst.sig \
+  veldmuis-aur-packages-0000000000000000000000000000000000000000000000000000000000000000.manifest.txt
+do
+  grep -qF -- "--key _known-good/nvidia-580xx/current/${stale_name}" "${prune_aws_log}" || {
+    printf '[check-known-good-nvidia-cache] ERROR: Prune did not delete %s\n' "${stale_name}" >&2
+    exit 1
+  }
+done
+
+reset_stage
+write_keep_state
+: > "${prune_aws_log}"
+run_prune >/dev/null
+if grep -q 'delete-object' "${prune_aws_log}"; then
+  printf '[check-known-good-nvidia-cache] ERROR: Prune deleted objects with nothing superseded\n' >&2
+  exit 1
+fi
+
+reset_stage
+write_keep_state
+printf 'tampered\n' >> "${known_good_manifest}"
+expect_publish_failure 'tampered known-good manifest' run_prune
+
+reset_stage
+: > "${prune_state}"
+expect_publish_failure 'empty known-good listing' run_prune
+
 printf '[check-known-good-nvidia-cache] Validated prepared cache, manifest signature, source binding, and package signatures.\n'

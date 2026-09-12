@@ -244,6 +244,16 @@ jobs:
           set -euo pipefail
           ./development/publish-known-good-nvidia-packages.sh --publish-only
 
+      - name: Prune superseded known-good NVIDIA cache objects
+        if: steps.refresh_check.outputs.refresh_needed == 'true' && steps.aur_scan.outputs.risk != 'high'
+        shell: bash
+        env:
+          CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
+          CF_R2_PACKAGE_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_PACKAGE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          ./development/publish-known-good-nvidia-packages.sh --prune-only
+
       - name: Write package refresh summary
         shell: bash
         run: |
