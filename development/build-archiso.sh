@@ -21,8 +21,6 @@ owner_uid="${SUDO_UID:-}"
 owner_gid="${SUDO_GID:-}"
 release_tag="${VELDMUIS_RELEASE_TAG:-$(date -u +%Y.%m.%d)}"
 iso_mode="${VELDMUIS_ISO_MODE:-network}"
-offline_manifest="${repo_file_root}/manifests/veldmuis-offline-packages.tsv"
-offline_build_info="${repo_file_root}/manifests/veldmuis-offline-build.txt"
 sudo_cmd=(sudo)
 
 require_cmd() {
@@ -84,62 +82,6 @@ validate_release_tag() {
   date_part="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
   normalized="$(date -u -d "${date_part//./-}" +%Y.%m.%d 2>/dev/null)" || return 1
   [[ "${normalized}" == "${date_part}" ]]
-}
-
-offline_build_value() {
-  local key="$1"
-
-  awk -F= -v wanted="${key}" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }' \
-    "${offline_build_info}"
-}
-
-validate_offline_repository() {
-  local offline_dir="${repo_file_root}/veldmuis-offline/os/x86_64"
-  local offline_db="${offline_dir}/veldmuis-offline.db.tar.gz"
-  local expected_hash=""
-  local expected_count=""
-  local expected_bytes=""
-  local actual_hash=""
-  local actual_count=""
-  local actual_bytes=""
-
-  [[ -s "${offline_db}" && -s "${offline_db}.sig" ]] || {
-    echo "Signed offline repository database not found under: ${offline_dir}" >&2
-    exit 1
-  }
-  [[ -s "${offline_manifest}" && -s "${offline_build_info}" ]] || {
-    echo "Offline repository manifest or build record is missing." >&2
-    exit 1
-  }
-
-  gpgv --keyring "${veldmuis_keyring_root}/veldmuis.gpg" \
-    "${offline_db}.sig" "${offline_db}" >/dev/null 2>&1 || {
-    echo "Offline repository database signature is invalid." >&2
-    exit 1
-  }
-
-  expected_hash="$(offline_build_value offline_manifest_sha256)"
-  expected_count="$(offline_build_value offline_package_count)"
-  expected_bytes="$(offline_build_value offline_repo_bytes)"
-  actual_hash="$(sha256sum "${offline_manifest}" | awk '{ print $1 }')"
-  actual_count="$(
-    awk -f "${repo_root}/development/count-offline-manifest-packages.awk" \
-      "${offline_manifest}"
-  )"
-  actual_bytes="$(du --bytes --summarize "${offline_dir}" | awk '{ print $1 }')"
-
-  [[ "${expected_hash}" =~ ^[0-9a-f]{64}$ && "${actual_hash}" == "${expected_hash}" ]] || {
-    echo "Offline repository manifest checksum is invalid." >&2
-    exit 1
-  }
-  [[ "${expected_count}" =~ ^[1-9][0-9]*$ && "${actual_count}" == "${expected_count}" ]] || {
-    echo "Offline repository package count is invalid." >&2
-    exit 1
-  }
-  [[ "${expected_bytes}" =~ ^[1-9][0-9]*$ && "${actual_bytes}" == "${expected_bytes}" ]] || {
-    echo "Offline repository byte count is invalid." >&2
-    exit 1
-  }
 }
 
 validate_embedded_repository() {
@@ -311,15 +253,13 @@ require_cmd umount
 require_cmd gpg
 require_cmd gpgv
 require_cmd date
-require_cmd awk
-require_cmd du
 require_cmd sha256sum
 require_cmd stat
 case "${iso_mode}" in
-  network|offline)
+  network)
     ;;
   *)
-    echo "VELDMUIS_ISO_MODE must be network or offline, got: ${iso_mode}" >&2
+    echo "VELDMUIS_ISO_MODE must be network, got: ${iso_mode}" >&2
     exit 1
     ;;
 esac
@@ -350,10 +290,6 @@ for keyring_file in veldmuis.gpg veldmuis-trusted veldmuis-revoked; do
   fi
 done
 
-if [[ "${iso_mode}" == "offline" ]]; then
-  validate_offline_repository
-fi
-
 mkdir -p "${build_root}" "${out_dir}"
 
 cleanup_mounts_under "${build_root}"
@@ -362,15 +298,10 @@ prune_archiso_history
 cp -a "${profile_source}" "${profile_work}"
 sed -i "s|@VELDMUIS_ISO_VERSION@|${release_tag}|g" "${profile_work}/profiledef.sh"
 
-if [[ "${iso_mode}" == "offline" ]]; then
-  install -Dm644 /dev/null "${profile_work}/airootfs/etc/veldmuis/offline-install"
-fi
-
 trap restore_build_ownership EXIT
 
-# Stage only the repositories used by the selected installer mode. This keeps
-# stale offline artifacts out of network ISOs and prevents unrelated files
-# under repos/ from entering either image.
+# Stage only the repositories used by the network installer. This keeps
+# unrelated files under repos/ from entering the image.
 embedded_repo_root="${profile_work}/airootfs/opt/veldmuis/repo"
 rm -rf "${embedded_repo_root}"
 install -d -m0755 "${embedded_repo_root}"
@@ -384,13 +315,6 @@ for repo_name in veldmuis-core veldmuis-extra; do
   validate_embedded_repository \
     "${repo_name}" "${embedded_repo_root}/${repo_name}/os/x86_64"
 done
-if [[ "${iso_mode}" == "offline" ]]; then
-  cp -a "${repo_file_root}/veldmuis-offline" \
-    "${embedded_repo_root}/veldmuis-offline"
-  install -d -m0755 "${embedded_repo_root}/manifests"
-  install -m0644 "${offline_manifest}" "${offline_build_info}" \
-    "${embedded_repo_root}/manifests/"
-fi
 
 rm -rf "${pacman_gpgdir}"
 mkdir -p "${pacman_gpgdir}"
@@ -441,15 +365,5 @@ iso_path="${out_dir}/veldmuis-${release_tag}-${iso_mode}-x86_64.iso"
   exit 1
 }
 mv -f "${generated_iso_path}" "${iso_path}"
-
-if [[ "${iso_mode}" == "offline" ]]; then
-  summary_path="${out_dir}/veldmuis-${release_tag}-${iso_mode}-x86_64.offline-repo.txt"
-  {
-    cat "${offline_build_info}"
-    printf 'iso_bytes=%s\n' "$(stat --format '%s' "${iso_path}")"
-  } >"${summary_path}"
-  chmod 644 "${summary_path}"
-  echo "Offline ISO size record: ${summary_path}"
-fi
 
 finalize_archiso_history

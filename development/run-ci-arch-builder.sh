@@ -57,7 +57,6 @@ Usage:
   run-ci-arch-builder.sh packages
   run-ci-arch-builder.sh candidate
   run-ci-arch-builder.sh iso
-  run-ci-arch-builder.sh offline-iso
 
 Environment:
   BUILDER_USER
@@ -68,7 +67,6 @@ Environment:
   VELDMUIS_GPG_FPR
   VELDMUIS_RELEASE_TAG
   VELDMUIS_RELEASE_SHA
-  VELDMUIS_ARCH_SNAPSHOT
   VELDMUIS_PACKAGER
   VELDMUIS_AUR_REF_MODE
   VELDMUIS_AUR_ENABLE_FALLBACK
@@ -102,7 +100,7 @@ is_true() {
 
 validate_target() {
   case "$1" in
-    packages|candidate|iso|offline-iso) ;;
+    packages|candidate|iso) ;;
     *)
       usage >&2
       die "Unsupported build target: $1"
@@ -112,7 +110,7 @@ validate_target() {
 
 validate_stage() {
   case "$1" in
-    packages|aur|sign|offline-download|offline-sign|offline-validate|iso|release-metadata) ;;
+    packages|aur|sign|iso|release-metadata) ;;
     *)
       usage >&2
       die "Unsupported container stage: $1"
@@ -288,41 +286,6 @@ run_signing_stage() {
   chown_output_paths "${container_workspace}/repos"
 }
 
-run_offline_download_stage() {
-  require_env HOST_UID
-  require_env HOST_GID
-  require_env VELDMUIS_ARCH_SNAPSHOT
-
-  cd "${container_workspace}"
-  VELDMUIS_ARCH_SNAPSHOT="${VELDMUIS_ARCH_SNAPSHOT}" \
-    "${container_support_root}/development/build-offline-install-repo.sh" download
-  chown_output_paths "${container_workspace}/repos"
-}
-
-run_offline_signing_stage() {
-  require_cmd gpg
-  require_cmd repo-add
-  require_cmd su
-  require_env BUILDER_USER
-  require_env GNUPGHOME
-  require_env VELDMUIS_KEY_FPR_FILE
-  require_env VELDMUIS_GPG_PRIVATE_KEY
-  require_env VELDMUIS_GPG_FPR
-  require_env VELDMUIS_ARCH_SNAPSHOT
-  require_env HOST_UID
-  require_env HOST_GID
-
-  prepare_builder_user
-  import_signing_key
-  run_as_builder "GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_KEY_FPR_FILE=$(shell_quote "${VELDMUIS_KEY_FPR_FILE}") VELDMUIS_ARCH_SNAPSHOT=$(shell_quote "${VELDMUIS_ARCH_SNAPSHOT}") ${container_support_root}/development/build-offline-install-repo.sh sign"
-  chown_output_paths "${container_workspace}/repos"
-}
-
-run_offline_validation_stage() {
-  cd "${container_workspace}"
-  "${container_support_root}/development/check-offline-install-repo.sh"
-}
-
 run_iso_stage() {
   require_env HOST_UID
   require_env HOST_GID
@@ -366,7 +329,7 @@ prepare_builder_image() {
   local -a packages=("${common_packages[@]}" "${veldmuis_nvidia_580xx_official_build_dependency_roots[@]}")
   local package_list=""
 
-  if [[ "${target}" == "iso" || "${target}" == "offline-iso" ]]; then
+  if [[ "${target}" == "iso" ]]; then
     packages+=("${iso_only_packages[@]}")
   fi
 
@@ -445,25 +408,6 @@ run_container_stage() {
       -e VELDMUIS_GPG_PRIVATE_KEY
       -e VELDMUIS_GPG_FPR
     )
-  elif [[ "${stage}" == "offline-download" ]]; then
-    mount_mode="ro"
-    docker_args+=(
-      -e VELDMUIS_ARCH_SNAPSHOT="${VELDMUIS_ARCH_SNAPSHOT:-}"
-    )
-  elif [[ "${stage}" == "offline-sign" ]]; then
-    mount_mode="ro"
-    docker_args+=(
-      --network none
-      -e VELDMUIS_KEY_FPR_FILE
-      -e VELDMUIS_GPG_PRIVATE_KEY
-      -e VELDMUIS_GPG_FPR
-      -e VELDMUIS_ARCH_SNAPSHOT="${VELDMUIS_ARCH_SNAPSHOT:-}"
-    )
-  elif [[ "${stage}" == "offline-validate" ]]; then
-    mount_mode="ro"
-    docker_args+=(
-      --network none
-    )
   elif [[ "${stage}" == "release-metadata" ]]; then
     mount_mode="ro"
     docker_args+=(
@@ -477,14 +421,14 @@ run_container_stage() {
       -e VELDMUIS_BUILDER_BASE_DIGEST="${builder_base_digest}"
       -e VELDMUIS_BUILDER_IMAGE_ID="${builder_image_id}"
       -e VELDMUIS_DOCKER_VERSION="${docker_version}"
-      -e VELDMUIS_ISO_MODE="$([[ "${target}" == "offline-iso" ]] && printf offline || printf network)"
+      -e VELDMUIS_ISO_MODE="network"
     )
   elif [[ "${stage}" == "iso" ]]; then
     mount_mode="ro"
     docker_args+=(
       --privileged
       -e VELDMUIS_RELEASE_TAG="${VELDMUIS_RELEASE_TAG:-}"
-      -e VELDMUIS_ISO_MODE="$([[ "${target}" == "offline-iso" ]] && printf offline || printf network)"
+      -e VELDMUIS_ISO_MODE="network"
     )
   fi
 
@@ -497,7 +441,7 @@ run_container_stage() {
   if [[ "${stage}" == "aur" ]]; then
     mkdir -p "${repo_root}/artifacts"
     docker_args+=(-v "${repo_root}/artifacts:${container_workspace}/artifacts:rw")
-  elif [[ "${stage}" == "sign" || "${stage}" == "offline-download" || "${stage}" == "offline-sign" ]]; then
+  elif [[ "${stage}" == "sign" ]]; then
     mkdir -p "${repo_root}/repos"
     docker_args+=(-v "${repo_root}/repos:${container_workspace}/repos:rw")
   elif [[ "${stage}" == "iso" || "${stage}" == "release-metadata" ]]; then
@@ -532,12 +476,9 @@ run_build_in_containers() {
   fi
   require_env RUNNER_TEMP
 
-  if [[ "${target}" == "iso" || "${target}" == "offline-iso" ]]; then
+  if [[ "${target}" == "iso" ]]; then
     require_env VELDMUIS_RELEASE_TAG
     require_env VELDMUIS_RELEASE_SHA
-  fi
-  if [[ "${target}" == "offline-iso" ]]; then
-    require_env VELDMUIS_ARCH_SNAPSHOT
   fi
 
   prepare_trusted_support
@@ -549,13 +490,7 @@ run_build_in_containers() {
     run_container_stage sign "${target}"
   fi
 
-  if [[ "${target}" == "offline-iso" ]]; then
-    run_container_stage offline-download "${target}"
-    run_container_stage offline-sign "${target}"
-    run_container_stage offline-validate "${target}"
-  fi
-
-  if [[ "${target}" == "iso" || "${target}" == "offline-iso" ]]; then
+  if [[ "${target}" == "iso" ]]; then
     run_container_stage iso "${target}"
     run_container_stage release-metadata "${target}"
   fi
@@ -588,15 +523,6 @@ main() {
         ;;
       sign)
         run_signing_stage
-        ;;
-      offline-download)
-        run_offline_download_stage
-        ;;
-      offline-sign)
-        run_offline_signing_stage
-        ;;
-      offline-validate)
-        run_offline_validation_stage
         ;;
       iso)
         run_iso_stage

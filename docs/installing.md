@@ -13,9 +13,7 @@ important data before changing disk partitions.
 - UEFI firmware. BIOS and legacy boot are not supported.
 - At least 2 GiB of RAM and 12 GiB of available storage. These are installer
   minimums; normal desktop use needs additional capacity.
-- A working internet connection throughout installation when using the network
-  installer. The offline installer carries its dated Arch package snapshot and
-  does not require network access during installation.
+- A working internet connection throughout installation.
 - A USB drive or other bootable medium large enough for the ISO.
 - A backup of any data that must survive repartitioning.
 
@@ -55,8 +53,6 @@ test "${actual_sha256}" = "${expected_sha256}"
 
 A successful signature check and `test` command authenticate the release
 metadata and verify the ISO bytes. Do not continue if either command fails.
-For the offline installer, substitute `offline` for `network` in both channel
-manifest URLs and local manifest filenames.
 
 ## 2. Create The Bootable Medium
 
@@ -101,7 +97,7 @@ Connect to a wired or wireless network in the live session before starting the
 installer. Confirm that web pages or Arch mirrors are reachable.
 
 The installer ranks Arch mirrors and downloads Arch packages while building the
-target system. Installation cannot complete as an offline operation.
+target system. Installation requires network access.
 
 Mirror ranking only selects where Arch packages are downloaded from. HTTPS is
 used for the selected mirrors, and pacman still requires Arch package

@@ -66,16 +66,10 @@ Current reproducibility limits:
 - The network installer resolves Arch packages from mirrors during
   installation.
 
-Full offline ISO candidates use one dated Arch Linux Archive snapshot for the
-complete install-time dependency closure. Candidate metadata records that
-snapshot, the package manifest, package count, and repository byte count.
-
 The current roadmap for stronger reproducibility is to select one dated Arch
 Linux Archive snapshot for native build dependencies and the live filesystem,
 pass it through the package and ISO workflows, and validate a clean rebuild
-against the recorded inputs before signing. This is roughly one to two
-maintainer-days of implementation followed by a full offline and VM validation
-cycle; it assumes no new hosted infrastructure.
+against the recorded inputs before signing.
 
 ## Build Native Packages
 
@@ -182,44 +176,12 @@ Requirements:
 
 The script signs package files and repository databases.
 
-## Build The Offline Installation Repository
-
-After the two Veldmuis repositories exist, resolve the complete installer seed
-against a dated Arch Linux Archive snapshot:
-
-```sh
-VELDMUIS_ARCH_SNAPSHOT=YYYY/MM/DD \
-  ./development/build-offline-install-repo.sh
-```
-
-The CI path splits this into a networked `download` phase without private key
-material and a network-disabled `sign` phase. It creates:
-
-```text
-repos/veldmuis-offline/os/x86_64/
-repos/manifests/veldmuis-offline-packages.tsv
-repos/manifests/veldmuis-offline-build.txt
-```
-
-Validate every installer selection using only local repositories:
-
-```sh
-./development/check-offline-install-repo.sh
-```
-
 ## Build The ISO
 
 Build the ISO from the current local repositories:
 
 ```sh
 ./development/build-archiso.sh
-```
-
-Build a full offline candidate after creating and validating the offline
-repository:
-
-```sh
-VELDMUIS_ISO_MODE=offline ./development/build-archiso.sh
 ```
 
 The ISO build requires:
@@ -252,7 +214,6 @@ Targets:
 ```sh
 ./development/run-ci-arch-builder.sh packages
 ./development/run-ci-arch-builder.sh iso
-./development/run-ci-arch-builder.sh offline-iso
 ```
 
 The outer script requires Docker and release environment variables, including
@@ -265,12 +226,6 @@ The container flow separates stages:
 - Native package build stage: no signing key.
 - AUR package build stage: no signing key.
 - Signing stage: receives signing key, validates AUR artifacts, has no network.
-- Offline download stage: receives no signing key and resolves the full package
-  closure from the requested Arch Linux Archive snapshot.
-- Offline signing stage: receives the signing key, has no network, and signs
-  the offline repository database.
-- Offline validation stage: receives no signing key, has no network, and proves
-  every installer choice resolves only to embedded files.
 - ISO stage: no signing key, repository mounted read-only.
 - Release-metadata stage: receives signing key, has no network, and creates the
   signed manifest, checksum, package inventory, SPDX SBOM, build-input record,
@@ -281,14 +236,6 @@ repository digest, and uses that digest in the generated Dockerfile. Release
 metadata records the requested image, resolved base digest, resulting image ID,
 Docker version, relevant build-tool versions, release source commit, and exact
 AUR refs.
-
-The `Offline Installer Release` workflow runs the `offline-iso` target,
-generates signed metadata, prints the exact ISO and embedded repository sizes,
-and publishes immutable artifacts plus the small offline channel documents.
-Every scheduled or manually dispatched network release calls it with a frozen
-tag, source commit, and Arch snapshot after network publication succeeds. It
-cannot be dispatched independently, does not publish the rolling package
-repository, and does not upload the large ISO as a GitHub artifact.
 
 Release metadata can be generated inside an appropriately prepared Arch build
 environment with:
@@ -354,16 +301,11 @@ test VM:
 ./development/rebuild-iso-vm.sh
 ```
 
-Create a VM with no network interface from boot for an offline installation
-test:
+Create a VM to test installation:
 
 ```sh
-NETWORK_MODE=none ./development/create-arch-test-vm.sh /path/to/veldmuis.iso
+./development/create-arch-test-vm.sh /path/to/veldmuis.iso
 ```
-
-The full offline candidate is not release-ready until default, NVIDIA 580xx
-with all extras, and all-open-source with all extras have each installed and
-booted successfully in this mode.
 
 Rebuild changed packages, rebuild the local repo and ISO, then write the newest
 ISO to a USB disk:

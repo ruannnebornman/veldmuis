@@ -15,8 +15,6 @@ builder_image_id="${VELDMUIS_BUILDER_IMAGE_ID:-unknown}"
 docker_version="${VELDMUIS_DOCKER_VERSION:-unknown}"
 iso_mode="${VELDMUIS_ISO_MODE:-network}"
 aur_manifest_source="${VELDMUIS_AUR_MANIFEST:-${repo_root}/artifacts/aur-packages/current/veldmuis-aur-packages.manifest.txt}"
-offline_manifest_source="${repo_root}/repos/manifests/veldmuis-offline-packages.tsv"
-offline_build_info_source="${repo_root}/repos/manifests/veldmuis-offline-build.txt"
 
 # shellcheck source=development/package-manifest.sh
 . "${script_dir}/package-manifest.sh"
@@ -56,13 +54,6 @@ validate_release_tag() {
 
 sha256_file() {
   sha256sum "$1" | awk '{ print $1 }'
-}
-
-offline_build_value() {
-  local key="$1"
-
-  awk -F= -v wanted="${key}" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }' \
-    "${offline_build_info_source}"
 }
 
 spdx_id() {
@@ -170,13 +161,6 @@ write_build_inputs() {
     printf 'docker_version=%s\n' "${docker_version}"
     printf 'aur_manifest=%s\n' "${aur_manifest_name}"
     printf 'aur_manifest_sha256=%s\n' "$(sha256_file "${aur_manifest_path}")"
-    if [[ "${iso_mode}" == "offline" ]]; then
-      printf 'arch_repository_snapshot=%s\n' "${arch_repository_snapshot}"
-      printf 'offline_package_count=%s\n' "${offline_package_count}"
-      printf 'offline_repo_bytes=%s\n' "${offline_repo_bytes}"
-      printf 'offline_manifest=%s\n' "${offline_manifest_name}"
-      printf 'offline_manifest_sha256=%s\n' "${offline_manifest_sha256}"
-    fi
     printf 'package_inventory=%s\n' "${package_inventory_name}"
     printf 'package_inventory_sha256=%s\n' "$(sha256_file "${package_inventory_path}")"
     printf 'generated_at_utc=%s\n' "${built_at_utc}"
@@ -224,13 +208,6 @@ write_signed_manifest() {
     printf 'build_inputs_sha256=%s\n' "$(sha256_file "${build_inputs_path}")"
     printf 'aur_manifest_name=%s\n' "${aur_manifest_name}"
     printf 'aur_manifest_sha256=%s\n' "$(sha256_file "${aur_manifest_path}")"
-    if [[ "${iso_mode}" == "offline" ]]; then
-      printf 'offline_manifest_name=%s\n' "${offline_manifest_name}"
-      printf 'offline_manifest_sha256=%s\n' "${offline_manifest_sha256}"
-      printf 'offline_repo_bytes=%s\n' "${offline_repo_bytes}"
-      printf 'offline_package_count=%s\n' "${offline_package_count}"
-      printf 'arch_repository_snapshot=%s\n' "${arch_repository_snapshot}"
-    fi
     printf 'signing_fingerprint=%s\n' "${key_fingerprint}"
     printf 'builder_base_digest=%s\n' "${builder_base_digest}"
     printf 'built_at_utc=%s\n' "${built_at_utc}"
@@ -269,10 +246,10 @@ main() {
   [[ "${builder_image_id}" == sha256:* ]] || \
     die "Builder image ID is invalid: ${builder_image_id}"
   case "${iso_mode}" in
-    network|offline)
+    network)
       ;;
     *)
-      die "VELDMUIS_ISO_MODE must be network or offline, got: ${iso_mode}"
+      die "VELDMUIS_ISO_MODE must be network, got: ${iso_mode}"
       ;;
   esac
 
@@ -313,27 +290,6 @@ main() {
   aur_manifest_path="${output_root}/${aur_manifest_name}"
   built_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-  if [[ "${iso_mode}" == "offline" ]]; then
-    [[ -s "${offline_manifest_source}" && -s "${offline_build_info_source}" ]] || \
-      die "Offline repository metadata is missing."
-    arch_repository_snapshot="$(offline_build_value arch_repository_snapshot)"
-    offline_package_count="$(offline_build_value offline_package_count)"
-    offline_repo_bytes="$(offline_build_value offline_repo_bytes)"
-    offline_manifest_sha256="$(offline_build_value offline_manifest_sha256)"
-    [[ "${arch_repository_snapshot}" =~ ^[0-9]{4}/[0-9]{2}/[0-9]{2}$ ]] || \
-      die "Offline repository snapshot is invalid."
-    [[ "${offline_package_count}" =~ ^[1-9][0-9]*$ ]] || \
-      die "Offline repository package count is invalid."
-    [[ "${offline_repo_bytes}" =~ ^[1-9][0-9]*$ ]] || \
-      die "Offline repository size is invalid."
-    [[ "${offline_manifest_sha256}" =~ ^[0-9a-f]{64}$ && \
-      "$(sha256_file "${offline_manifest_source}")" == "${offline_manifest_sha256}" ]] || \
-      die "Offline repository manifest checksum is invalid."
-    offline_manifest_name="${artifact_stem}.offline-packages.tsv"
-    offline_manifest_path="${output_root}/${offline_manifest_name}"
-    install -m600 "${offline_manifest_source}" "${offline_manifest_path}"
-  fi
-
   install -m600 "${aur_manifest_source}" "${aur_manifest_path}"
   write_package_inventory
   write_spdx_sbom
@@ -353,11 +309,6 @@ main() {
     chmod 644 "${file_name}"
   done
 
-  if [[ "${iso_mode}" == "offline" ]]; then
-    [[ -s "${offline_manifest_path}" ]] || die "Generated offline package manifest is empty."
-    chmod 644 "${offline_manifest_path}"
-  fi
-
   printf '[generate-release-metadata] Generated and verified release metadata.\n'
   printf '  ISO: %s\n' "${iso_path}"
   printf '  Manifest: %s\n' "${manifest_path}"
@@ -365,9 +316,6 @@ main() {
   printf '  Package inventory: %s\n' "${package_inventory_path}"
   printf '  SPDX SBOM: %s\n' "${sbom_path}"
   printf '  Build inputs: %s\n' "${build_inputs_path}"
-  if [[ "${iso_mode}" == "offline" ]]; then
-    printf '  Offline packages: %s\n' "${offline_manifest_path}"
-  fi
 }
 
 main "$@"

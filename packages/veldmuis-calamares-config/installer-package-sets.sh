@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# Shared package selections for the Calamares bootstrap and the offline
-# repository build. Keep the installer UI identifiers mapped to these arrays so
-# the ISO closure and the packages selected at install time cannot diverge.
+# Shared package selections for the Calamares bootstrap. Keep the installer UI
+# identifiers mapped to these arrays so the ISO closure and the packages
+# selected at install time cannot diverge.
 # ShellCheck analyzes this source file in isolation and cannot see its consumers.
 # shellcheck disable=SC2034
 
@@ -74,18 +74,4 @@ declare -ag veldmuis_installer_sync_packages=(
 
 declare -ag veldmuis_installer_development_packages=(
   veldmuis-development
-)
-
-# This is the minimal seed whose recursive dependency closure must contain
-# every package that any current installer choice can request.
-declare -ag veldmuis_offline_seed_packages=(
-  "${veldmuis_installer_base_packages[@]}"
-  "${veldmuis_installer_cpu_amd_packages[@]}"
-  "${veldmuis_installer_cpu_intel_packages[@]}"
-  "${veldmuis_installer_graphics_all_open_source_packages[@]}"
-  "${veldmuis_installer_graphics_nvidia_580xx_packages[@]}"
-  "${veldmuis_installer_gaming_packages[@]}"
-  "${veldmuis_installer_downloads_packages[@]}"
-  "${veldmuis_installer_sync_packages[@]}"
-  "${veldmuis_installer_development_packages[@]}"
 )

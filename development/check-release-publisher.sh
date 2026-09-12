@@ -36,9 +36,6 @@ write_fixture() {
   for file_name in "${file_names[@]}"; do
     [[ -e "${output_root}/${file_name}" ]] || printf 'fixture\n' > "${output_root}/${file_name}"
   done
-  if [[ "${installer}" == "offline" ]]; then
-    printf 'fixture\n' > "${output_root}/${artifact_stem}.offline-packages.tsv"
-  fi
   {
     printf 'release_tag=%s\n' "${release_tag}"
     printf 'installer=%s\n' "${installer}"
@@ -151,6 +148,5 @@ EOF
 }
 
 check_installer network
-check_installer offline
 check_storage_prune
 printf '[check-release-publisher] Publication plans prune previous releases, protect the current tag, and use small channels.\n'
