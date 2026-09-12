@@ -37,6 +37,13 @@ jobs:
     environment: release
     permissions:
       contents: read
+    outputs:
+      aur_updates_available: ${{ steps.aur_audit.outputs.updates_available }}
+      aur_risk: ${{ steps.aur_audit.outputs.risk }}
+      aur_pinned: ${{ steps.aur_pin.outputs.pinned }}
+      pinned_refs: ${{ steps.aur_pin.outputs.pinned_refs }}
+      scan_risk: ${{ steps.aur_scan.outputs.risk }}
+      refresh_needed: ${{ steps.refresh_check.outputs.refresh_needed }}
     env:
       BUILDER_USER: builder
       BUILDER_HOME: /home/builder
@@ -106,6 +113,55 @@ jobs:
 
           (( missing == 0 )) || exit 1
 
+      - name: Resolve latest AUR refs
+        id: aur_latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolved_refs="${RUNNER_TEMP}/veldmuis-aur-latest-refs.txt"
+          VELDMUIS_AUR_REF_MODE=latest \
+            ./development/build-aur-packages.sh --resolve-only \
+            | sort > "${resolved_refs}"
+          printf 'resolved_refs=%s\n' "${resolved_refs}" >> "${GITHUB_OUTPUT}"
+
+      - name: Audit AUR updates against lock
+        id: aur_audit
+        shell: bash
+        env:
+          VELDMUIS_AUR_RESOLVED_REFS_FILE: ${{ steps.aur_latest.outputs.resolved_refs }}
+          VELDMUIS_AUR_UPDATE_REPORT: ${{ runner.temp }}/veldmuis-aur-refresh-audit.md
+        run: |
+          set -euo pipefail
+          ./development/audit-aur-update.sh \
+            --resolved-refs "${VELDMUIS_AUR_RESOLVED_REFS_FILE}" \
+            --report "${VELDMUIS_AUR_UPDATE_REPORT}"
+
+      - name: Pin routine low-risk candidate refs
+        id: aur_pin
+        shell: bash
+        env:
+          VELDMUIS_AUR_RESOLVED_REFS_FILE: ${{ steps.aur_latest.outputs.resolved_refs }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.aur_audit.outputs.updates_available }}" == 'true' && "${{ steps.aur_audit.outputs.risk }}" == 'low' ]]; then
+            while read -r package_base ref; do
+              suffix="$(printf '%s' "${package_base}" | tr '[:lower:]-' '[:upper:]_')"
+              printf 'VELDMUIS_AUR_REF_%s=%s\n' "${suffix}" "${ref}" >> "${GITHUB_ENV}"
+            done < "${VELDMUIS_AUR_RESOLVED_REFS_FILE}"
+            printf 'VELDMUIS_AUR_REF_MODE=locked\n' >> "${GITHUB_ENV}"
+            {
+              printf 'pinned=true\n'
+              printf 'pinned_refs<<PINNED_REFS_EOF\n'
+              cat "${VELDMUIS_AUR_RESOLVED_REFS_FILE}"
+              printf 'PINNED_REFS_EOF\n'
+            } >> "${GITHUB_OUTPUT}"
+          else
+            printf 'pinned=false\n' >> "${GITHUB_OUTPUT}"
+            if [[ "${{ steps.aur_audit.outputs.updates_available }}" == 'true' ]]; then
+              echo "::warning::High-risk AUR update is pending; package refresh stays on the locked refs."
+            fi
+          fi
+
       - name: Check whether package refresh is needed
         id: refresh_check
         shell: bash
@@ -131,15 +187,45 @@ jobs:
           set -euo pipefail
           ./development/run-ci-arch-builder.sh packages
 
+      - name: Scan pinned low-risk candidate
+        if: steps.aur_pin.outputs.pinned == 'true' && steps.refresh_check.outputs.refresh_needed == 'true'
+        id: aur_scan
+        shell: bash
+        env:
+          VELDMUIS_AUR_SCAN_REPORT: ${{ runner.temp }}/veldmuis-aur-refresh-scan.md
+        run: |
+          set -euo pipefail
+          ./development/build-aur-packages.sh --validate-only
+          ./development/scan-aur-candidate.sh \
+            --report "${VELDMUIS_AUR_SCAN_REPORT}" \
+            --source-root artifacts/aur-packages/work
+
+      - name: Preserve pinned candidate scan
+        if: steps.aur_scan.outputs.risk != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aur-refresh-scan-${{ github.run_id }}
+          path: ${{ steps.aur_scan.outputs.report_file }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Stop publish on high-risk scan
+        if: steps.aur_scan.outputs.risk == 'high'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::warning::Pinned candidate failed the payload scan; publish is skipped and a high-risk review is opened by the sync job."
+          cat "${{ steps.aur_scan.outputs.report_file }}"
+
       - name: Ensure AWS CLI is available
-        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        if: steps.refresh_check.outputs.refresh_needed == 'true' && steps.aur_scan.outputs.risk != 'high'
         shell: bash
         run: |
           set -euo pipefail
           ./development/ensure-aws-cli.sh
 
       - name: Publish pacman repo to R2
-        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        if: steps.refresh_check.outputs.refresh_needed == 'true' && steps.aur_scan.outputs.risk != 'high'
         shell: bash
         env:
           CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
@@ -149,7 +235,7 @@ jobs:
           ./development/publish-r2-package-repo.sh
 
       - name: Update known-good NVIDIA package cache
-        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        if: steps.refresh_check.outputs.refresh_needed == 'true' && steps.aur_scan.outputs.risk != 'high'
         shell: bash
         env:
           CF_R2_PACKAGE_ACCESS_KEY_ID: ${{ secrets.CF_R2_PACKAGE_ACCESS_KEY_ID }}
@@ -168,6 +254,10 @@ jobs:
             echo
             echo "- Refresh needed: \`${{ steps.refresh_check.outputs.refresh_needed }}\`"
             echo "- Reason: ${{ steps.refresh_check.outputs.reason }}"
+            echo "- AUR updates available: \`${{ steps.aur_audit.outputs.updates_available }}\`"
+            echo "- AUR audit risk: \`${{ steps.aur_audit.outputs.risk }}\`"
+            echo "- AUR candidate pinned: \`${{ steps.aur_pin.outputs.pinned }}\`"
+            echo "- AUR scan risk: \`${{ steps.aur_scan.outputs.risk }}\`"
             echo "- Current source commit: \`${{ steps.refresh_check.outputs.current_source_commit }}\`"
             echo "- Published source commit: \`${{ steps.refresh_check.outputs.published_source_commit || 'unavailable' }}\`"
             echo "- AUR ref mode: \`${{ steps.refresh_check.outputs.ref_mode }}\`"
@@ -176,3 +266,119 @@ jobs:
             echo "- Fallback enabled: \`${VELDMUIS_AUR_ENABLE_FALLBACK}\`"
             echo "- Simulated AUR failure: \`${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
+
+  sync-lock:
+    name: Sync AUR Lock
+    needs: refresh
+    if: needs.refresh.outputs.aur_updates_available == 'true' && needs.refresh.outputs.aur_pinned == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VELDMUIS_AUR_UPDATE_GROUP: nvidia-580xx
+      VELDMUIS_AUR_UPDATE_BRANCH: automation/aur-update/nvidia-580xx
+    steps:
+      - name: Check out main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/heads/main
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
+      - name: Restore pinned refs and audit
+        id: audit
+        shell: bash
+        env:
+          PINNED_REFS: ${{ needs.refresh.outputs.pinned_refs }}
+          SCAN_RISK: ${{ needs.refresh.outputs.scan_risk }}
+        run: |
+          set -euo pipefail
+          pinned_file="${RUNNER_TEMP}/veldmuis-aur-pinned-refs.txt"
+          printf '%s\n' "${PINNED_REFS}" > "${pinned_file}"
+          base_sha="$(git rev-parse HEAD)"
+          printf 'base_sha=%s\n' "${base_sha}" >> "${GITHUB_OUTPUT}"
+          printf 'pinned_refs=%s\n' "${pinned_file}" >> "${GITHUB_OUTPUT}"
+          if [[ "${SCAN_RISK}" == 'high' ]]; then
+            printf 'risk=high\n' >> "${GITHUB_OUTPUT}"
+            scan_dir="${RUNNER_TEMP}/veldmuis-aur-scan-evidence"
+            mkdir -p "${scan_dir}"
+            if ! gh run download "${GITHUB_RUN_ID}" --name "aur-refresh-scan-${GITHUB_RUN_ID}" --dir "${scan_dir}"; then
+              printf 'The pinned candidate failed the refresh payload scan; the scan artifact was unavailable.\n' > "${scan_dir}/scan-unavailable.txt"
+            fi
+            printf 'scan_dir=%s\n' "${scan_dir}" >> "${GITHUB_OUTPUT}"
+          else
+            VELDMUIS_AUR_RESOLVED_REFS_FILE="${pinned_file}" \
+            VELDMUIS_AUR_UPDATE_REPORT="${RUNNER_TEMP}/veldmuis-aur-sync-audit.md" \
+              ./development/audit-aur-update.sh \
+              --resolved-refs "${pinned_file}" \
+              --report "${RUNNER_TEMP}/veldmuis-aur-sync-audit.md"
+          fi
+
+      - name: Prepare candidate lock
+        id: candidate_lock
+        shell: bash
+        env:
+          VELDMUIS_AUR_RESOLVED_REFS_FILE: ${{ steps.audit.outputs.pinned_refs }}
+        run: |
+          set -euo pipefail
+          candidate_lock="${RUNNER_TEMP}/veldmuis-aur-candidate.lock"
+          cp development/aur-packages.lock "${candidate_lock}"
+          VELDMUIS_AUR_LOCK_FILE="${candidate_lock}" \
+            ./development/update-aur-lock.sh \
+            --resolved-refs "${VELDMUIS_AUR_RESOLVED_REFS_FILE}" \
+            --lock-file "${candidate_lock}"
+          printf 'candidate_lock=%s\n' "${candidate_lock}" >> "${GITHUB_OUTPUT}"
+
+      - name: Combine sync evidence
+        id: evidence
+        shell: bash
+        env:
+          AUDIT_REPORT: ${{ steps.audit.outputs.report_file }}
+          SCAN_DIR: ${{ steps.audit.outputs.scan_dir }}
+          SYNC_RISK: ${{ steps.audit.outputs.risk }}
+        run: |
+          set -euo pipefail
+          evidence_report="${RUNNER_TEMP}/veldmuis-aur-sync-evidence.md"
+          {
+            printf '# Lock sync\n\n'
+            if [[ "${SYNC_RISK}" == 'high' ]]; then
+              printf 'The scheduled package refresh built this candidate but the payload scan flagged it, so publishing was skipped.\n'
+            else
+              printf 'The scheduled package refresh published these refs. Merging aligns the lock baseline with the published manifest.\n'
+            fi
+            if [[ -n "${AUDIT_REPORT:-}" && -r "${AUDIT_REPORT}" ]]; then
+              printf '\n---\n\n'
+              cat "${AUDIT_REPORT}"
+            fi
+            if [[ -n "${SCAN_DIR:-}" && -d "${SCAN_DIR}" ]]; then
+              for scan_file in "${SCAN_DIR}"/*; do
+                [[ -f "${scan_file}" ]] || continue
+                printf '\n---\n\n'
+                cat "${scan_file}"
+              done
+            fi
+          } > "${evidence_report}"
+          printf 'evidence_report=%s\n' "${evidence_report}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create or update lock sync pull request
+        shell: bash
+        env:
+          VELDMUIS_AUR_CANDIDATE_LOCK: ${{ steps.candidate_lock.outputs.candidate_lock }}
+          VELDMUIS_AUR_UPDATE_REPORT: ${{ steps.evidence.outputs.evidence_report }}
+          VELDMUIS_AUR_UPDATE_RISK: ${{ steps.audit.outputs.risk }}
+          VELDMUIS_AUR_REVIEW_BASE_SHA: ${{ steps.audit.outputs.base_sha }}
+          VELDMUIS_AUR_UPDATE_LABELS: high-risk,needs-maintainer-review
+          VELDMUIS_AUR_UPDATE_ASSIGNEES: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          ./development/manage-aur-update-pr.sh

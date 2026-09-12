@@ -9,6 +9,7 @@ on:
 permissions:
   actions: write
   contents: write
+  issues: write
   pull-requests: write
 
 concurrency:
@@ -74,8 +75,20 @@ jobs:
           set -euo pipefail
           cat "${VELDMUIS_AUR_UPDATE_REPORT}"
 
+      - name: Defer routine low-risk updates to package refresh
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk != 'high'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "${VELDMUIS_AUR_UPDATE_REPORT}"
+          {
+            echo "Routine low-risk AUR update detected."
+            echo "No candidate build or pull request is created here."
+            echo "The scheduled package refresh publishes these refs and opens a quiet lock sync."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Prepare candidate lock
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk == 'high'
         id: candidate_lock
         shell: bash
         env:
@@ -91,7 +104,7 @@ jobs:
           printf 'candidate_lock=%s\n' "${candidate_lock}" >> "${GITHUB_OUTPUT}"
 
       - name: Pin candidate build to audited refs
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk == 'high'
         shell: bash
         env:
           VELDMUIS_AUR_RESOLVED_REFS_FILE: ${{ steps.resolve.outputs.resolved_refs }}
@@ -104,21 +117,21 @@ jobs:
           printf 'VELDMUIS_AUR_REF_MODE=locked\n' >> "${GITHUB_ENV}"
 
       - name: Build candidate packages without signing credentials
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk == 'high'
         shell: bash
         run: |
           set -euo pipefail
           ./development/run-ci-arch-builder.sh candidate
 
       - name: Validate candidate package set
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk == 'high'
         shell: bash
         run: |
           set -euo pipefail
           ./development/build-aur-packages.sh --validate-only
 
       - name: Scan candidate package payload
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk == 'high'
         id: scan
         shell: bash
         env:
@@ -130,7 +143,7 @@ jobs:
             --source-root artifacts/aur-packages/work
 
       - name: Combine candidate evidence
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk == 'high'
         id: evidence
         shell: bash
         env:
@@ -153,7 +166,7 @@ jobs:
           printf 'evidence_report=%s\n' "${evidence_report}" >> "${GITHUB_OUTPUT}"
 
       - name: Preserve candidate evidence
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk == 'high'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: aur-update-${{ github.run_id }}
@@ -165,13 +178,34 @@ jobs:
           retention-days: 30
 
       - name: Create or update candidate pull request
-        if: steps.audit.outputs.updates_available == 'true'
+        if: steps.audit.outputs.updates_available == 'true' && steps.evidence.outputs.final_risk == 'high'
+        id: update_pr
         shell: bash
         env:
           VELDMUIS_AUR_CANDIDATE_LOCK: ${{ steps.candidate_lock.outputs.candidate_lock }}
           VELDMUIS_AUR_UPDATE_REPORT: ${{ steps.evidence.outputs.evidence_report }}
           VELDMUIS_AUR_UPDATE_RISK: ${{ steps.evidence.outputs.final_risk }}
           VELDMUIS_AUR_REVIEW_BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
+          VELDMUIS_AUR_UPDATE_LABELS: high-risk,needs-maintainer-review
+          VELDMUIS_AUR_UPDATE_ASSIGNEES: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           ./development/manage-aur-update-pr.sh
+
+      - name: Remind when high-risk review is waiting
+        if: steps.update_pr.outputs.pr_number != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.update_pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          pr_url="$(gh pr view "${PR_NUMBER}" --json url --jq '.url')"
+          created_at="$(gh pr view "${PR_NUMBER}" --json createdAt --jq '.createdAt')"
+          created_epoch="$(date -u -d "${created_at}" +%s)"
+          now_epoch="$(date -u +%s)"
+          age_days="$(( (now_epoch - created_epoch) / 86400 ))"
+          echo "::warning::High-risk AUR update is waiting for review: ${pr_url} (open ${age_days}d)"
+          if (( age_days >= 7 && age_days % 7 == 0 )); then
+            gh pr comment "${PR_NUMBER}" --body "Reminder: this high-risk AUR update has been waiting ${age_days} days for maintainer review. The scheduled package refresh keeps publishing the locked refs until this is resolved." >/dev/null
+          fi

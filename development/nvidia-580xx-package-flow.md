@@ -44,18 +44,29 @@ the package repo build.
 
 ## Update Review Policy
 
-The scheduled AUR review can move a routine update through the automated path
-when the candidate changes only an allowlisted version, source, checksum, or
-signing-key metadata assignment and its history remains a descendant of the
-accepted lock. The build, package-set, license, payload-scan, signature, and
-repository checks still run for that candidate.
+Routine updates are published without waiting for a lock pull request. The
+scheduled package refresh resolves the latest AUR refs, audits them against
+the lock, and when the candidate changes only an allowlisted version, source,
+checksum, or signing-key metadata assignment with descendant history, it pins,
+builds, payload-scans, and publishes that candidate. The build, package-set,
+license, payload-scan, signature, and repository checks still run for that
+candidate. A follow-up lock sync pull request then aligns the lock baseline
+with the published manifest; those syncs are batchable and non-blocking.
 
 Changes to build logic, dependencies, install or service files, privileged
-paths, other package inputs, non-descendant history, or scan results remain on
-the manual review path. This classification describes the changed recipe
-surface only; it does not assert that an AUR source is trustworthy. The signed
-package repository refresh remains separately controlled by the normal
-protected integration workflow.
+paths, other package inputs, non-descendant history, audit results, or scan
+results remain on the manual review path: the refresh stays on the locked
+refs and the scheduled AUR review opens or updates a labeled, assigned
+high-risk pull request with build evidence instead. A payload-scan failure on
+a pinned candidate also skips publishing and opens a high-risk review. This
+classification describes the changed recipe surface only; it does not assert
+that an AUR source is trustworthy. The signed package repository refresh
+remains separately controlled by the normal protected integration workflow.
+
+The lock file is the audit baseline and the known-good fallback anchor, not
+the release gate. Merging lock syncs promptly keeps the audit baseline close
+to the published manifest and keeps installer releases aligned with the
+package repository.
 
 The signing key must never be passed to either package build container. The
 signing stage may read completed package artifacts but must not execute
