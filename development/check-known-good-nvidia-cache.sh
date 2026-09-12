@@ -349,6 +349,13 @@ do
     exit 1
   }
 done
+while IFS= read -r aws_call; do
+  [[ -z "${aws_call}" ]] && continue
+  [[ "${aws_call}" == *"--endpoint-url https://objects.example.invalid"* ]] || {
+    printf '[check-known-good-nvidia-cache] ERROR: Prune AWS call missed the configured endpoint: %s\n' "${aws_call}" >&2
+    exit 1
+  }
+done < "${prune_aws_log}"
 
 reset_stage
 write_keep_state
