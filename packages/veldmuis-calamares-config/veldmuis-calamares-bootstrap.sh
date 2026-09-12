@@ -10,10 +10,7 @@ downloads_choice="no-downloads"
 sync_choice="no-sync"
 development_choice="no-development"
 live_repo_root="/opt/veldmuis/repo"
-offline_install_marker="/etc/veldmuis/offline-install"
 installer_package_sets="/usr/lib/veldmuis/installer-package-sets.sh"
-offline_manifest="${live_repo_root}/manifests/veldmuis-offline-packages.tsv"
-offline_build_info="${live_repo_root}/manifests/veldmuis-offline-build.txt"
 tmp_pacman_conf=""
 tmp_arch_mirrorlist=""
 log_file="/tmp/veldmuis-calamares-bootstrap.log"
@@ -34,88 +31,6 @@ require_cmd() {
 cleanup() {
   [[ -n "${tmp_pacman_conf}" ]] && rm -f "${tmp_pacman_conf}"
   [[ -n "${tmp_arch_mirrorlist}" ]] && rm -f "${tmp_arch_mirrorlist}"
-}
-
-offline_install_enabled() {
-  [[ -f "${offline_install_marker}" ]]
-}
-
-offline_build_value() {
-  local key="$1"
-
-  awk -F= -v wanted="${key}" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }' \
-    "${offline_build_info}"
-}
-
-validate_offline_repository() {
-  local offline_dir="${live_repo_root}/veldmuis-offline/os/x86_64"
-  local offline_db="${offline_dir}/veldmuis-offline.db.tar.gz"
-  local repo_name=""
-  local repo_db=""
-  local expected_manifest_hash=""
-  local actual_manifest_hash=""
-  local expected_count=""
-  local actual_count=""
-  local package_name=""
-  local package_version=""
-  local package_arch=""
-  local source_repo=""
-  local expected_size=""
-  local expected_hash=""
-  local package_filename=""
-  local package_path=""
-
-  [[ -s "${offline_db}" && -s "${offline_db}.sig" ]] || \
-    die "Embedded offline repository database or signature is missing."
-  [[ -s "${offline_manifest}" && -s "${offline_build_info}" ]] || \
-    die "Embedded offline repository manifest or build record is missing."
-  [[ "$(head -n 1 "${offline_manifest}")" == $'package\tversion\tarchitecture\toriginal_repository\tfile_size\tsha256\tfilename' ]] || \
-    die "Embedded offline repository manifest has an invalid header."
-
-  for repo_name in veldmuis-core veldmuis-extra veldmuis-offline; do
-    repo_db="${live_repo_root}/${repo_name}/os/x86_64/${repo_name}.db.tar.gz"
-    [[ -s "${repo_db}" && -s "${repo_db}.sig" ]] || \
-      die "Embedded repository database or signature is missing: ${repo_name}"
-    gpgv --keyring /usr/share/pacman/keyrings/veldmuis.gpg \
-      "${repo_db}.sig" "${repo_db}" >/dev/null 2>&1 || \
-      die "Embedded repository database signature is invalid: ${repo_name}"
-  done
-
-  expected_manifest_hash="$(offline_build_value offline_manifest_sha256)"
-  actual_manifest_hash="$(sha256sum "${offline_manifest}" | awk '{ print $1 }')"
-  [[ "${expected_manifest_hash}" =~ ^[0-9a-f]{64}$ && \
-    "${actual_manifest_hash}" == "${expected_manifest_hash}" ]] || \
-    die "Embedded offline repository manifest checksum is invalid."
-
-  expected_count="$(offline_build_value offline_package_count)"
-  actual_count="$(awk 'END { print (NR > 0 ? NR - 1 : 0) }' "${offline_manifest}")"
-  [[ "${expected_count}" =~ ^[1-9][0-9]*$ && "${actual_count}" == "${expected_count}" ]] || \
-    die "Embedded offline repository package count is invalid."
-
-  log "Verifying ${expected_count} embedded offline package files"
-  while IFS=$'\t' read -r \
-    package_name package_version package_arch source_repo expected_size \
-    expected_hash package_filename
-  do
-    [[ "${package_name}" != package ]] || continue
-    [[ -n "${package_name}" && -n "${package_version}" && \
-      "${package_arch}" =~ ^(any|x86_64)$ && \
-      "${source_repo}" =~ ^(core|extra|multilib)$ && \
-      "${expected_size}" =~ ^[1-9][0-9]*$ && \
-      "${expected_hash}" =~ ^[0-9a-f]{64}$ && \
-      "${package_filename}" =~ ^[A-Za-z0-9@._+:-]+\.pkg\.tar\.[A-Za-z0-9.]+$ ]] || \
-      die "Embedded offline manifest contains an invalid entry for ${package_name:-unknown}."
-
-    package_path="${offline_dir}/${package_filename}"
-    [[ -s "${package_path}" && -s "${package_path}.sig" ]] || \
-      die "Embedded offline package or signature is missing: ${package_filename}"
-    [[ "$(stat --format '%s' "${package_path}")" == "${expected_size}" ]] || \
-      die "Embedded offline package size is invalid: ${package_filename}"
-    [[ "$(sha256sum "${package_path}" | awk '{ print $1 }')" == "${expected_hash}" ]] || \
-      die "Embedded offline package checksum is invalid: ${package_filename}"
-  done <"${offline_manifest}"
-
-  log "Embedded offline repository passed manifest and database checks"
 }
 
 write_live_arch_mirrorlist() {
@@ -300,32 +215,6 @@ pick_resolver_source() {
 write_pacman_conf() {
   tmp_pacman_conf="$(mktemp -t veldmuis-calamares-pacman.XXXXXX)"
 
-  if offline_install_enabled; then
-    cat >"${tmp_pacman_conf}" <<EOF
-[options]
-HoldPkg = pacman glibc
-Architecture = auto
-CheckSpace
-SigLevel = Required DatabaseOptional
-LocalFileSigLevel = Required
-ParallelDownloads = 1
-
-[veldmuis-core]
-SigLevel = Required DatabaseRequired
-Server = file://${live_repo_root}/veldmuis-core/os/\$arch
-
-[veldmuis-extra]
-SigLevel = Required DatabaseRequired
-Server = file://${live_repo_root}/veldmuis-extra/os/\$arch
-
-[veldmuis-offline]
-SigLevel = Required DatabaseRequired
-Server = file://${live_repo_root}/veldmuis-offline/os/\$arch
-EOF
-    log "Using local-only package sources for the offline installation"
-    return
-  fi
-
   write_arch_mirrorlist
   cat >"${tmp_pacman_conf}" <<EOF
 [options]
@@ -434,9 +323,6 @@ prepare_target_root() {
   if resolver_source="$(pick_resolver_source)"; then
     log "Copying resolver config from ${resolver_source} into ${target_root}"
     install -Dm644 "${resolver_source}" "${target_root}/etc/resolv.conf"
-  elif offline_install_enabled; then
-    log "No external resolver is available; continuing in offline installation mode"
-    install -Dm644 /dev/null "${target_root}/etc/resolv.conf"
   else
     die "Could not find a non-loopback resolver config in the live environment."
   fi
@@ -586,8 +472,6 @@ main() {
   require_cmd pacman-key
   require_cmd gpg
   require_cmd arch-chroot
-  require_cmd sha256sum
-  require_cmd stat
   local release_key_id=""
   local -a bootstrap_packages=()
 
@@ -605,10 +489,6 @@ main() {
 
   # shellcheck source=packages/veldmuis-calamares-config/installer-package-sets.sh
   . "${installer_package_sets}"
-  if offline_install_enabled; then
-    require_cmd gpgv
-    validate_offline_repository
-  fi
 
   trap cleanup EXIT
   normalize_graphics_choice

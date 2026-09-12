@@ -219,16 +219,6 @@ check_workflow_source() {
     die "Network release workflow does not publish a channel-manifest signature."
   grep -q 'gpgv --keyring ./packages/veldmuis-keyring/veldmuis.gpg' "${workflow}" || \
     die "Release workflow does not verify generated metadata with the packaged keyring."
-  if grep -qF "if: github.event_name == 'schedule'" "${workflow}"; then
-    die "Network release workflow still restricts offline builds to scheduled releases."
-  fi
-  grep -qF 'uses: ./.github/workflows/offline-iso-size.yml' "${workflow}" || \
-    die "Network release workflow does not call the offline installer workflow."
-  grep -qF 'secrets: inherit' "${workflow}" || \
-    die "Network release workflow does not pass protected secrets to the offline build."
-  grep -qF "arch_snapshot: \${{ needs.validate-release.outputs.arch_snapshot }}" "${workflow}" || \
-    die "Network release workflow does not pass its frozen Arch snapshot to the offline build."
-
   log "Release workflow source follows the one-shot release policy"
 }
 
@@ -247,39 +237,6 @@ check_workflow_action_pins() {
   done < <(find "${repo_root}/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print)
 
   log "Workflow actions are pinned to immutable commit SHAs"
-}
-
-check_offline_release_workflow_source() {
-  local workflow="${repo_root}/.github/workflows/offline-iso-size.yml"
-
-  [[ -f "${workflow}" ]] || die "Offline ISO size workflow not found: ${workflow}"
-  if grep -qF 'workflow_dispatch:' "${workflow}"; then
-    die "Offline release workflow remains independently dispatchable."
-  fi
-  grep -qF "if: github.ref == 'refs/heads/main'" "${workflow}" || \
-    die "Offline ISO size workflow is not restricted to main."
-  grep -qF 'ref: refs/heads/main' "${workflow}" || \
-    die "Offline ISO size workflow does not explicitly check out main."
-  grep -qF 'workflow_call:' "${workflow}" || \
-    die "Offline release workflow is not reusable by the scheduled release."
-  grep -qF "ref: \${{ steps.candidate.outputs.release_sha }}" "${workflow}" || \
-    die "Offline release workflow does not check out the resolved release commit."
-  grep -qF "Release tag \${release_tag} does not resolve to \${release_sha}" "${workflow}" || \
-    die "Offline release workflow does not verify the called release tag and commit."
-  grep -qF './development/run-ci-arch-builder.sh offline-iso' "${workflow}" || \
-    die "Offline ISO size workflow does not use the offline ISO build target."
-  grep -qF './development/publish-r2-release.sh' "${workflow}" || \
-    die "Offline release workflow does not publish immutable artifacts."
-  grep -qF 'VELDMUIS_ISO_MODE: offline' "${workflow}" || \
-    die "Offline release workflow does not select the offline release channel."
-  if grep -qF 'configure-r2-release-cors.sh' "${workflow}"; then
-    die "Offline release workflow attempts to modify bucket-level CORS configuration."
-  fi
-  if grep -Eq 'gh[[:space:]]+release|git/tags|git/refs' "${workflow}"; then
-    die "Offline release workflow must not mutate the network release tag history."
-  fi
-
-  log "Offline release workflow is main-only and publishes the offline channel"
 }
 
 check_repository_signature_policy() {
@@ -305,7 +262,7 @@ check_repository_signature_policy() {
   done
 
   file="${repo_root}/packages/veldmuis-calamares-config/veldmuis-calamares-bootstrap.sh"
-  for section in veldmuis-core veldmuis-extra veldmuis-offline; do
+  for section in veldmuis-core veldmuis-extra; do
     awk -v wanted="${section}" '
       /^\[/ { in_section = ($0 == "[" wanted "]") }
       in_section && $0 == "SigLevel = Required DatabaseRequired" { found=1 }
@@ -525,7 +482,6 @@ main() {
   check_release_asset_selection
   check_workflow_source
   check_workflow_action_pins
-  check_offline_release_workflow_source
   check_repository_signature_policy
   check_release_metadata_source
   check_private_reporting_source

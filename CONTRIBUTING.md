@@ -60,7 +60,7 @@ Normal development happens on a short-lived branch. Direct changes to `main`
 are reserved for exceptional recovery work. Use a neutral branch name such as:
 
 ```text
-feature/offline-iso
+feature/installer-downloads
 fix/installer-bootstrap
 chore/repository-checks
 ```

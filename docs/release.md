@@ -2,10 +2,9 @@
 
 Veldmuis releases are date-tagged builds from `main`. The rolling package
 repository has its own workflow. The installer release workflow publishes the
-network installer and then calls the reusable offline-installer workflow with
-the same tag, commit, and Arch snapshot. Installer artifacts use immutable
-versioned paths while published; small channel documents select the currently
-promoted build without storing a second copy of either ISO.
+network installer. Installer artifacts use immutable
+versioned paths while published; the small channel document selects the currently
+promoted build without storing a second copy of the ISO.
 
 ## Tag Formats
 
@@ -30,11 +29,7 @@ supported.
 
 The `Installer Release` workflow is defined in
 `.github/workflows/release.yml`. It runs as a monthly schedule or by manual
-dispatch with an explicit daily tag. After successful network publication,
-every run calls the reusable offline installer workflow in
-`.github/workflows/offline-iso-size.yml` with the same release tag, exact
-source commit, and Arch Linux Archive snapshot resolved before the network
-build starts. The offline workflow cannot be dispatched independently. Manual
+dispatch with an explicit daily tag. Manual
 release dispatch is accepted only from `main`.
 
 Manual release tags must be the next valid tag for that UTC date. For example,
@@ -84,21 +79,12 @@ At a high level, the workflow:
 13. Creates the GitHub release and attaches the authenticated metadata.
 14. Downloads the published manifest and signature and verifies them with the
     packaged public key.
-15. Calls the offline installer workflow with the frozen tag, commit, and
-    snapshot after network publication succeeds.
 
 Reusable workflow actions are pinned to complete commit SHAs. Workflow token
 permissions are read-only by default and elevated only for the publication job.
 Signing material is passed only to network-disabled signing stages, while
 object-storage credentials are passed only to publisher steps. Release jobs do
 not receive bucket-administration credentials or modify bucket configuration.
-
-The reusable `Offline Installer Release` workflow builds and validates a full
-offline installer from the selected snapshot, reports its exact size, uploads
-immutable release objects, and promotes the offline channel. It verifies and
-checks out the exact tagged commit supplied by the network release workflow.
-It does not publish the rolling package repository, create a GitHub tag, or
-create a GitHub release.
 
 ## Protected Release Environment
 
@@ -173,23 +159,14 @@ veldmuis-TAG-network-x86_64.packages.tsv
 veldmuis-TAG-network-x86_64.spdx
 veldmuis-TAG-network-x86_64.build-inputs.txt
 veldmuis-TAG-network-x86_64.aur-packages.manifest.txt
-
-veldmuis-TAG-offline-x86_64.iso
-veldmuis-TAG-offline-x86_64.iso.sha256
-veldmuis-TAG-offline-x86_64.manifest.txt
-veldmuis-TAG-offline-x86_64.manifest.txt.sig
-veldmuis-TAG-offline-x86_64.offline-packages.tsv
 ```
 
-Small channel documents identify the promoted installer releases:
+Small channel documents identify the promoted installer release:
 
 ```text
 https://downloads.veldmuislinux.org/iso/channels/network.json
 https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt
 https://downloads.veldmuislinux.org/iso/channels/network.manifest.txt.sig
-https://downloads.veldmuislinux.org/iso/channels/offline.json
-https://downloads.veldmuislinux.org/iso/channels/offline.manifest.txt
-https://downloads.veldmuislinux.org/iso/channels/offline.manifest.txt.sig
 ```
 
 Each JSON channel document contains the immutable ISO, checksum, signed
@@ -227,16 +204,6 @@ aur_manifest_sha256
 signing_fingerprint
 builder_base_digest
 built_at_utc
-```
-
-Full offline candidate manifests additionally record:
-
-```text
-offline_manifest_name
-offline_manifest_sha256
-offline_repo_bytes
-offline_package_count
-arch_repository_snapshot
 ```
 
 The build-input record adds the requested builder image, immutable base-image

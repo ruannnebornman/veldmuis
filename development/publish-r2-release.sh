@@ -352,8 +352,8 @@ main() {
   [[ "${release_tag}" =~ ^[0-9]{4}\.[0-9]{2}(\.[0-9]{2}(\.[0-9]+)?)?$ ]] || \
     die "Invalid release tag: ${release_tag}"
   case "${installer}" in
-    network|offline) ;;
-    *) die "VELDMUIS_ISO_MODE must be network or offline, got: ${installer}" ;;
+    network) ;;
+    *) die "VELDMUIS_ISO_MODE must be network, got: ${installer}" ;;
   esac
   [[ -n "${bucket}" ]] || die "Missing CF_R2_BUCKET."
   [[ "${public_base}" =~ ^https:// ]] || die "CF_R2_PUBLIC_BASE_URL must use HTTPS."
@@ -383,30 +383,16 @@ main() {
     "${signature_name}"
     "${manifest_name}"
   )
-  if [[ "${installer}" == "offline" ]]; then
-    artifact_names+=("${artifact_stem}.offline-packages.tsv")
-    legacy_aliases=(
-      latest-offline.iso
-      latest-offline.iso.sha256
-      latest-offline.manifest.txt
-      latest-offline.manifest.txt.sig
-      offline/latest.iso
-      offline/latest.iso.sha256
-      offline/latest.manifest.txt
-      offline/latest.manifest.txt.sig
-    )
-  else
-    legacy_aliases=(
-      latest.iso
-      latest.iso.sha256
-      latest.packages.tsv
-      latest.spdx
-      latest.build-inputs.txt
-      latest.aur-packages.manifest.txt
-      latest.manifest.txt.sig
-      latest.manifest.txt
-    )
-  fi
+  legacy_aliases=(
+    latest.iso
+    latest.iso.sha256
+    latest.packages.tsv
+    latest.spdx
+    latest.build-inputs.txt
+    latest.aur-packages.manifest.txt
+    latest.manifest.txt.sig
+    latest.manifest.txt
+  )
 
   verify_local_artifacts
   for file_name in "${artifact_names[@]}"; do
