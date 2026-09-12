@@ -465,6 +465,7 @@ list_remote_keys() {
     --bucket "${bucket}" \
     --prefix "${prefix}/" \
     --query 'Contents[].Key' \
+    --endpoint-url "${endpoint}" \
     --output text
 }
 
