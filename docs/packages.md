@@ -200,7 +200,10 @@ veldmuis-kaazrot
 It ships kaazrot terminal, editor, and agent-default templates plus the
 `veldmuis-kaazrot-apply` helper, which copies them into `$HOME` (backing up
 differing files) and releases Fish and WezTerm from legacy distro user-defaults
-management. It is unchecked by default in the installer.
+management. Apply runs automatically at login through a systemd user service
+and tracks template versions, so package updates sync untouched files on next
+login while user-edited files are backed up and left alone. It is unchecked by
+default in the installer.
 
 ## Graphics Choices
 

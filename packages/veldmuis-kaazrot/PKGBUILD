@@ -13,6 +13,7 @@ depends=(
 install=veldmuis-kaazrot.install
 source=(
   "veldmuis-kaazrot-apply"
+  "veldmuis-kaazrot-apply.service"
   "fish-config.fish"
   "wezterm.lua"
   "opencode-AGENTS.md"
@@ -23,7 +24,8 @@ source=(
   "opencode-wezterm-sessions.mjs"
 )
 sha256sums=(
-  "a82b9958445bb885fa2854240eee8aabf996136dc0ad3d2a3c746b4976aee0f0"
+  "a76214b4d74c86cf6137a17cfedb6b31a786855e19446efa9a005c99208ead19"
+  "e9b17087ed5e5b0d85d0c1c1bdbbf3de65d2c56cbb954b874c9efd2f1779b797"
   "cebb24ab5b09d41bfeacd21f1712f9f7ccf5c4418a288a20f67f6fd956894d4d"
   "010716747713e94d5416e5be651252ddcfae7919c5dfb9978196a8abd58c0fd1"
   "07c2dc2bb9d18d71c9f000e3cf12d27ceb4667a30e9ea7e6ef3280d22aa0c198"
@@ -39,6 +41,11 @@ package() {
 
   install -Dm755 "${srcdir}/veldmuis-kaazrot-apply" \
     "${pkgdir}/usr/bin/veldmuis-kaazrot-apply"
+  install -Dm644 "${srcdir}/veldmuis-kaazrot-apply.service" \
+    "${pkgdir}/usr/lib/systemd/user/veldmuis-kaazrot-apply.service"
+  install -d "${pkgdir}/etc/systemd/user/default.target.wants"
+  ln -s /usr/lib/systemd/user/veldmuis-kaazrot-apply.service \
+    "${pkgdir}/etc/systemd/user/default.target.wants/veldmuis-kaazrot-apply.service"
   install -Dm644 "${srcdir}/fish-config.fish" \
     "${templates_root}/fish/config.fish"
   install -Dm644 "${srcdir}/wezterm.lua" \
