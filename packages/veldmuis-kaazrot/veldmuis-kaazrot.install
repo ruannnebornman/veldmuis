@@ -3,7 +3,8 @@
 post_install() {
   printf '%s\n' \
     'veldmuis-kaazrot ships personal templates only.' \
-    'Run `veldmuis-kaazrot-apply` to copy them into $HOME (existing files are backed up).'
+    'They apply automatically at next login (user service).' \
+    'Run `veldmuis-kaazrot-apply` manually to apply immediately (existing files are backed up).'
 }
 
 post_upgrade() {

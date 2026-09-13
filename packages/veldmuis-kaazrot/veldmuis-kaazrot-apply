@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 #
 # Apply kaazrot personal customizations from the veldmuis-kaazrot package
-# templates into $HOME. Existing files are never lost: differing files are
-# backed up next to the original with a timestamp suffix before replacement.
-#
-# Fish and WezTerm entries tracked by the retired veldmuis-terminal updater are
-# flipped to mode=unmanaged so nothing restores distro defaults over them.
+# templates into $HOME. Tracks template versions to sync on update,
+# backs up user-edited files, and releases fish/wezterm from legacy
+# distro user-defaults management.
 
 set -euo pipefail
 
 templates_root="/usr/share/veldmuis-kaazrot/templates"
-state_file="${HOME}/.local/state/veldmuis/user-defaults/state.ini"
+state_dir="${HOME}/.local/state/veldmuis-kaazrot"
+state_file="${state_dir}/files.ini"
+pkgver_file="${state_dir}/pkgver"
+legacy_state="${HOME}/.local/state/veldmuis/user-defaults/state.ini"
 stamp="$(date +%Y%m%d-%H%M%S)"
+pkgver="20260913"
 
 log() {
   printf '[veldmuis-kaazrot-apply] %s\n' "$*"
@@ -22,31 +24,50 @@ die() {
   exit 1
 }
 
-install_file() {
-  local src="$1" dest="$2" backup=""
+ensure_state_dir() {
+  mkdir -p -- "${state_dir}"
+}
 
-  [[ -f "${src}" ]] || die "Package template is missing: ${src}"
-  mkdir -p -- "$(dirname -- "${dest}")"
-
-  if [[ ! -e "${dest}" ]]; then
-    install -Dm644 -- "${src}" "${dest}"
-    log "installed ${dest}"
-  elif cmp -s -- "${src}" "${dest}"; then
-    log "unchanged ${dest}"
+read_pkgver() {
+  if [[ -f "${pkgver_file}" ]]; then
+    cat "${pkgver_file}"
   else
-    backup="${dest}.bak-${stamp}"
-    cp -a -- "${dest}" "${backup}"
-    install -Dm644 -- "${src}" "${dest}"
-    log "replaced ${dest} (backup at ${backup})"
+    echo ""
   fi
 }
 
-release_managed_entry() {
-  local id="$1" tmp=""
+write_pkgver() {
+  printf '%s\n' "${pkgver}" >"${pkgver_file}"
+}
 
-  [[ -f "${state_file}" ]] || return 0
-  grep -Eq "^\[${id}\]$" "${state_file}" || return 0
+read_state() {
+  local file="$1"
+  [[ -f "${state_file}" ]] || return 1
+  grep -E "^${file}\|" "${state_file}" | cut -d'|' -f2
+}
 
+write_state() {
+  local file="$1"
+  local hash="$2"
+  local tmp
+  tmp="$(mktemp)"
+  if [[ -f "${state_file}" ]]; then
+    grep -vE "^${file}\|" "${state_file}" >"${tmp}" || true
+  fi
+  printf '%s|%s|%s\n' "${file}" "${hash}" "${pkgver}" >>"${tmp}"
+  mv -- "${tmp}" "${state_file}"
+}
+
+hash_file() {
+  sha256sum -- "$1" 2>/dev/null | awk '{print $1}'
+}
+
+release_legacy() {
+  local id="$1"
+  [[ -f "${legacy_state}" ]] || return 0
+  grep -Eq "^\[${id}\]$" "${legacy_state}" || return 0
+
+  local tmp
   tmp="$(mktemp)"
   awk -v id="${id}" '
     /^\[.+\]$/ { section = substr($0, 2, length($0) - 2) }
@@ -55,26 +76,92 @@ release_managed_entry() {
     section == id && /^applied_hash=/ { print "applied_hash=none"; next }
     section == id && /^observation=/ { print "observation=user"; next }
     { print }
-  ' "${state_file}" >"${tmp}"
-  cat -- "${tmp}" >"${state_file}"
-  rm -f -- "${tmp}"
+  ' "${legacy_state}" >"${tmp}"
+  mv -- "${tmp}" "${legacy_state}"
   log "released [${id}] from legacy user-defaults management"
+}
+
+process_file() {
+  local rel="$1"
+  local dest="$2"
+  local src="${templates_root}/${rel}"
+
+  [[ -f "${src}" ]] || die "Package template is missing: ${src}"
+  mkdir -p -- "$(dirname -- "${dest}")"
+
+  local src_hash
+  src_hash="$(hash_file "${src}")"
+  [[ -n "${src_hash}" ]] || die "Failed to hash ${src}"
+
+  local stored_hash
+  stored_hash="$(read_state "${rel}" || true)"
+
+  if [[ ! -e "${dest}" ]]; then
+    install -Dm644 -- "${src}" "${dest}"
+    write_state "${rel}" "${src_hash}"
+    log "installed ${dest}"
+    return 0
+  fi
+
+  local dest_hash
+  dest_hash="$(hash_file "${dest}")"
+  [[ -n "${dest_hash}" ]] || die "Failed to hash ${dest}"
+
+  if [[ "${dest_hash}" == "${src_hash}" ]]; then
+    if [[ -z "${stored_hash}" ]]; then
+      write_state "${rel}" "${src_hash}"
+    fi
+    log "unchanged ${dest}"
+    return 0
+  fi
+
+  if [[ -n "${stored_hash}" && "${dest_hash}" == "${stored_hash}" ]]; then
+    local old_pkgver
+    old_pkgver="$(grep -E "^${rel}\|" "${state_file}" 2>/dev/null | cut -d'|' -f3 || true)"
+    if [[ "${old_pkgver}" != "${pkgver}" ]]; then
+      install -Dm644 -- "${src}" "${dest}"
+      write_state "${rel}" "${src_hash}"
+      log "synced ${dest} (package updated from ${old_pkgver:-unknown} to ${pkgver})"
+      return 0
+    fi
+    log "unchanged ${dest} (matches stored)"
+    return 0
+  fi
+
+  if [[ -z "${stored_hash}" ]]; then
+    local backup="${dest}.bak-${stamp}"
+    cp -a -- "${dest}" "${backup}"
+    install -Dm644 -- "${src}" "${dest}"
+    write_state "${rel}" "${src_hash}"
+    log "replaced ${dest} (backup at ${backup})"
+    return 0
+  fi
+
+  log "kept local edits at ${dest} (package template differs)"
 }
 
 main() {
   [[ -d "${templates_root}" ]] || die "Templates are missing: ${templates_root}"
+  ensure_state_dir
 
-  install_file "${templates_root}/fish/config.fish" "${HOME}/.config/fish/config.fish"
-  install_file "${templates_root}/wezterm/wezterm.lua" "${HOME}/.config/wezterm/wezterm.lua"
-  install_file "${templates_root}/opencode/AGENTS.md" "${HOME}/.config/opencode/AGENTS.md"
-  install_file "${templates_root}/opencode/opencode.jsonc" "${HOME}/.config/opencode/opencode.jsonc"
-  install_file "${templates_root}/opencode/tui.jsonc" "${HOME}/.config/opencode/tui.jsonc"
-  install_file "${templates_root}/opencode/opencode-ctrl-c-interrupt.mjs" "${HOME}/.config/opencode/opencode-ctrl-c-interrupt.mjs"
-  install_file "${templates_root}/opencode/opencode-wezterm-attention.mjs" "${HOME}/.config/opencode/opencode-wezterm-attention.mjs"
-  install_file "${templates_root}/opencode/opencode-wezterm-sessions.mjs" "${HOME}/.config/opencode/opencode-wezterm-sessions.mjs"
+  local prev_pkgver
+  prev_pkgver="$(read_pkgver)"
+  if [[ -n "${prev_pkgver}" && "${prev_pkgver}" != "${pkgver}" ]]; then
+    log "package upgraded from ${prev_pkgver} to ${pkgver}"
+  fi
+  write_pkgver
 
-  release_managed_entry fish
-  release_managed_entry wezterm
+  process_file "fish/config.fish" "${HOME}/.config/fish/config.fish"
+  process_file "wezterm/wezterm.lua" "${HOME}/.config/wezterm/wezterm.lua"
+  process_file "opencode/AGENTS.md" "${HOME}/.config/opencode/AGENTS.md"
+  process_file "opencode/opencode.jsonc" "${HOME}/.config/opencode/opencode.jsonc"
+  process_file "opencode/tui.jsonc" "${HOME}/.config/opencode/tui.jsonc"
+  process_file "opencode/opencode-ctrl-c-interrupt.mjs" "${HOME}/.config/opencode/opencode-ctrl-c-interrupt.mjs"
+  process_file "opencode/opencode-wezterm-attention.mjs" "${HOME}/.config/opencode/opencode-wezterm-attention.mjs"
+  process_file "opencode/opencode-wezterm-sessions.mjs" "${HOME}/.config/opencode/opencode-wezterm-sessions.mjs"
+
+  release_legacy fish
+  release_legacy wezterm
 
   if ! command -v opencode >/dev/null 2>&1 && [[ ! -x "${HOME}/.opencode/bin/opencode" ]]; then
     log "opencode is not installed; run its installer, then restart it to pick up the config"

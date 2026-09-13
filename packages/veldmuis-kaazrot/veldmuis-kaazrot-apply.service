@@ -1,0 +1,14 @@
+[Unit]
+Description=Apply kaazrot personal templates (fish, wezterm, opencode)
+ConditionPathExists=/usr/share/veldmuis-kaazrot/templates
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/veldmuis-kaazrot-apply
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
