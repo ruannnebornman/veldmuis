@@ -1,6 +1,6 @@
 pkgname=veldmuis-common
 pkgver=20260305
-pkgrel=3
+pkgrel=4
 pkgdesc="Common user-facing metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -20,6 +20,7 @@ depends=(
   "btop"
   "noto-fonts"
   "noto-fonts-emoji"
+  "adobe-source-han-sans-jp-fonts"
 )
 
 package() {
