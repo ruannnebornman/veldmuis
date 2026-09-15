@@ -3,6 +3,15 @@ local config = wezterm.config_builder()
 
 config.default_prog = { '/usr/bin/fish' }
 
+-- U+FF5C (｜ FULLWIDTH VERTICAL LINE) had no coverage until
+-- adobe-source-han-sans-jp-fonts was installed. Keep it as fallback
+-- so fullwidth/CJK glyphs render instead of placeholder boxes.
+config.font = wezterm.font_with_fallback({
+  'JetBrains Mono',
+  'Noto Sans',
+  'Source Han Sans JP',
+})
+
 config.keys = {
   {
     key = 'Backspace',
@@ -191,8 +200,6 @@ resurrect.state_manager.set_max_nlines(2000)
 resurrect.state_manager.periodic_save({ interval_seconds = 30, save_workspaces = true })
 resurrect.state_manager.event_driven_save({ save_workspaces = true, save_on_focus_loss = true })
 
-local last_save_text = 'autosave: pending'
-
 local function read_json_file(path)
   local file = io.open(path, 'r')
   if not file then return nil end
@@ -306,11 +313,6 @@ end
 
 wezterm.on('resurrect.file_io.write_state.finished', function(file_path)
   rebuild_session_snapshot(file_path)
-  last_save_text = 'autosave: ' .. os.date('%H:%M:%S')
-end)
-
-wezterm.on('update-status', function(window)
-  window:set_right_status(last_save_text)
 end)
 
 local restore_snapshot = {}

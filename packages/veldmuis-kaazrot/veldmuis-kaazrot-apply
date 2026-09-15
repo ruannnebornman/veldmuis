@@ -13,7 +13,7 @@ state_file="${state_dir}/files.ini"
 pkgver_file="${state_dir}/pkgver"
 legacy_state="${HOME}/.local/state/veldmuis/user-defaults/state.ini"
 stamp="$(date +%Y%m%d-%H%M%S)"
-pkgver="20260913"
+pkgver="20260914"
 
 log() {
   printf '[veldmuis-kaazrot-apply] %s\n' "$*"
