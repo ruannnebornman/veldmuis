@@ -71,6 +71,8 @@ jobs:
       - name: Stop when AUR inputs are current
         if: steps.audit.outputs.updates_available != 'true'
         shell: bash
+        env:
+          VELDMUIS_AUR_UPDATE_REPORT: ${{ steps.audit.outputs.report_file }}
         run: |
           set -euo pipefail
           cat "${VELDMUIS_AUR_UPDATE_REPORT}"
@@ -78,6 +80,8 @@ jobs:
       - name: Defer routine low-risk updates to package refresh
         if: steps.audit.outputs.updates_available == 'true' && steps.audit.outputs.risk != 'high'
         shell: bash
+        env:
+          VELDMUIS_AUR_UPDATE_REPORT: ${{ steps.audit.outputs.report_file }}
         run: |
           set -euo pipefail
           cat "${VELDMUIS_AUR_UPDATE_REPORT}"
