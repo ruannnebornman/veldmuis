@@ -1,5 +1,5 @@
 pkgname=veldmuis-kaazrot
-pkgver=20260913
+pkgver=20260914
 pkgrel=1
 pkgdesc="Personal customizations overlay for kaazrot (terminal, editor, agent defaults)"
 arch=("any")
@@ -24,10 +24,10 @@ source=(
   "opencode-wezterm-sessions.mjs"
 )
 sha256sums=(
-  "a76214b4d74c86cf6137a17cfedb6b31a786855e19446efa9a005c99208ead19"
+  "2a4865c8ba9dddbfee0168a932445f883edaf83811b0fef0d815ddf7569b64c4"
   "e9b17087ed5e5b0d85d0c1c1bdbbf3de65d2c56cbb954b874c9efd2f1779b797"
   "cebb24ab5b09d41bfeacd21f1712f9f7ccf5c4418a288a20f67f6fd956894d4d"
-  "010716747713e94d5416e5be651252ddcfae7919c5dfb9978196a8abd58c0fd1"
+  "5f74979f2b6b287101efe35b164cd2761ed65e3a76b96779e9833c03832e1b80"
   "07c2dc2bb9d18d71c9f000e3cf12d27ceb4667a30e9ea7e6ef3280d22aa0c198"
   "21ce0ea8260020fce054c2d67b8141d362e2dcef53007ac861982d5b29bc2a63"
   "5b4e239647ab0ed0c6f45fba3427d4492b855ff043a029853836a7b2ee43b50c"
