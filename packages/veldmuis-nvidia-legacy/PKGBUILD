@@ -23,7 +23,7 @@ source=(
   "nvidia-580xx-package-set.sh"
 )
 sha256sums=(
-  "32260bdd3847610ef7f97d28bfe664df76ec4cc0b127f2f75ad09b8c3aee8a87"
+  "30bfa9ce5eaf7ecc345d47354f90b34e91c9d9f0f37459b5150bcc34e566a6e9"
 )
 
 package() {

@@ -123,3 +123,20 @@ jobs:
           }
 
           ./development/build-aur-packages.sh --resolve-only >/dev/null
+
+      - name: Check NVIDIA metapackage source checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          package_root="packages/veldmuis-nvidia-legacy"
+          expected="$(
+            awk '/^sha256sums=/{inside=1; next} inside && /^\)/{exit} inside {gsub(/["[:space:]]/, ""); if ($0 != "") print}' \
+              "${package_root}/PKGBUILD"
+          )"
+          actual="$(sha256sum "${package_root}/nvidia-580xx-package-set.sh" | awk '{ print $1 }')"
+
+          [[ "${actual}" == "${expected}" ]] || {
+            echo "NVIDIA metapackage checksum does not match PKGBUILD" >&2
+            exit 1
+          }
