@@ -167,7 +167,7 @@ main() {
   fi
 
   body_file="$(mktemp)"
-  trap 'rm -f -- "${body_file}"' EXIT
+  trap 'rm -f -- "${body_file:-}"' EXIT
   write_pr_body "${body_file}"
 
   if [[ -n "${pr_number}" ]]; then
