@@ -3,22 +3,28 @@
 The NVIDIA 580xx package path is intentional and active.
 
 `packages/veldmuis-nvidia-legacy` is a metapackage. It does not build the real
-driver binaries. The real NVIDIA 580xx packages are built from the configured
-AUR package bases, collected as package artifacts, and published into the
-`veldmuis-extra` pacman repository.
+driver binaries. The real NVIDIA 580xx packages are built from package recipes
+vendored under `packages/nvidia-580xx-src`, collected as package artifacts, and
+published into the `veldmuis-extra` pacman repository.
 
-Do not remove the AUR builder, known-good fallback, or AUR manifest publishing
-until another source for the NVIDIA 580xx binary package artifacts is wired into
-the package repo build.
+Do not remove the vendored recipe builder, known-good fallback, or manifest
+publishing until another source for the NVIDIA 580xx binary package artifacts is
+wired into the package repo build.
 
 ## Source Of Truth
 
 `packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh` defines:
 
-- AUR package bases to build.
+- Package bases to build.
 - Repository package names expected from those builds.
 - Runtime dependencies used by `veldmuis-nvidia-legacy`.
 - Expected package licenses used by artifact validation.
+
+`packages/nvidia-580xx-src/<package_base>/` holds the build recipes. They are
+copied from the upstream AUR package repositories, and
+`packages/nvidia-580xx-src/upstream-refs.txt` records the upstream commit each
+recipe was last synced from. The driver payload itself still comes from the
+official NVIDIA `.run` installer referenced by each PKGBUILD.
 
 ## Build Flow
 
@@ -26,48 +32,41 @@ the package repo build.
    image and a read-only snapshot of the trusted build tooling.
 2. Veldmuis packages are built without the repository signing key.
 3. `development/build-aur-packages.sh` runs in a separate container with the
-   repository mounted read-only. It can write only to
-   `artifacts/aur-packages`.
-4. If enabled, the AUR stage restores the known-good NVIDIA package set when a
-   fresh AUR build fails, verifying the project's detached package signatures
-   before the artifacts enter the signing stage.
+   repository mounted read-only. By default (`VELDMUIS_AUR_SOURCE=local`) it
+   builds from the vendored recipes under `packages/nvidia-580xx-src` and can
+   write only to `artifacts/aur-packages`. Setting `VELDMUIS_AUR_SOURCE=aur`
+   restores the legacy upstream-clone path for ad-hoc use.
+4. If enabled, the stage restores the known-good NVIDIA package set when a fresh
+   build fails, verifying the project's detached package signatures before the
+   artifacts enter the signing stage.
 5. A network-disabled signing container validates the expected NVIDIA artifact
    set, imports the signing key, and runs `development/build-local-repo.sh`.
 6. `development/build-local-repo.sh` copies `veldmuis-nvidia-legacy` plus the
    NVIDIA 580xx artifacts into `veldmuis-extra` and signs the repository.
 7. `development/publish-r2-package-repo.sh` publishes the pacman repositories
-   and includes the AUR manifest, including resolved refs and source hashes.
+   and includes the NVIDIA manifest, including recipe hashes and source hashes.
 8. `development/publish-known-good-nvidia-packages.sh` updates the known-good
    NVIDIA package cache after a successful non-fallback build, then prunes
    cached objects the new manifest no longer references.
 9. `development/restore-known-good-nvidia-packages.sh` restores that cache when
-   the active AUR build path cannot produce a complete package set.
+   the active build path cannot produce a complete package set.
 
-## Update Review Policy
+## Recipe Sync Policy
 
-Routine updates are published without waiting for a lock pull request. The
-scheduled package refresh resolves the latest AUR refs, audits them against
-the lock, and when the candidate changes only an allowlisted version, source,
-checksum, or signing-key metadata assignment with descendant history, it pins,
-builds, payload-scans, and publishes that candidate. The build, package-set,
-license, payload-scan, signature, and repository checks still run for that
-candidate. A follow-up lock sync pull request then aligns the lock baseline
-with the published manifest; those syncs are batchable and non-blocking.
+The vendored recipes are the build source, so there is no lock pull request to
+merge. The scheduled package refresh rebuilds and publishes whenever the
+vendored recipes or other package inputs change on `main`. The build,
+package-set, license, payload-scan, signature, and repository checks all run for
+every refresh.
 
-Changes to build logic, dependencies, install or service files, privileged
-paths, other package inputs, non-descendant history, audit results, or scan
-results remain on the manual review path: the refresh stays on the locked
-refs and the scheduled AUR review opens or updates a labeled, assigned
-high-risk pull request with build evidence instead. A payload-scan failure on
-a pinned candidate also skips publishing and opens a high-risk review. This
-classification describes the changed recipe surface only; it does not assert
-that an AUR source is trustworthy. The signed package repository refresh
-remains separately controlled by the normal protected integration workflow.
-
-The lock file is the audit baseline and the known-good fallback anchor, not
-the release gate. Merging lock syncs promptly keeps the audit baseline close
-to the published manifest and keeps installer releases aligned with the
-package repository.
+Upstream recipe changes are surfaced by the scheduled `NVIDIA Recipe Watch`
+workflow. It runs `development/check-nvidia-recipe-drift.sh`, which compares the
+vendored recipes against the upstream AUR package repositories, and opens an
+issue when they differ. Syncing is manual: copy the changed files into
+`packages/nvidia-580xx-src/<package_base>/`, update
+`packages/nvidia-580xx-src/upstream-refs.txt`, review the diff, and let the
+package refresh rebuild. This keeps the build independent of AUR availability
+while still making upstream changes visible.
 
 The signing key must never be passed to either package build container. The
 signing stage may read completed package artifacts but must not execute
@@ -75,7 +74,7 @@ PKGBUILDs or have network access.
 
 ## Audit Rule
 
-The AUR flow may be removed only after a replacement source provides the same
-NVIDIA 580xx repository packages and `development/build-local-repo.sh`,
-package-refresh automation, release automation, and this document are updated to
-use that replacement source.
+The vendored recipe flow may be replaced only after a replacement source
+provides the same NVIDIA 580xx repository packages and
+`development/build-local-repo.sh`, package-refresh automation, release
+automation, and this document are updated to use that replacement source.

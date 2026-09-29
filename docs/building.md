@@ -8,7 +8,7 @@ reviewers who want to understand or reproduce the repository behavior.
 Veldmuis builds in these stages:
 
 1. Build native packages from `packages/`.
-2. Build NVIDIA 580xx artifacts from configured AUR package bases.
+2. Build NVIDIA 580xx artifacts from the vendored recipes.
 3. Sign packages and repository databases into local pacman repositories.
 4. Build an archiso image using the signed local repositories.
 5. Generate and sign release metadata for release builds.
@@ -60,9 +60,9 @@ Current reproducibility limits:
 - Native and live-filesystem Arch build dependencies are not yet pinned to an
   Arch Linux Archive snapshot.
 - Native package build dependencies are prepared by the host or CI image.
-- AUR-derived NVIDIA packages use the locked refs in
-  `development/aur-packages.lock` by default. `latest` is an explicit update
-  path and should be used only while reviewing a lock-file change.
+- NVIDIA 580xx packages build from recipes vendored under
+  `packages/nvidia-580xx-src`. Upstream recipe drift is reported by the
+  scheduled `NVIDIA Recipe Watch` workflow; syncing is a manual commit.
 - The network installer resolves Arch packages from mirrors during
   installation.
 
@@ -88,71 +88,62 @@ Build a subset:
 Native package artifacts are written beside their PKGBUILDs under `packages/`.
 Generated package artifacts are ignored by Git.
 
-## Build AUR-Derived NVIDIA Packages
+## Build NVIDIA 580xx Packages
 
-The NVIDIA 580xx AUR package bases are defined in:
+The NVIDIA 580xx package bases are defined in:
 
 ```text
 packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
 ```
 
-Build using the locked refs from `development/aur-packages.lock` (the normal
+Build from the vendored recipes under `packages/nvidia-580xx-src` (the normal
 release path):
 
 ```sh
-VELDMUIS_AUR_REF_MODE=locked ./development/build-aur-packages.sh
+./development/build-aur-packages.sh
 ```
 
-Build using the latest AUR refs only when deliberately reviewing a lock-file
-update. Do not use this mode for production publication; the automated review
-workflow promotes only the exact refs it has audited:
+Build from the upstream AUR repositories only for ad-hoc work. Do not use this
+mode for production publication:
 
 ```sh
-VELDMUIS_AUR_REF_MODE=latest ./development/build-aur-packages.sh
+VELDMUIS_AUR_SOURCE=aur VELDMUIS_AUR_REF_MODE=latest ./development/build-aur-packages.sh
 ```
 
-Resolve refs without building:
+Resolve the vendored recipe content hashes without building:
 
 ```sh
 ./development/build-aur-packages.sh --resolve-only
 ```
 
-Validate already-built AUR artifacts:
+Validate already-built NVIDIA artifacts:
 
 ```sh
 ./development/build-aur-packages.sh --validate-only
 ```
 
-The AUR output directory defaults to:
+The output directory defaults to:
 
 ```text
 artifacts/aur-packages/current/
 ```
 
-The AUR manifest records the resolved ref, the checked-out `PKGBUILD` hash, and
-pre-build hashes for the source inputs present in each package checkout. These
-records make the selected inputs auditable; they do not prove that the upstream
-source is safe or that the package can be rebuilt byte-for-byte.
+The NVIDIA manifest records the recipe content hash and pre-build hashes for the
+source inputs present in each recipe checkout. These records make the selected
+inputs auditable; they do not prove that the upstream source is safe or that the
+package can be rebuilt byte-for-byte.
 
-## Automated AUR Update Review
+## NVIDIA Recipe Watch
 
-The `AUR Update Review` workflow checks for newer AUR commits without signing or
-publishing them. It compares each candidate with the accepted lock, builds the
-candidate in Arch containers without signing credentials, validates the expected
-package set, and scans the resulting package payloads.
-
-An update group has one open pull request. A newer candidate updates that PR to
-the newest exact refs, reruns the checks, and adds the superseded report to the
-PR history. High-risk candidates, including the proprietary NVIDIA group, are
-created as draft pull requests and returned to draft when their candidate SHA
-changes. Low-risk candidates receive the lighter automated policy but still
-require the maintainer to merge the PR.
-A lock-file change on `main` starts the normal signed package-repository refresh,
-which rebuilds the exact accepted refs.
+The `NVIDIA Recipe Watch` workflow compares the vendored recipes with the
+upstream AUR package repositories and opens an issue when they differ. To sync,
+copy the changed files into `packages/nvidia-580xx-src/<package_base>/`, update
+`packages/nvidia-580xx-src/upstream-refs.txt`, and commit. The signed package
+repository refresh then rebuilds and publishes the vendored recipes.
 
 ## Build The Local Package Repository
 
-After native packages and AUR artifacts exist, build signed local repositories:
+After native packages and NVIDIA artifacts exist, build signed local repositories:
 
 ```sh
 ./development/build-local-repo.sh
@@ -224,18 +215,18 @@ the signing key material used only by network-disabled signing stages. The
 The container flow separates stages:
 
 - Native package build stage: no signing key.
-- AUR package build stage: no signing key.
-- Signing stage: receives signing key, validates AUR artifacts, has no network.
+- NVIDIA package build stage: no signing key.
+- Signing stage: receives signing key, validates NVIDIA artifacts, has no network.
 - ISO stage: no signing key, repository mounted read-only.
 - Release-metadata stage: receives signing key, has no network, and creates the
   signed manifest, checksum, package inventory, SPDX SBOM, build-input record,
-  and release-specific AUR-input manifest.
+  and release-specific NVIDIA-input manifest.
 
 The outer builder pulls its configured base image, resolves the immutable
 repository digest, and uses that digest in the generated Dockerfile. Release
 metadata records the requested image, resolved base digest, resulting image ID,
 Docker version, relevant build-tool versions, release source commit, and exact
-AUR refs.
+NVIDIA recipe content hashes.
 
 Release metadata can be generated inside an appropriately prepared Arch build
 environment with:
@@ -287,7 +278,7 @@ current:
 It compares:
 
 - current source commit versus the published package repository manifest
-- resolved AUR refs versus the published AUR manifest
+- vendored recipe content hashes versus the published NVIDIA manifest
 
 The workflow can force a refresh or simulate an AUR failure to test the
 known-good NVIDIA fallback path.

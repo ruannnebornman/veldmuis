@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
 
-# Sourced by NVIDIA AUR build, publish, restore, and metapackage helpers.
+# Sourced by NVIDIA package build, publish, restore, and metapackage helpers.
 
 veldmuis_nvidia_580xx_aur_package_bases=(
   "nvidia-580xx-utils"
@@ -9,7 +9,7 @@ veldmuis_nvidia_580xx_aur_package_bases=(
   "nvidia-580xx-settings"
 )
 
-# Audited direct official build-dependency roots for the locked AUR recipes
+# Audited direct official build-dependency roots for the vendored recipes
 # above. Keep locally built nvidia-580xx packages out of this list.
 veldmuis_nvidia_580xx_official_build_dependency_roots=(
   "dkms"

@@ -1,0 +1,65 @@
+name: NVIDIA Recipe Watch
+
+on:
+  schedule:
+    # 11:23 Africa/Johannesburg. GitHub cron uses UTC.
+    - cron: "23 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: veldmuis-nvidia-recipe-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Check upstream NVIDIA recipe drift
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: refs/heads/main
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
+      - name: Detect upstream recipe drift
+        id: drift
+        shell: bash
+        env:
+          VELDMUIS_RECIPE_DRIFT_REPORT: ${{ runner.temp }}/veldmuis-nvidia-recipe-drift.md
+        run: |
+          set -euo pipefail
+          ./development/check-nvidia-recipe-drift.sh --report "${VELDMUIS_RECIPE_DRIFT_REPORT}"
+
+      - name: Open drift issue when needed
+        if: steps.drift.outputs.drift == 'true'
+        shell: bash
+        env:
+          VELDMUIS_RECIPE_DRIFT_REPORT: ${{ runner.temp }}/veldmuis-nvidia-recipe-drift.md
+        run: |
+          set -euo pipefail
+          title="NVIDIA 580xx recipe drift detected"
+          existing="$(
+            gh issue list --state open --limit 100 --json number,title \
+              --jq '.[] | select(.title=="NVIDIA 580xx recipe drift detected") | .number' \
+              | head -n1
+          )"
+          if [[ -n "${existing}" ]]; then
+            echo "Open drift issue #${existing} already tracks this; leaving it in place."
+            exit 0
+          fi
+          gh issue create \
+            --title "${title}" \
+            --body-file "${VELDMUIS_RECIPE_DRIFT_REPORT}"

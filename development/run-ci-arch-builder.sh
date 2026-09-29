@@ -68,6 +68,7 @@ Environment:
   VELDMUIS_RELEASE_TAG
   VELDMUIS_RELEASE_SHA
   VELDMUIS_PACKAGER
+  VELDMUIS_AUR_SOURCE
   VELDMUIS_AUR_REF_MODE
   VELDMUIS_AUR_ENABLE_FALLBACK
   VELDMUIS_SIMULATE_AUR_BUILD_FAILURE
@@ -229,12 +230,13 @@ run_aur_build_stage() {
 
   local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
   local aur_ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
+  local aur_source="${VELDMUIS_AUR_SOURCE:-local}"
   local aur_dependency_installer="${container_support_root}/development/install-aur-build-dependency.sh"
   local aur_build_status=0
   local build_aur_command
   local override_name
 
-  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") VELDMUIS_AUR_DEPENDENCY_INSTALLER=$(shell_quote "${aur_dependency_installer}")"
+  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_SOURCE=$(shell_quote "${aur_source}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") VELDMUIS_AUR_DEPENDENCY_INSTALLER=$(shell_quote "${aur_dependency_installer}")"
   for override_name in \
     VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS \
     VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS \
@@ -392,6 +394,7 @@ run_container_stage() {
   if [[ "${stage}" == "aur" ]]; then
     mount_mode="ro"
     docker_args+=(
+      -e VELDMUIS_AUR_SOURCE="${VELDMUIS_AUR_SOURCE:-local}"
       -e VELDMUIS_AUR_REF_MODE="${VELDMUIS_AUR_REF_MODE:-}"
       -e VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS:-}"
       -e VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS:-}"
