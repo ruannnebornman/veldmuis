@@ -84,66 +84,42 @@ jobs:
             exit 1
           }
 
-      - name: Check AUR review helpers
+      - name: Check vendored NVIDIA recipes
         shell: bash
-        env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_REF: ${{ github.head_ref }}
-          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
           set -euo pipefail
 
           for script in \
-            development/audit-aur-update.sh \
+            development/build-aur-packages.sh \
             development/install-aur-build-dependency.sh \
-            development/manage-aur-update-pr.sh \
-            development/scan-aur-candidate.sh \
-            development/update-aur-lock.sh
+            development/scan-aur-candidate.sh
           do
             bash -n "${script}"
           done
 
-          test_root="$(mktemp -d)"
-          trap 'rm -rf -- "${test_root}"' EXIT
+          # shellcheck source=packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
+          source packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
+          ((${#veldmuis_nvidia_580xx_aur_package_bases[@]} > 0)) || {
+            echo "No vendored NVIDIA package bases defined" >&2
+            exit 1
+          }
 
-          if [[ -n "${PR_BASE_SHA:-}" ]]; then
-            base_sha="${PR_BASE_SHA}"
-          else
-            git fetch --force origin main:refs/remotes/origin/main
-            base_sha="$(git rev-parse refs/remotes/origin/main)"
-          fi
-          git cat-file -e "${base_sha}^{commit}"
-
-          base_lock="${test_root}/base-aur-packages.lock"
-          git show "${base_sha}:development/aur-packages.lock" > "${base_lock}"
-
-          if ! git diff --quiet "${base_sha}" HEAD -- development/aur-packages.lock; then
-            if [[ "${GITHUB_EVENT_NAME}" == pull_request && ( \
-              "${PR_HEAD_REF}" != automation/aur-update/nvidia-580xx || \
-              "${PR_HEAD_REPOSITORY}" != "${GITHUB_REPOSITORY}" ) ]]; then
-              echo "AUR lock changes must come from the automated update branch" >&2
+          for base in "${veldmuis_nvidia_580xx_aur_package_bases[@]}"; do
+            recipe_dir="packages/nvidia-580xx-src/${base}"
+            [[ -d "${recipe_dir}" ]] || {
+              echo "Missing vendored recipe directory: ${recipe_dir}" >&2
               exit 1
-            fi
+            }
+            [[ -f "${recipe_dir}/PKGBUILD" ]] || {
+              echo "Missing vendored PKGBUILD: ${recipe_dir}/PKGBUILD" >&2
+              exit 1
+            }
+            bash -n "${recipe_dir}/PKGBUILD"
+          done
 
-            changed_files="$(git diff --name-only "${base_sha}" HEAD)"
-            while IFS= read -r changed_file; do
-              [[ "${changed_file}" == development/aur-packages.lock ]] || {
-                echo "AUR update branch changed an unexpected file: ${changed_file}" >&2
-                exit 1
-              }
-            done <<< "${changed_files}"
-          fi
+          [[ -f packages/nvidia-580xx-src/upstream-refs.txt ]] || {
+            echo "Missing packages/nvidia-580xx-src/upstream-refs.txt" >&2
+            exit 1
+          }
 
-          cp development/aur-packages.lock "${test_root}/aur-packages.lock"
-          awk 'NF && $1 !~ /^#/ { print $1 " " $2 }' \
-            development/aur-packages.lock > "${test_root}/resolved-refs.txt"
-          ./development/update-aur-lock.sh \
-            --resolved-refs "${test_root}/resolved-refs.txt" \
-            --lock-file "${test_root}/aur-packages.lock"
-          cmp -s development/aur-packages.lock "${test_root}/aur-packages.lock"
-
-          VELDMUIS_AUR_LOCK_FILE="${base_lock}" \
-            ./development/audit-aur-update.sh \
-            --resolved-refs development/aur-packages.lock \
-            --report "${test_root}/aur-update-report.md"
-          grep -q '^Overall risk: \(low\|high\)$' "${test_root}/aur-update-report.md"
+          ./development/build-aur-packages.sh --resolve-only >/dev/null

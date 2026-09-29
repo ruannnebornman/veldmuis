@@ -2,12 +2,14 @@
 
 set -euo pipefail
 
-# Active NVIDIA 580xx supply path. Do not remove this AUR build flow unless a
-# replacement binary package source is wired into the repo build first; see
-# development/nvidia-580xx-package-flow.md.
+# Active NVIDIA 580xx supply path. The package recipes are vendored under
+# packages/nvidia-580xx-src and built from the local checkout by default; see
+# development/nvidia-580xx-package-flow.md. Set VELDMUIS_AUR_SOURCE=aur only for
+# the legacy upstream-clone path.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
-lock_file="${VELDMUIS_AUR_LOCK_FILE:-${script_dir}/aur-packages.lock}"
+source_mode="${VELDMUIS_AUR_SOURCE:-local}"
+source_dir="${VELDMUIS_AUR_SOURCE_DIR:-${repo_root}/packages/nvidia-580xx-src}"
 work_root="${VELDMUIS_AUR_WORK_ROOT:-${repo_root}/artifacts/aur-packages/work}"
 package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
 manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
@@ -50,15 +52,17 @@ Usage:
   build-aur-packages.sh --validate-only
 
 Environment:
-  VELDMUIS_AUR_REF_MODE=locked|latest
-  VELDMUIS_AUR_LOCK_FILE=/path/to/aur-packages.lock
+  VELDMUIS_AUR_SOURCE=local|aur
+  VELDMUIS_AUR_SOURCE_DIR=/path/to/vendored-recipes
+  VELDMUIS_AUR_REF_MODE=latest
   VELDMUIS_AUR_WORK_ROOT=/path/to/work
   VELDMUIS_AUR_PACKAGE_DIR=/path/to/package-output
   VELDMUIS_AUR_MANIFEST=/path/to/manifest.txt
   VELDMUIS_AUR_REF_<PACKAGE_BASE>=commit-or-ref
 
 Examples:
-  VELDMUIS_AUR_REF_MODE=latest ./development/build-aur-packages.sh
+  ./development/build-aur-packages.sh
+  VELDMUIS_AUR_SOURCE=aur VELDMUIS_AUR_REF_MODE=latest ./development/build-aur-packages.sh
   VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS=master ./development/build-aur-packages.sh
 EOF
 }
@@ -72,31 +76,28 @@ aur_url() {
   printf 'https://aur.archlinux.org/%s.git' "${package_base}"
 }
 
+local_recipe_ref() {
+  local package_base="$1"
+  local recipe_dir="${source_dir}/${package_base}"
+
+  [[ -d "${recipe_dir}" ]] || die "Vendored NVIDIA recipe not found: ${recipe_dir}"
+
+  (
+    cd "${recipe_dir}"
+    find . -type f -not -path './.git/*' -print0 \
+      | LC_ALL=C sort -z \
+      | xargs -0 -r sha256sum \
+      | sha256sum \
+      | awk '{print $1}'
+  )
+}
+
 env_ref_name() {
   local package_base="$1"
   local suffix
 
   suffix="$(printf '%s' "${package_base}" | tr '[:lower:]-' '[:upper:]_')"
   printf 'VELDMUIS_AUR_REF_%s' "${suffix}"
-}
-
-locked_ref() {
-  local package_base="$1"
-
-  [[ -r "${lock_file}" ]] || die "AUR lock file not readable: ${lock_file}"
-
-  awk -v package_base="${package_base}" '
-    $1 == package_base && $1 !~ /^#/ {
-      print $2
-      found = 1
-      exit
-    }
-    END {
-      if (!found) {
-        exit 1
-      }
-    }
-  ' "${lock_file}" || die "No locked ref found for ${package_base}"
 }
 
 latest_ref() {
@@ -112,6 +113,18 @@ resolve_ref() {
   local package_base="$1"
   local ref_env_name ref_env_value
 
+  case "${source_mode}" in
+    local)
+      local_recipe_ref "${package_base}"
+      return
+      ;;
+    aur)
+      ;;
+    *)
+      die "VELDMUIS_AUR_SOURCE must be local or aur, got: ${source_mode}"
+      ;;
+  esac
+
   ref_env_name="$(env_ref_name "${package_base}")"
   ref_env_value="${!ref_env_name:-}"
 
@@ -122,7 +135,7 @@ resolve_ref() {
 
   case "${ref_mode}" in
     locked)
-      locked_ref "${package_base}"
+      die "VELDMUIS_AUR_REF_MODE=locked was removed with the AUR lock file; set VELDMUIS_AUR_REF_<PACKAGE_BASE> or use latest"
       ;;
     latest)
       latest_ref "${package_base}"
@@ -390,9 +403,15 @@ build_package_base() {
   local ref="$2"
   local build_dir="${work_root}/${package_base}"
 
-  log "Cloning ${package_base} at ${ref}"
-  git clone --quiet "$(aur_url "${package_base}")" "${build_dir}"
-  git -C "${build_dir}" checkout --quiet --detach "${ref}"
+  if [[ "${source_mode}" == "local" ]]; then
+    log "Copying vendored ${package_base} recipe from ${source_dir}/${package_base}"
+    mkdir -p "${build_dir}"
+    cp -a "${source_dir}/${package_base}/." "${build_dir}/"
+  else
+    log "Cloning ${package_base} at ${ref}"
+    git clone --quiet "$(aur_url "${package_base}")" "${build_dir}"
+    git -C "${build_dir}" checkout --quiet --detach "${ref}"
+  fi
 
   log "Building ${package_base}"
   (
@@ -420,17 +439,23 @@ write_manifest() {
 
   {
     printf 'built_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf 'source=aur\n'
+    printf 'source=%s\n' "${source_mode}"
     printf 'fallback_used=false\n'
     printf 'ref_mode=%s\n' "${ref_mode}"
-    printf 'lock_file=%s\n' "${lock_file}"
     printf 'package_dir=%s\n' "${package_dir}"
     printf '\n[package_bases]\n'
     for package_base in "${package_bases[@]}"; do
-      printf '%s\t%s\t%s\n' \
-        "${package_base}" \
-        "${resolved_refs[${package_base}]}" \
-        "$(aur_url "${package_base}")"
+      if [[ "${source_mode}" == "local" ]]; then
+        printf '%s\t%s\t%s\n' \
+          "${package_base}" \
+          "${resolved_refs[${package_base}]}" \
+          "${source_dir}/${package_base}"
+      else
+        printf '%s\t%s\t%s\n' \
+          "${package_base}" \
+          "${resolved_refs[${package_base}]}" \
+          "$(aur_url "${package_base}")"
+      fi
     done
 
     printf '\n[source_inputs]\n'
