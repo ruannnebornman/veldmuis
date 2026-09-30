@@ -243,5 +243,5 @@ the full verification flow.
 ## License
 
 Repository code and documentation are licensed under the MIT License unless a
-file states otherwise. Upstream packages, Arch packages, AUR-derived packages,
-and proprietary driver components keep their own licenses.
+file states otherwise. Upstream packages, Arch packages, the vendored NVIDIA
+recipes, and proprietary driver components keep their own licenses.

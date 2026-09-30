@@ -57,7 +57,7 @@ The release and package workflows sign:
 - Pacman repository databases for both Veldmuis repositories.
 - The release manifest that authenticates the ISO checksum, release commit,
   immutable artifact path, package inventory, SPDX SBOM, build inputs, and
-  resolved AUR-input manifest.
+  the NVIDIA recipe manifest.
 
 The manifest has a detached OpenPGP signature. The ISO does not have a separate
 detached signature; its SHA-256 digest is authenticated by the signed manifest.
@@ -106,8 +106,8 @@ verified manifest directs the download to release-specific immutable objects.
 ## Verify A Historical Release
 
 Releases produced by the current workflow retain the signed manifest, detached
-signature, checksum, package inventory, SPDX SBOM, build inputs, and resolved
-AUR-input manifest. Their release notes link to the immutable ISO on the
+signature, checksum, package inventory, SPDX SBOM, build inputs, and the
+NVIDIA recipe manifest. Their release notes link to the immutable ISO on the
 download origin. Older releases may predate signed release manifests.
 
 For a historical release:
@@ -146,16 +146,18 @@ Arch repositories retain their upstream-compatible database-signature policy.
 Pacman checks package and repository signatures automatically under this policy;
 do not bypass it with `SigLevel = Never` or an untrusted replacement keyring.
 
-## AUR-Derived Packages
+## Vendored NVIDIA Packages
 
-The NVIDIA 580xx packages are built from configured AUR package bases,
-validated as package artifacts, and then signed into the Veldmuis package
-repository. The release build records the exact resolved refs, the AUR
-`PKGBUILD` hashes, and pre-build source-input hashes in its AUR-input and
+The NVIDIA 580xx packages are built from recipes vendored under
+`packages/nvidia-580xx-src`, validated as package artifacts, and then signed
+into the Veldmuis package repository. The release build records the recipe
+content hashes and pre-build source-input hashes in its NVIDIA-input and
 build-input manifests.
 
-The AUR build stage does not receive the signing key. Signing happens later in
-a network-disabled stage after artifact validation. See
+The NVIDIA build stage does not receive the signing key. Signing happens later in
+a network-disabled stage after artifact validation. A scheduled drift watcher
+compares the vendored recipes against the upstream AUR repositories and opens an
+issue when they differ. See
 [NVIDIA 580xx Package Flow](development/nvidia-580xx-package-flow.md) and
 [NVIDIA 580xx Support](docs/nvidia.md).
 
@@ -200,7 +202,8 @@ and provide explicit recovery instructions before normal publication resumes.
 
 - Arch repository inputs are not pinned to an Arch Linux Archive snapshot, so
   byte-for-byte rebuilds are not currently guaranteed.
-- The NVIDIA 580xx path depends on AUR-derived package sources.
+- The NVIDIA 580xx path depends on vendored third-party package recipes and
+  NVIDIA's proprietary driver archives.
 - Build-input manifests authenticate the recorded refs, source hashes, and build
   metadata; they do not constitute a source audit or a byte-for-byte
   reproducibility guarantee.

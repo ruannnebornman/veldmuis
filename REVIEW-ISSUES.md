@@ -165,7 +165,7 @@ Official GitHub link in the footer).
 - `SigLevel = Required DatabaseRequired` on both Veldmuis repos.
 - Repo hygiene check rejecting tracked secrets (`check-repo-hygiene.sh`).
 - No curl|bash, no insecure download flags anywhere in the tree.
-- Keyring ships only public material; AUR build stage has no signing key.
+- Keyring ships only public material; NVIDIA build stage has no signing key.
 
 ---
 
@@ -180,7 +180,8 @@ Completed work is recorded above and should not be reopened.
       `packages/veldmuis-mirrorlist/arch-mirrorlist-fallback`.
 - [x] Confirm that scheduled package refreshes and installer releases should use
       locked AUR refs, with `latest` reserved for deliberate lock-file updates
-      (confirmed 2026-08-02).
+      (confirmed 2026-08-02; superseded 2026-09-30 by vendored recipes under
+      `packages/nvidia-580xx-src`).
 
 ### GitHub And Key Controls
 
