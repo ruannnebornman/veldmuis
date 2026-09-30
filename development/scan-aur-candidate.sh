@@ -94,13 +94,20 @@ scan_source_checkout() {
   local package_base="$1"
   local checkout_path="${source_root}/${package_base}"
   local source_file
+  local -a source_files=()
 
-  [[ -d "${checkout_path}/.git" ]] || {
+  if [[ -d "${checkout_path}/.git" ]]; then
+    mapfile -t source_files < <(git -C "${checkout_path}" ls-files)
+  elif [[ -d "${checkout_path}" ]]; then
+    mapfile -t source_files < <(
+      cd "${checkout_path}" && find . -type f -not -path './.git/*' | sed 's#^\./##' | LC_ALL=C sort
+    )
+  else
     add_finding "${package_base}: source checkout is unavailable for scanning"
     return
-  }
+  fi
 
-  while IFS= read -r source_file; do
+  for source_file in "${source_files[@]}"; do
     case "${source_file}" in
       PKGBUILD|*.install|*.hook|*.service|*.sh)
         if grep -Eiq 'curl|wget|nc[[:space:]]|/dev/tcp|systemctl|pacman[[:space:]]|chmod[[:space:]].*\+s|setcap|mkfs|dd[[:space:]]+if=' \
@@ -109,7 +116,7 @@ scan_source_checkout() {
         fi
         ;;
     esac
-  done < <(git -C "${checkout_path}" ls-files)
+  done
 }
 
 main() {
