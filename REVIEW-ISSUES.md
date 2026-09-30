@@ -44,6 +44,10 @@ Actions:
 - [x] Document the residual risk in `docs/nvidia.md` in plain language (done
       2026-08-02).
 
+Note (2026-09-30): the lock-based flow described above was replaced by vendored
+recipes under `packages/nvidia-580xx-src` plus the `NVIDIA Recipe Watch` drift
+issue. See `development/nvidia-580xx-package-flow.md`.
+
 ### [MED] Non-reproducible builds (documented limitation)
 Arch inputs are not pinned to an Arch Linux Archive snapshot, so artifacts can't
 be byte-for-byte rebuilt. Combined with the previous item: signed binaries that

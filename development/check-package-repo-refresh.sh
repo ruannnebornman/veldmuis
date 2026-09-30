@@ -4,7 +4,6 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
-ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
 force_refresh="${VELDMUIS_PACKAGE_REFRESH_FORCE:-0}"
 package_base="${PACKAGE_BASE_URL:-https://packages.veldmuislinux.org}"
 package_manifest_url="${PUBLISHED_PACKAGE_MANIFEST_URL:-}"
@@ -65,12 +64,11 @@ write_summary() {
     echo "- Reason: ${reason}"
     echo "- Current source commit: \`${current_source_commit}\`"
     echo "- Published source commit: \`${published_source_commit:-unavailable}\`"
-    echo "- AUR ref mode: \`${ref_mode}\`"
     echo "- Published package manifest: ${package_manifest_url}"
-    echo "- Published AUR manifest: ${aur_manifest_url}"
+    echo "- Published NVIDIA manifest: ${aur_manifest_url}"
     if [[ -s "${resolved_refs_file}" ]]; then
       echo
-      echo "### Resolved AUR Refs"
+      echo "### Resolved NVIDIA Recipe Hashes"
       echo
       echo '```text'
       cat "${resolved_refs_file}"
@@ -86,7 +84,6 @@ finish() {
   log "${reason}"
   write_output "refresh_needed" "${refresh_needed}"
   write_output "reason" "${reason}"
-  write_output "ref_mode" "${ref_mode}"
   write_output "current_source_commit" "${current_source_commit}"
   write_output "published_source_commit" "${published_source_commit}"
   write_output "package_manifest_url" "${package_manifest_url}"
@@ -222,9 +219,8 @@ main() {
     return 0
   fi
 
-  log "Resolving AUR refs with VELDMUIS_AUR_REF_MODE=${ref_mode}"
-  VELDMUIS_AUR_REF_MODE="${ref_mode}" \
-    "${repo_root}/development/build-aur-packages.sh" --resolve-only \
+  log "Resolving NVIDIA recipe content hashes"
+  "${repo_root}/development/build-aur-packages.sh" --resolve-only \
     | sort > "${resolved_refs_file}"
 
   if ! curl --fail --silent --show-error --location "${aur_manifest_url}" \

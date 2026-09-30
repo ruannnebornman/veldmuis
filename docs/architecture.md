@@ -14,7 +14,7 @@ The package list is defined in `development/package-manifest.sh`.
 
 `veldmuis-core` contains the native Veldmuis packages and the Calamares package
 used by the installer. `veldmuis-extra` contains the NVIDIA legacy metapackage
-plus the NVIDIA 580xx artifacts built from the configured AUR package bases.
+plus the NVIDIA 580xx artifacts built from the vendored package recipes.
 
 Most desktop policy packages are metapackages. They intentionally carry little
 or no payload; their dependency lists define the install composition. Packages
@@ -88,7 +88,8 @@ signing stage. They publish release-specific ISO objects before advancing the
 small network channel document.
 
 GitHub releases keep release notes, the signed manifest and signature,
-checksum, package inventory, SPDX SBOM, build inputs, and resolved AUR inputs.
+checksum, package inventory, SPDX SBOM, build inputs, and NVIDIA recipe content
+hashes.
 The current channel paths are:
 
 ```text
