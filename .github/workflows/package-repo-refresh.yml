@@ -53,7 +53,6 @@ jobs:
       CF_R2_PACKAGE_BUCKET: ${{ vars.CF_R2_PACKAGE_BUCKET }}
       PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
-      VELDMUIS_AUR_SOURCE: local
       VELDMUIS_PACKAGE_REFRESH_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
       VELDMUIS_AUR_ENABLE_FALLBACK: true
       VELDMUIS_SIMULATE_AUR_BUILD_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_aur_failure && 'true' || 'false' }}
