@@ -31,10 +31,10 @@ official NVIDIA `.run` installer referenced by each PKGBUILD.
 1. `development/run-ci-arch-builder.sh` prepares a disposable Arch builder
    image and a read-only snapshot of the trusted build tooling.
 2. Veldmuis packages are built without the repository signing key.
-3. `development/build-aur-packages.sh` runs in a separate container with the
-   repository mounted read-only. By default (`VELDMUIS_AUR_SOURCE=local`) it
+3. `development/build-nvidia-packages.sh` runs in a separate container with the
+   repository mounted read-only. By default (`VELDMUIS_NVIDIA_SOURCE=local`) it
    builds from the vendored recipes under `packages/nvidia-580xx-src` and can
-   write only to `artifacts/aur-packages`. Setting `VELDMUIS_AUR_SOURCE=aur`
+   write only to `artifacts/nvidia-packages`. Setting `VELDMUIS_NVIDIA_SOURCE=upstream`
    restores the legacy upstream-clone path for ad-hoc use.
 4. If enabled, the stage restores the known-good NVIDIA package set when a fresh
    build fails, verifying the project's detached package signatures before the

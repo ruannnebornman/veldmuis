@@ -165,7 +165,7 @@ jobs:
       CF_R2_PUBLIC_BASE_URL: ${{ vars.CF_R2_PUBLIC_BASE_URL }}
       PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
-      VELDMUIS_AUR_ENABLE_FALLBACK: true
+      VELDMUIS_NVIDIA_ENABLE_FALLBACK: true
     steps:
       - name: Check out release ref
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -319,7 +319,7 @@ jobs:
           package_inventory_path="${output_root}/${artifact_stem}.packages.tsv"
           sbom_path="${output_root}/${artifact_stem}.spdx"
           build_inputs_path="${output_root}/${artifact_stem}.build-inputs.txt"
-          aur_manifest_path="${output_root}/${artifact_stem}.aur-packages.manifest.txt"
+          nvidia_manifest_path="${output_root}/${artifact_stem}.nvidia-packages.manifest.txt"
 
           for artifact_path in \
             "${iso_path}" \
@@ -329,7 +329,7 @@ jobs:
             "${package_inventory_path}" \
             "${sbom_path}" \
             "${build_inputs_path}" \
-            "${aur_manifest_path}"
+            "${nvidia_manifest_path}"
           do
             [[ -s "${artifact_path}" ]] || {
               echo "Release artifact is missing or empty: ${artifact_path}" >&2
@@ -382,7 +382,7 @@ jobs:
           verify_manifest_hash package_inventory_sha256 "${package_inventory_path}"
           verify_manifest_hash sbom_sha256 "${sbom_path}"
           verify_manifest_hash build_inputs_sha256 "${build_inputs_path}"
-          verify_manifest_hash aur_manifest_sha256 "${aur_manifest_path}"
+          verify_manifest_hash nvidia_manifest_sha256 "${nvidia_manifest_path}"
           gpgv --keyring ./packages/veldmuis-keyring/veldmuis.gpg \
             "${signature_path}" "${manifest_path}"
 
@@ -407,14 +407,14 @@ jobs:
             echo "package_inventory_path=${package_inventory_path}"
             echo "sbom_path=${sbom_path}"
             echo "build_inputs_path=${build_inputs_path}"
-            echo "aur_manifest_path=${aur_manifest_path}"
+            echo "nvidia_manifest_path=${nvidia_manifest_path}"
             echo "iso_name=${iso_name}"
             echo "manifest_name=${manifest_name}"
             echo "signature_name=$(basename "${signature_path}")"
             echo "package_inventory_name=$(basename "${package_inventory_path}")"
             echo "sbom_name=$(basename "${sbom_path}")"
             echo "build_inputs_name=$(basename "${build_inputs_path}")"
-            echo "aur_manifest_name=$(basename "${aur_manifest_path}")"
+            echo "nvidia_manifest_name=$(basename "${nvidia_manifest_path}")"
             echo "sha256=${sha256}"
             echo "artifact_name=veldmuis-iso-${RELEASE_TAG}-${short_sha}"
             echo "release_object_prefix=${r2_prefix}/releases/${RELEASE_TAG}"
@@ -436,7 +436,7 @@ jobs:
             ${{ steps.metadata.outputs.package_inventory_path }}
             ${{ steps.metadata.outputs.sbom_path }}
             ${{ steps.metadata.outputs.build_inputs_path }}
-            ${{ steps.metadata.outputs.aur_manifest_path }}
+            ${{ steps.metadata.outputs.nvidia_manifest_path }}
           if-no-files-found: error
           retention-days: 14
 
@@ -490,7 +490,7 @@ jobs:
           PACKAGE_INVENTORY_ASSET_PATH: ${{ steps.metadata.outputs.package_inventory_path }}
           SBOM_ASSET_PATH: ${{ steps.metadata.outputs.sbom_path }}
           BUILD_INPUTS_ASSET_PATH: ${{ steps.metadata.outputs.build_inputs_path }}
-          AUR_MANIFEST_ASSET_PATH: ${{ steps.metadata.outputs.aur_manifest_path }}
+          NVIDIA_MANIFEST_ASSET_PATH: ${{ steps.metadata.outputs.nvidia_manifest_path }}
           IMMUTABLE_ISO_URL: ${{ steps.metadata.outputs.immutable_iso_url }}
           IMMUTABLE_MANIFEST_URL: ${{ steps.metadata.outputs.immutable_manifest_url }}
           IMMUTABLE_SIGNATURE_URL: ${{ steps.metadata.outputs.immutable_signature_url }}
@@ -594,7 +594,7 @@ jobs:
             echo "- Package inventory: \`$(basename "${PACKAGE_INVENTORY_ASSET_PATH}")\`"
             echo "- SPDX SBOM: \`$(basename "${SBOM_ASSET_PATH}")\`"
             echo "- Build inputs: \`$(basename "${BUILD_INPUTS_ASSET_PATH}")\`"
-            echo "- AUR inputs: \`$(basename "${AUR_MANIFEST_ASSET_PATH}")\`"
+            echo "- NVIDIA inputs: \`$(basename "${NVIDIA_MANIFEST_ASSET_PATH}")\`"
           } >> "${body_file}"
 
           if [[ "${RELEASE_TAG}" =~ ${monthly_pattern} ]]; then
@@ -615,7 +615,7 @@ jobs:
             "${PACKAGE_INVENTORY_ASSET_PATH}" \
             "${SBOM_ASSET_PATH}" \
             "${BUILD_INPUTS_ASSET_PATH}" \
-            "${AUR_MANIFEST_ASSET_PATH}"
+            "${NVIDIA_MANIFEST_ASSET_PATH}"
 
           echo "html_url=https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
 

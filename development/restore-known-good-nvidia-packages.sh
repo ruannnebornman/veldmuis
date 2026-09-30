@@ -5,13 +5,13 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
 package_base="${PACKAGE_BASE_URL:-https://packages.veldmuislinux.org}"
-package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
-manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
-work_root="${VELDMUIS_KNOWN_GOOD_WORK_ROOT:-${repo_root}/artifacts/aur-packages/known-good-work}"
+package_dir="${VELDMUIS_NVIDIA_PACKAGE_DIR:-${repo_root}/artifacts/nvidia-packages/current}"
+manifest_path="${VELDMUIS_NVIDIA_MANIFEST:-${package_dir}/veldmuis-nvidia-packages.manifest.txt}"
+work_root="${VELDMUIS_KNOWN_GOOD_WORK_ROOT:-${repo_root}/artifacts/nvidia-packages/known-good-work}"
 known_good_url="${VELDMUIS_KNOWN_GOOD_NVIDIA_URL:-}"
 known_good_manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
 known_good_manifest_signature_name="${known_good_manifest_name}.sig"
-failed_ref_mode="${VELDMUIS_AUR_REF_MODE:-unknown}"
+failed_ref_mode="${VELDMUIS_NVIDIA_REF_MODE:-unknown}"
 package_keyring="${VELDMUIS_PACKAGE_KEYRING:-${repo_root}/packages/veldmuis-keyring/veldmuis.gpg}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
@@ -190,8 +190,8 @@ verify_known_good_manifest() {
 restore_packages() {
   local known_good_manifest="${work_root}/${known_good_manifest_name}"
   local known_good_signature="${work_root}/${known_good_manifest_signature_name}"
-  local source_aur_manifest
-  local source_aur_manifest_path
+  local source_nvidia_manifest
+  local source_nvidia_manifest_path
   local expected_source_hash actual_source_hash
   local known_good_manifest_sha256
   local expected_hash file_name output_path actual_hash
@@ -205,19 +205,26 @@ restore_packages() {
   download_file "${known_good_url}/${known_good_manifest_signature_name}" "${known_good_signature}"
   verify_known_good_manifest "${known_good_manifest}" "${known_good_signature}"
 
-  source_aur_manifest="$(manifest_value "${known_good_manifest}" source_aur_manifest)"
-  [[ -n "${source_aur_manifest}" ]] || die "Known-good manifest is missing source_aur_manifest"
-  safe_file_name "${source_aur_manifest}" || die "Unsafe source_aur_manifest in known-good manifest: ${source_aur_manifest}"
-  source_aur_manifest_path="${work_root}/${source_aur_manifest}"
+  source_nvidia_manifest="$(manifest_value "${known_good_manifest}" source_nvidia_manifest)"
+  if [[ -z "${source_nvidia_manifest}" ]]; then
+    # Fallback for known-good manifests written before the rename.
+    source_nvidia_manifest="$(manifest_value "${known_good_manifest}" source_aur_manifest)"
+  fi
+  [[ -n "${source_nvidia_manifest}" ]] || die "Known-good manifest is missing source_nvidia_manifest"
+  safe_file_name "${source_nvidia_manifest}" || die "Unsafe source_nvidia_manifest in known-good manifest: ${source_nvidia_manifest}"
+  source_nvidia_manifest_path="${work_root}/${source_nvidia_manifest}"
 
-  log "Downloading source AUR manifest: ${known_good_url}/${source_aur_manifest}"
-  download_file "${known_good_url}/${source_aur_manifest}" "${source_aur_manifest_path}"
-  expected_source_hash="$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
+  log "Downloading source NVIDIA manifest: ${known_good_url}/${source_nvidia_manifest}"
+  download_file "${known_good_url}/${source_nvidia_manifest}" "${source_nvidia_manifest_path}"
+  expected_source_hash="$(manifest_value "${known_good_manifest}" source_nvidia_manifest_sha256)"
+  if [[ -z "${expected_source_hash}" ]]; then
+    expected_source_hash="$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
+  fi
   [[ "${expected_source_hash}" =~ ^[0-9a-fA-F]{64}$ ]] || \
-    die "Known-good manifest has an invalid source AUR manifest checksum"
-  actual_source_hash="$(sha256sum "${source_aur_manifest_path}" | awk '{print $1}')"
+    die "Known-good manifest has an invalid source NVIDIA manifest checksum"
+  actual_source_hash="$(sha256sum "${source_nvidia_manifest_path}" | awk '{print $1}')"
   [[ "${actual_source_hash}" == "${expected_source_hash}" ]] || \
-    die "Source AUR manifest checksum does not match known-good manifest"
+    die "Source NVIDIA manifest checksum does not match known-good manifest"
   known_good_manifest_sha256="$(sha256sum "${known_good_manifest}" | awk '{print $1}')"
 
   while read -r expected_hash file_name; do
@@ -246,13 +253,13 @@ restore_packages() {
 
   ensure_expected_package_set
   verify_package_signatures
-  write_fallback_manifest "${known_good_manifest}" "${known_good_manifest_sha256}" "${source_aur_manifest_path}"
+  write_fallback_manifest "${known_good_manifest}" "${known_good_manifest_sha256}" "${source_nvidia_manifest_path}"
 }
 
 write_fallback_manifest() {
   local known_good_manifest="$1"
   local known_good_manifest_sha256="$2"
-  local source_aur_manifest_path="$3"
+  local source_nvidia_manifest_path="$3"
   local manifest_tmp="${manifest_path}.tmp"
   local package_path
 
@@ -264,12 +271,12 @@ write_fallback_manifest() {
     printf 'known_good_manifest_url=%s/%s\n' "${known_good_url}" "${known_good_manifest_name}"
     printf 'known_good_manifest_sha256=%s\n' "${known_good_manifest_sha256}"
     printf 'known_good_created_at_utc=%s\n' "$(manifest_value "${known_good_manifest}" created_at_utc)"
-    printf 'source_aur_manifest_sha256=%s\n' "$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
+    printf 'source_nvidia_manifest_sha256=%s\n' "$(manifest_value "${known_good_manifest}" source_nvidia_manifest_sha256)"
     printf 'package_dir=%s\n' "${package_dir}"
     printf '\n[package_bases]\n'
-    parse_package_bases "${source_aur_manifest_path}"
+    parse_package_bases "${source_nvidia_manifest_path}"
     printf '\n[source_inputs]\n'
-    parse_source_inputs "${source_aur_manifest_path}"
+    parse_source_inputs "${source_nvidia_manifest_path}"
     printf '\n[package_files]\n'
     while IFS= read -r package_path; do
       sha256sum "${package_path}" | awk -v file_name="${package_path##*/}" '{print $1 "\t" file_name}'

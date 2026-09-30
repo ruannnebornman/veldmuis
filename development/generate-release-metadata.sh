@@ -14,7 +14,7 @@ builder_base_digest="${VELDMUIS_BUILDER_BASE_DIGEST:-unknown}"
 builder_image_id="${VELDMUIS_BUILDER_IMAGE_ID:-unknown}"
 docker_version="${VELDMUIS_DOCKER_VERSION:-unknown}"
 iso_mode="${VELDMUIS_ISO_MODE:-network}"
-aur_manifest_source="${VELDMUIS_AUR_MANIFEST:-${repo_root}/artifacts/aur-packages/current/veldmuis-aur-packages.manifest.txt}"
+nvidia_manifest_source="${VELDMUIS_NVIDIA_MANIFEST:-${repo_root}/artifacts/nvidia-packages/current/veldmuis-nvidia-packages.manifest.txt}"
 
 # shellcheck source=development/package-manifest.sh
 . "${script_dir}/package-manifest.sh"
@@ -159,8 +159,8 @@ write_build_inputs() {
     printf 'builder_base_digest=%s\n' "${builder_base_digest}"
     printf 'builder_image_id=%s\n' "${builder_image_id}"
     printf 'docker_version=%s\n' "${docker_version}"
-    printf 'aur_manifest=%s\n' "${aur_manifest_name}"
-    printf 'aur_manifest_sha256=%s\n' "$(sha256_file "${aur_manifest_path}")"
+    printf 'nvidia_manifest=%s\n' "${nvidia_manifest_name}"
+    printf 'nvidia_manifest_sha256=%s\n' "$(sha256_file "${nvidia_manifest_path}")"
     printf 'package_inventory=%s\n' "${package_inventory_name}"
     printf 'package_inventory_sha256=%s\n' "$(sha256_file "${package_inventory_path}")"
     printf 'generated_at_utc=%s\n' "${built_at_utc}"
@@ -170,18 +170,18 @@ write_build_inputs() {
       [[ -n "${package_version}" ]] || package_version=unavailable
       printf '%s\t%s\n' "${package_name}" "${package_version}"
     done
-    printf '\n[aur_inputs]\n'
+    printf '\n[nvidia_inputs]\n'
     awk '
       /^\[package_bases\]$/ { in_section=1; next }
       /^\[/ { in_section=0 }
       in_section && NF { print }
-    ' "${aur_manifest_path}"
-    printf '\n[aur_source_inputs]\n'
+    ' "${nvidia_manifest_path}"
+    printf '\n[nvidia_source_inputs]\n'
     awk '
       /^\[source_inputs\]$/ { in_section=1; next }
       /^\[/ { in_section=0 }
       in_section && NF { print }
-    ' "${aur_manifest_path}"
+    ' "${nvidia_manifest_path}"
   } > "${build_inputs_path}"
 }
 
@@ -206,8 +206,8 @@ write_signed_manifest() {
     printf 'sbom_sha256=%s\n' "$(sha256_file "${sbom_path}")"
     printf 'build_inputs_name=%s\n' "${build_inputs_name}"
     printf 'build_inputs_sha256=%s\n' "$(sha256_file "${build_inputs_path}")"
-    printf 'aur_manifest_name=%s\n' "${aur_manifest_name}"
-    printf 'aur_manifest_sha256=%s\n' "$(sha256_file "${aur_manifest_path}")"
+    printf 'nvidia_manifest_name=%s\n' "${nvidia_manifest_name}"
+    printf 'nvidia_manifest_sha256=%s\n' "$(sha256_file "${nvidia_manifest_path}")"
     printf 'signing_fingerprint=%s\n' "${key_fingerprint}"
     printf 'builder_base_digest=%s\n' "${builder_base_digest}"
     printf 'built_at_utc=%s\n' "${built_at_utc}"
@@ -240,7 +240,7 @@ main() {
   validate_release_tag "${release_tag}" || die "Invalid release tag: ${release_tag}"
   [[ "${release_sha}" =~ ^[0-9a-f]{40}$ ]] || die "Invalid release commit: ${release_sha}"
   [[ -r "${key_fpr_file}" ]] || die "Signing fingerprint marker is missing: ${key_fpr_file}"
-  [[ -r "${aur_manifest_source}" ]] || die "AUR input manifest is missing: ${aur_manifest_source}"
+  [[ -r "${nvidia_manifest_source}" ]] || die "NVIDIA input manifest is missing: ${nvidia_manifest_source}"
   [[ "${builder_base_digest}" == *@sha256:* ]] || \
     die "Builder base image digest is not immutable: ${builder_base_digest}"
   [[ "${builder_image_id}" == sha256:* ]] || \
@@ -286,11 +286,11 @@ main() {
   sbom_path="${output_root}/${sbom_name}"
   build_inputs_name="${artifact_stem}.build-inputs.txt"
   build_inputs_path="${output_root}/${build_inputs_name}"
-  aur_manifest_name="${artifact_stem}.aur-packages.manifest.txt"
-  aur_manifest_path="${output_root}/${aur_manifest_name}"
+  nvidia_manifest_name="${artifact_stem}.nvidia-packages.manifest.txt"
+  nvidia_manifest_path="${output_root}/${nvidia_manifest_name}"
   built_at_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-  install -m600 "${aur_manifest_source}" "${aur_manifest_path}"
+  install -m600 "${nvidia_manifest_source}" "${nvidia_manifest_path}"
   write_package_inventory
   write_spdx_sbom
   write_build_inputs
@@ -303,7 +303,7 @@ main() {
     "${package_inventory_path}" \
     "${sbom_path}" \
     "${build_inputs_path}" \
-    "${aur_manifest_path}"
+    "${nvidia_manifest_path}"
   do
     [[ -s "${file_name}" ]] || die "Generated release metadata is empty: ${file_name}"
     chmod 644 "${file_name}"

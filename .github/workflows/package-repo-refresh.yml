@@ -7,8 +7,8 @@ on:
     paths:
       - packages/nvidia-580xx-src/**
       - packages/veldmuis-nvidia-legacy/**
-      - development/build-aur-packages.sh
-      - development/scan-aur-candidate.sh
+      - development/build-nvidia-packages.sh
+      - development/scan-nvidia-packages.sh
       - development/check-package-repo-refresh.sh
   schedule:
     # 12:17 Africa/Johannesburg. GitHub cron uses UTC.
@@ -16,12 +16,12 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: Build and publish even if source and AUR refs are current
+        description: Build and publish even if source and NVIDIA recipe hashes are current
         required: false
         type: boolean
         default: false
-      simulate_aur_failure:
-        description: Simulate an AUR build failure to test known-good fallback
+      simulate_build_failure:
+        description: Simulate an NVIDIA build failure to test known-good fallback
         required: false
         type: boolean
         default: false
@@ -42,7 +42,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      scan_risk: ${{ steps.aur_scan.outputs.risk }}
+      scan_risk: ${{ steps.nvidia_scan.outputs.risk }}
       refresh_needed: ${{ steps.refresh_check.outputs.refresh_needed }}
     env:
       BUILDER_USER: builder
@@ -54,8 +54,8 @@ jobs:
       PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
       VELDMUIS_PACKAGE_REFRESH_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
-      VELDMUIS_AUR_ENABLE_FALLBACK: true
-      VELDMUIS_SIMULATE_AUR_BUILD_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_aur_failure && 'true' || 'false' }}
+      VELDMUIS_NVIDIA_ENABLE_FALLBACK: true
+      VELDMUIS_SIMULATE_BUILD_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_build_failure && 'true' || 'false' }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -147,33 +147,33 @@ jobs:
 
       - name: Scan built NVIDIA package set
         if: steps.refresh_check.outputs.refresh_needed == 'true'
-        id: aur_scan
+        id: nvidia_scan
         shell: bash
         env:
-          VELDMUIS_AUR_SCAN_REPORT: ${{ runner.temp }}/veldmuis-aur-refresh-scan.md
+          VELDMUIS_NVIDIA_SCAN_REPORT: ${{ runner.temp }}/veldmuis-nvidia-refresh-scan.md
         run: |
           set -euo pipefail
-          ./development/build-aur-packages.sh --validate-only
-          ./development/scan-aur-candidate.sh \
-            --report "${VELDMUIS_AUR_SCAN_REPORT}" \
-            --source-root artifacts/aur-packages/work
+          ./development/build-nvidia-packages.sh --validate-only
+          ./development/scan-nvidia-packages.sh \
+            --report "${VELDMUIS_NVIDIA_SCAN_REPORT}" \
+            --source-root artifacts/nvidia-packages/work
 
       - name: Preserve candidate scan
-        if: steps.aur_scan.outputs.risk != ''
+        if: steps.nvidia_scan.outputs.risk != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: aur-refresh-scan-${{ github.run_id }}
-          path: ${{ steps.aur_scan.outputs.report_file }}
+          name: nvidia-refresh-scan-${{ github.run_id }}
+          path: ${{ steps.nvidia_scan.outputs.report_file }}
           if-no-files-found: error
           retention-days: 30
 
       - name: Report high-risk scan findings
-        if: steps.aur_scan.outputs.risk == 'high'
+        if: steps.nvidia_scan.outputs.risk == 'high'
         shell: bash
         run: |
           set -euo pipefail
           echo "::warning::Built NVIDIA package set has payload-scan review signals; publishing continues because the vendored recipes are reviewed at sync time."
-          cat "${{ steps.aur_scan.outputs.report_file }}"
+          cat "${{ steps.nvidia_scan.outputs.report_file }}"
 
       - name: Ensure AWS CLI is available
         if: steps.refresh_check.outputs.refresh_needed == 'true'
@@ -223,12 +223,12 @@ jobs:
             echo "- Refresh needed: \`${{ steps.refresh_check.outputs.refresh_needed }}\`"
             echo "- Reason: ${{ steps.refresh_check.outputs.reason }}"
             echo "- Recipe source: \`local (packages/nvidia-580xx-src)\`"
-            echo "- Scan risk: \`${{ steps.aur_scan.outputs.risk }}\`"
+            echo "- Scan risk: \`${{ steps.nvidia_scan.outputs.risk }}\`"
             echo "- Current source commit: \`${{ steps.refresh_check.outputs.current_source_commit }}\`"
             echo "- Published source commit: \`${{ steps.refresh_check.outputs.published_source_commit || 'unavailable' }}\`"
             echo "- Package repo: ${PACKAGE_BASE_URL}"
             echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
-            echo "- Fallback enabled: \`${VELDMUIS_AUR_ENABLE_FALLBACK}\`"
-            echo "- Simulated AUR failure: \`${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE}\`"
+            echo "- Fallback enabled: \`${VELDMUIS_NVIDIA_ENABLE_FALLBACK}\`"
+            echo "- Simulated NVIDIA build failure: \`${VELDMUIS_SIMULATE_BUILD_FAILURE}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 

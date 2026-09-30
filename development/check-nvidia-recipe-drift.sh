@@ -11,9 +11,9 @@ export LC_ALL=C
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
-source_dir="${VELDMUIS_AUR_SOURCE_DIR:-${repo_root}/packages/nvidia-580xx-src}"
-aur_root="${VELDMUIS_AUR_UPSTREAM_ROOT:-https://aur.archlinux.org}"
-upstream_refs="${VELDMUIS_AUR_UPSTREAM_REFS:-${source_dir}/upstream-refs.txt}"
+source_dir="${VELDMUIS_NVIDIA_SOURCE_DIR:-${repo_root}/packages/nvidia-580xx-src}"
+upstream_root="${VELDMUIS_NVIDIA_UPSTREAM_ROOT:-https://aur.archlinux.org}"
+upstream_refs="${VELDMUIS_NVIDIA_UPSTREAM_REFS:-${source_dir}/upstream-refs.txt}"
 report_file="${VELDMUIS_RECIPE_DRIFT_REPORT:-}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
@@ -41,8 +41,8 @@ Usage:
   check-nvidia-recipe-drift.sh --report PATH
 
 Environment:
-  VELDMUIS_AUR_SOURCE_DIR=/path/to/vendored-recipes
-  VELDMUIS_AUR_UPSTREAM_ROOT=https://aur.archlinux.org
+  VELDMUIS_NVIDIA_SOURCE_DIR=/path/to/vendored-recipes
+  VELDMUIS_NVIDIA_UPSTREAM_ROOT=https://aur.archlinux.org
   VELDMUIS_RECIPE_DRIFT_REPORT=/path/to/report.md
 
 Writes a Markdown report and sets drift=true|false in GITHUB_OUTPUT.
@@ -167,7 +167,7 @@ main() {
 
   # shellcheck source=packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
   . "${nvidia_package_set}"
-  package_bases=("${veldmuis_nvidia_580xx_aur_package_bases[@]}")
+  package_bases=("${veldmuis_nvidia_580xx_package_bases[@]}")
 
   while read -r base upstream_ref; do
     synced_refs["${base}"]="${upstream_ref}"
@@ -185,7 +185,7 @@ main() {
 
   for base in "${package_bases[@]}"; do
     upstream_dir="${work_root}/${base}"
-    clone_upstream "${aur_root%/}/${base}.git" "${upstream_dir}"
+    clone_upstream "${upstream_root%/}/${base}.git" "${upstream_dir}"
     upstream_ref="$(git -C "${upstream_dir}" rev-parse HEAD)"
 
     {

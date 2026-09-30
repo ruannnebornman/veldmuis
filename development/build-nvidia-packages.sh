@@ -4,27 +4,27 @@ set -euo pipefail
 
 # Active NVIDIA 580xx supply path. The package recipes are vendored under
 # packages/nvidia-580xx-src and built from the local checkout by default; see
-# development/nvidia-580xx-package-flow.md. Set VELDMUIS_AUR_SOURCE=aur only for
+# development/nvidia-580xx-package-flow.md. Set VELDMUIS_NVIDIA_SOURCE=upstream only for
 # the legacy upstream-clone path.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
-source_mode="${VELDMUIS_AUR_SOURCE:-local}"
-source_dir="${VELDMUIS_AUR_SOURCE_DIR:-${repo_root}/packages/nvidia-580xx-src}"
-work_root="${VELDMUIS_AUR_WORK_ROOT:-${repo_root}/artifacts/aur-packages/work}"
-package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
-manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
-ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
-dependency_installer="${VELDMUIS_AUR_DEPENDENCY_INSTALLER:-}"
+source_mode="${VELDMUIS_NVIDIA_SOURCE:-local}"
+source_dir="${VELDMUIS_NVIDIA_SOURCE_DIR:-${repo_root}/packages/nvidia-580xx-src}"
+work_root="${VELDMUIS_NVIDIA_WORK_ROOT:-${repo_root}/artifacts/nvidia-packages/work}"
+package_dir="${VELDMUIS_NVIDIA_PACKAGE_DIR:-${repo_root}/artifacts/nvidia-packages/current}"
+manifest_path="${VELDMUIS_NVIDIA_MANIFEST:-${package_dir}/veldmuis-nvidia-packages.manifest.txt}"
+ref_mode="${VELDMUIS_NVIDIA_REF_MODE:-locked}"
+dependency_installer="${VELDMUIS_NVIDIA_DEPENDENCY_INSTALLER:-}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
 [[ -r "${nvidia_package_set}" ]] || {
-  printf '[build-aur-packages] ERROR: NVIDIA package set not readable: %s\n' "${nvidia_package_set}" >&2
+  printf '[build-nvidia-packages] ERROR: NVIDIA package set not readable: %s\n' "${nvidia_package_set}" >&2
   exit 1
 }
 # shellcheck source=packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
 . "${nvidia_package_set}"
 
-package_bases=("${veldmuis_nvidia_580xx_aur_package_bases[@]}")
+package_bases=("${veldmuis_nvidia_580xx_package_bases[@]}")
 
 declare -A official_build_dependency_roots=()
 for dependency in "${veldmuis_nvidia_580xx_official_build_dependency_roots[@]}"; do
@@ -36,34 +36,34 @@ declare -A source_input_hashes=()
 declare -a source_input_entries=()
 
 log() {
-  printf '[build-aur-packages] %s\n' "$*"
+  printf '[build-nvidia-packages] %s\n' "$*"
 }
 
 die() {
-  printf '[build-aur-packages] ERROR: %s\n' "$*" >&2
+  printf '[build-nvidia-packages] ERROR: %s\n' "$*" >&2
   exit 1
 }
 
 usage() {
   cat <<'EOF'
 Usage:
-  build-aur-packages.sh
-  build-aur-packages.sh --resolve-only
-  build-aur-packages.sh --validate-only
+  build-nvidia-packages.sh
+  build-nvidia-packages.sh --resolve-only
+  build-nvidia-packages.sh --validate-only
 
 Environment:
-  VELDMUIS_AUR_SOURCE=local|aur
-  VELDMUIS_AUR_SOURCE_DIR=/path/to/vendored-recipes
-  VELDMUIS_AUR_REF_MODE=latest
-  VELDMUIS_AUR_WORK_ROOT=/path/to/work
-  VELDMUIS_AUR_PACKAGE_DIR=/path/to/package-output
-  VELDMUIS_AUR_MANIFEST=/path/to/manifest.txt
-  VELDMUIS_AUR_REF_<PACKAGE_BASE>=commit-or-ref
+  VELDMUIS_NVIDIA_SOURCE=local|upstream
+  VELDMUIS_NVIDIA_SOURCE_DIR=/path/to/vendored-recipes
+  VELDMUIS_NVIDIA_REF_MODE=latest
+  VELDMUIS_NVIDIA_WORK_ROOT=/path/to/work
+  VELDMUIS_NVIDIA_PACKAGE_DIR=/path/to/package-output
+  VELDMUIS_NVIDIA_MANIFEST=/path/to/manifest.txt
+  VELDMUIS_NVIDIA_REF_<PACKAGE_BASE>=commit-or-ref
 
 Examples:
-  ./development/build-aur-packages.sh
-  VELDMUIS_AUR_SOURCE=aur VELDMUIS_AUR_REF_MODE=latest ./development/build-aur-packages.sh
-  VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS=master ./development/build-aur-packages.sh
+  ./development/build-nvidia-packages.sh
+  VELDMUIS_NVIDIA_SOURCE=upstream VELDMUIS_NVIDIA_REF_MODE=latest ./development/build-nvidia-packages.sh
+  VELDMUIS_NVIDIA_REF_NVIDIA_580XX_UTILS=master ./development/build-nvidia-packages.sh
 EOF
 }
 
@@ -71,7 +71,7 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "Missing required command: $1"
 }
 
-aur_url() {
+upstream_repo_url() {
   local package_base="$1"
   printf 'https://aur.archlinux.org/%s.git' "${package_base}"
 }
@@ -97,15 +97,15 @@ env_ref_name() {
   local suffix
 
   suffix="$(printf '%s' "${package_base}" | tr '[:lower:]-' '[:upper:]_')"
-  printf 'VELDMUIS_AUR_REF_%s' "${suffix}"
+  printf 'VELDMUIS_NVIDIA_REF_%s' "${suffix}"
 }
 
 latest_ref() {
   local package_base="$1"
   local ref
 
-  ref="$(git ls-remote "$(aur_url "${package_base}")" HEAD | awk 'NR == 1 {print $1; exit}')"
-  [[ -n "${ref}" ]] || die "Unable to resolve latest AUR ref for ${package_base}"
+  ref="$(git ls-remote "$(upstream_repo_url "${package_base}")" HEAD | awk 'NR == 1 {print $1; exit}')"
+  [[ -n "${ref}" ]] || die "Unable to resolve latest upstream ref for ${package_base}"
   printf '%s' "${ref}"
 }
 
@@ -118,10 +118,10 @@ resolve_ref() {
       local_recipe_ref "${package_base}"
       return
       ;;
-    aur)
+    upstream)
       ;;
     *)
-      die "VELDMUIS_AUR_SOURCE must be local or aur, got: ${source_mode}"
+      die "VELDMUIS_NVIDIA_SOURCE must be local or upstream, got: ${source_mode}"
       ;;
   esac
 
@@ -135,13 +135,13 @@ resolve_ref() {
 
   case "${ref_mode}" in
     locked)
-      die "VELDMUIS_AUR_REF_MODE=locked was removed with the AUR lock file; set VELDMUIS_AUR_REF_<PACKAGE_BASE> or use latest"
+      die "VELDMUIS_NVIDIA_REF_MODE=locked was removed with the the removed lock file; set VELDMUIS_NVIDIA_REF_<PACKAGE_BASE> or use latest"
       ;;
     latest)
       latest_ref "${package_base}"
       ;;
     *)
-      die "VELDMUIS_AUR_REF_MODE must be locked or latest, got: ${ref_mode}"
+      die "VELDMUIS_NVIDIA_REF_MODE must be locked or latest, got: ${ref_mode}"
       ;;
   esac
 }
@@ -244,7 +244,7 @@ check_isolated_build_dependencies() {
     elif [[ -n "${resolved_refs[${dependency_name}]:-}" || "${dependency_name}" == "${package_base}" ]]; then
       :
     else
-      die "Unapproved AUR build dependency for ${package_base}: ${dependency}"
+      die "Unapproved NVIDIA build dependency for ${package_base}: ${dependency}"
     fi
   done < <(
     printf '%s\n' "${srcinfo}" | awk '
@@ -270,7 +270,7 @@ check_isolated_build_dependencies() {
   done
 
   if ((${#missing_dependencies[@]} > 0)); then
-    die "Missing isolated AUR build dependencies for ${package_base}: ${!missing_dependencies[*]}"
+    die "Missing isolated NVIDIA build dependencies for ${package_base}: ${!missing_dependencies[*]}"
   fi
 }
 
@@ -341,7 +341,7 @@ expected_license() {
   local package_name="$1"
   local expected="${veldmuis_nvidia_580xx_expected_licenses[${package_name}]:-}"
 
-  [[ -n "${expected}" ]] || die "Unexpected AUR package artifact: ${package_name}"
+  [[ -n "${expected}" ]] || die "Unexpected NVIDIA package artifact: ${package_name}"
   printf '%s' "${expected}"
 }
 
@@ -381,7 +381,7 @@ validate_expected_package_set() {
   while IFS= read -r package_path; do
     package_name="$(package_info_value "${package_path}" "pkgname")"
     [[ -n "${package_name}" ]] || die "Unable to read package name from: ${package_path}"
-    [[ -z "${seen[${package_name}]:-}" ]] || die "Duplicate AUR package artifact: ${package_name}"
+    [[ -z "${seen[${package_name}]:-}" ]] || die "Duplicate NVIDIA package artifact: ${package_name}"
     seen["${package_name}"]=1
   done < <(
     find "${package_dir}" -maxdepth 1 -type f \
@@ -391,11 +391,11 @@ validate_expected_package_set() {
 
   for expected_name in "${veldmuis_nvidia_580xx_repository_packages[@]}"; do
     [[ -n "${seen[${expected_name}]:-}" ]] || \
-      die "Expected AUR package artifact is missing: ${expected_name}"
+      die "Expected NVIDIA package artifact is missing: ${expected_name}"
   done
 
   ((${#seen[@]} == ${#veldmuis_nvidia_580xx_repository_packages[@]})) || \
-    die "AUR package artifact set contains an unexpected number of packages."
+    die "NVIDIA package artifact set contains an unexpected number of packages."
 }
 
 build_package_base() {
@@ -409,7 +409,7 @@ build_package_base() {
     cp -a "${source_dir}/${package_base}/." "${build_dir}/"
   else
     log "Cloning ${package_base} at ${ref}"
-    git clone --quiet "$(aur_url "${package_base}")" "${build_dir}"
+    git clone --quiet "$(upstream_repo_url "${package_base}")" "${build_dir}"
     git -C "${build_dir}" checkout --quiet --detach "${ref}"
   fi
 
@@ -454,7 +454,7 @@ write_manifest() {
         printf '%s\t%s\t%s\n' \
           "${package_base}" \
           "${resolved_refs[${package_base}]}" \
-          "$(aur_url "${package_base}")"
+          "$(upstream_repo_url "${package_base}")"
       fi
     done
 
@@ -511,10 +511,10 @@ main() {
     require_cmd bsdtar
     require_cmd find
     require_cmd sort
-    [[ -d "${package_dir}" ]] || die "AUR package artifact directory not found: ${package_dir}"
+    [[ -d "${package_dir}" ]] || die "NVIDIA package artifact directory not found: ${package_dir}"
     validate_package_artifacts
     validate_expected_package_set
-    log "Validated AUR package artifact set under: ${package_dir}"
+    log "Validated NVIDIA package artifact set under: ${package_dir}"
     exit 0
   fi
 
@@ -548,7 +548,7 @@ main() {
   validate_package_artifacts
   validate_expected_package_set
   write_manifest
-  log "Built AUR package artifacts under: ${package_dir}"
+  log "Built NVIDIA package artifacts under: ${package_dir}"
   log "Wrote manifest: ${manifest_path}"
 }
 

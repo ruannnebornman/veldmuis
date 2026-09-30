@@ -100,32 +100,32 @@ Build from the vendored recipes under `packages/nvidia-580xx-src` (the normal
 release path):
 
 ```sh
-./development/build-aur-packages.sh
+./development/build-nvidia-packages.sh
 ```
 
 Build from the upstream AUR repositories only for ad-hoc work. Do not use this
 mode for production publication:
 
 ```sh
-VELDMUIS_AUR_SOURCE=aur VELDMUIS_AUR_REF_MODE=latest ./development/build-aur-packages.sh
+VELDMUIS_NVIDIA_SOURCE=upstream VELDMUIS_NVIDIA_REF_MODE=latest ./development/build-nvidia-packages.sh
 ```
 
 Resolve the vendored recipe content hashes without building:
 
 ```sh
-./development/build-aur-packages.sh --resolve-only
+./development/build-nvidia-packages.sh --resolve-only
 ```
 
 Validate already-built NVIDIA artifacts:
 
 ```sh
-./development/build-aur-packages.sh --validate-only
+./development/build-nvidia-packages.sh --validate-only
 ```
 
 The output directory defaults to:
 
 ```text
-artifacts/aur-packages/current/
+artifacts/nvidia-packages/current/
 ```
 
 The NVIDIA manifest records the recipe content hash and pre-build hashes for the
@@ -261,7 +261,7 @@ It publishes:
 - `veldmuis-extra`
 - repository metadata and signatures
 - `veldmuis-package-repo.manifest.txt`
-- `veldmuis-aur-packages.manifest.txt` when present
+- `veldmuis-nvidia-packages.manifest.txt` when present
 
 Publishing requires Cloudflare R2-compatible credentials and environment
 variables used by the workflow.
@@ -280,7 +280,7 @@ It compares:
 - current source commit versus the published package repository manifest
 - vendored recipe content hashes versus the published NVIDIA manifest
 
-The workflow can force a refresh or simulate an AUR failure to test the
+The workflow can force a refresh or simulate an NVIDIA build failure to test the
 known-good NVIDIA fallback path.
 
 ## Local VM And USB Helpers

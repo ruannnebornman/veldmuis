@@ -4,23 +4,23 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
-package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
-source_root="${VELDMUIS_AUR_WORK_ROOT:-${repo_root}/artifacts/aur-packages/work}"
-report_file="${VELDMUIS_AUR_SCAN_REPORT:-}"
+package_dir="${VELDMUIS_NVIDIA_PACKAGE_DIR:-${repo_root}/artifacts/nvidia-packages/current}"
+source_root="${VELDMUIS_NVIDIA_WORK_ROOT:-${repo_root}/artifacts/nvidia-packages/work}"
+report_file="${VELDMUIS_NVIDIA_SCAN_REPORT:-}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
 
 declare -a findings=()
 scan_risk=low
 
 die() {
-  printf '[scan-aur-candidate] ERROR: %s\n' "$*" >&2
+  printf '[scan-nvidia-packages] ERROR: %s\n' "$*" >&2
   exit 1
 }
 
 usage() {
   cat <<'EOF'
 Usage:
-  scan-aur-candidate.sh --report PATH [--package-dir PATH]
+  scan-nvidia-packages.sh --report PATH [--package-dir PATH]
 
 The scanner reports package paths, executable content, privileged files, and
 setuid entries. Findings require risk review; they are not proof of malware.
@@ -163,12 +163,12 @@ main() {
     package_path="$(package_path_for "${package_name}")"
     scan_package "${package_name}" "${package_path}"
   done
-  for package_name in "${veldmuis_nvidia_580xx_aur_package_bases[@]}"; do
+  for package_name in "${veldmuis_nvidia_580xx_package_bases[@]}"; do
     scan_source_checkout "${package_name}"
   done
 
   {
-    printf '# AUR Candidate Package Scan\n\n'
+    printf '# NVIDIA Package Scan\n\n'
     printf 'Scanner version: 1\n'
     printf 'Package directory: %s\n' "${package_dir}"
     printf 'Source checkout root: %s\n' "${source_root}"
@@ -186,7 +186,7 @@ main() {
     printf 'risk=%s\n' "${scan_risk}" >>"${GITHUB_OUTPUT}"
     printf 'report_file=%s\n' "${report_file}" >>"${GITHUB_OUTPUT}"
   fi
-  printf '[scan-aur-candidate] Candidate package scan completed with %s risk.\n' "${scan_risk}"
+  printf '[scan-nvidia-packages] Candidate package scan completed with %s risk.\n' "${scan_risk}"
 }
 
 main "$@"

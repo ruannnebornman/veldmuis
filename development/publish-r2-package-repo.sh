@@ -15,8 +15,8 @@ account_id="${CF_R2_ACCOUNT_ID:-}"
 endpoint="${CF_R2_ENDPOINT_URL:-}"
 package_base="${PACKAGE_BASE_URL:-https://packages.veldmuislinux.org}"
 manifest_name="${R2_PACKAGE_MANIFEST_NAME:-veldmuis-package-repo.manifest.txt}"
-aur_manifest_path="${VELDMUIS_AUR_MANIFEST:-${repo_root}/artifacts/aur-packages/current/veldmuis-aur-packages.manifest.txt}"
-aur_manifest_name="${R2_AUR_MANIFEST_NAME:-veldmuis-aur-packages.manifest.txt}"
+nvidia_manifest_path="${VELDMUIS_NVIDIA_MANIFEST:-${repo_root}/artifacts/nvidia-packages/current/veldmuis-nvidia-packages.manifest.txt}"
+nvidia_manifest_name="${R2_NVIDIA_MANIFEST_NAME:-veldmuis-nvidia-packages.manifest.txt}"
 dry_run="${R2_PACKAGE_DRY_RUN:-0}"
 repo_cache_control="${R2_PACKAGE_REPO_CACHE_CONTROL:-public, max-age=60, must-revalidate}"
 metadata_cache_control="${R2_PACKAGE_METADATA_CACHE_CONTROL:-no-store, max-age=0, must-revalidate}"
@@ -119,10 +119,10 @@ prepare_stage() {
   cp -aL "${repos_root}/${core_repo}" "${stage_dir}/${core_repo}"
   cp -aL "${repos_root}/${extra_repo}" "${stage_dir}/${extra_repo}"
 
-  if [[ -r "${aur_manifest_path}" ]]; then
-    cp -f "${aur_manifest_path}" "${stage_dir}/${aur_manifest_name}"
+  if [[ -r "${nvidia_manifest_path}" ]]; then
+    cp -f "${nvidia_manifest_path}" "${stage_dir}/${nvidia_manifest_name}"
   else
-    log "AUR manifest not found, package refresh checks will rebuild next time: ${aur_manifest_path}"
+    log "NVIDIA manifest not found, package refresh checks will rebuild next time: ${nvidia_manifest_path}"
   fi
 
   materialize_repo_alias "${stage_dir}/${core_repo}/os/${arch}" "${core_repo}" "db"
@@ -169,12 +169,12 @@ EOF
 render_manifest() {
   local commit="unknown"
   local published_at
-  local aur_fallback_used=""
+  local nvidia_fallback_used=""
 
   published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   commit="$(git -C "${repo_root}" rev-parse HEAD 2>/dev/null || printf 'unknown')"
-  if [[ -r "${stage_dir}/${aur_manifest_name}" ]]; then
-    aur_fallback_used="$(awk -F '=' '$1 == "fallback_used" { print $2; found = 1; exit } END { exit !found }' "${stage_dir}/${aur_manifest_name}" 2>/dev/null || true)"
+  if [[ -r "${stage_dir}/${nvidia_manifest_name}" ]]; then
+    nvidia_fallback_used="$(awk -F '=' '$1 == "fallback_used" { print $2; found = 1; exit } END { exit !found }' "${stage_dir}/${nvidia_manifest_name}" 2>/dev/null || true)"
   fi
 
   {
@@ -184,10 +184,10 @@ render_manifest() {
     printf 'bucket=%s\n' "${bucket}"
     printf 'arch=%s\n' "${arch}"
     printf 'repositories=%s,%s\n' "${core_repo}" "${extra_repo}"
-    if [[ -f "${stage_dir}/${aur_manifest_name}" ]]; then
-      printf 'aur_manifest=%s\n' "${aur_manifest_name}"
-      if [[ -n "${aur_fallback_used}" ]]; then
-        printf 'aur_fallback_used=%s\n' "${aur_fallback_used}"
+    if [[ -f "${stage_dir}/${nvidia_manifest_name}" ]]; then
+      printf 'nvidia_manifest=%s\n' "${nvidia_manifest_name}"
+      if [[ -n "${nvidia_fallback_used}" ]]; then
+        printf 'nvidia_fallback_used=%s\n' "${nvidia_fallback_used}"
       fi
     fi
     printf '\n[file_manifest]\n'
@@ -322,9 +322,9 @@ verify_published_repo() {
   verify_public_url "${public_root}/index.html"
   verify_public_url "${public_root}/${manifest_name}"
 
-  if [[ -f "${stage_dir}/${aur_manifest_name}" ]]; then
-    verify_bucket_object "${aur_manifest_name}"
-    verify_public_url "${public_root}/${aur_manifest_name}"
+  if [[ -f "${stage_dir}/${nvidia_manifest_name}" ]]; then
+    verify_bucket_object "${nvidia_manifest_name}"
+    verify_public_url "${public_root}/${nvidia_manifest_name}"
   fi
 
   verify_repo_metadata "${core_repo}"
@@ -359,8 +359,8 @@ main() {
   upload_repo_metadata "${core_repo}"
   upload_repo_metadata "${extra_repo}"
   upload_file "${stage_dir}/index.html" "index.html" "${root_cache_control}"
-  if [[ -f "${stage_dir}/${aur_manifest_name}" ]]; then
-    upload_file "${stage_dir}/${aur_manifest_name}" "${aur_manifest_name}" "${metadata_cache_control}"
+  if [[ -f "${stage_dir}/${nvidia_manifest_name}" ]]; then
+    upload_file "${stage_dir}/${nvidia_manifest_name}" "${nvidia_manifest_name}" "${metadata_cache_control}"
   fi
   upload_file "${stage_dir}/${manifest_name}" "${manifest_name}" "${root_cache_control}"
 

@@ -158,7 +158,7 @@ veldmuis-TAG-network-x86_64.manifest.txt.sig
 veldmuis-TAG-network-x86_64.packages.tsv
 veldmuis-TAG-network-x86_64.spdx
 veldmuis-TAG-network-x86_64.build-inputs.txt
-veldmuis-TAG-network-x86_64.aur-packages.manifest.txt
+veldmuis-TAG-network-x86_64.nvidia-packages.manifest.txt
 ```
 
 Small channel documents identify the promoted installer release:
@@ -199,8 +199,8 @@ sbom_name
 sbom_sha256
 build_inputs_name
 build_inputs_sha256
-aur_manifest_name
-aur_manifest_sha256
+nvidia_manifest_name
+nvidia_manifest_sha256
 signing_fingerprint
 builder_base_digest
 built_at_utc
@@ -229,7 +229,7 @@ The package repository publication writes:
 - `veldmuis-package-repo.manifest.txt`
 - Repository databases and signatures.
 - Package files and detached package signatures.
-- `veldmuis-aur-packages.manifest.txt` when NVIDIA artifacts are present.
+- `veldmuis-nvidia-packages.manifest.txt` when NVIDIA artifacts are present.
 
 Veldmuis pacman configurations require both package and repository-database
 signatures.

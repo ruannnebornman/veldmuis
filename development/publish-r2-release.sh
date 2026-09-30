@@ -379,7 +379,7 @@ main() {
     "${artifact_stem}.packages.tsv"
     "${artifact_stem}.spdx"
     "${artifact_stem}.build-inputs.txt"
-    "${artifact_stem}.aur-packages.manifest.txt"
+    "${artifact_stem}.nvidia-packages.manifest.txt"
     "${signature_name}"
     "${manifest_name}"
   )
@@ -389,7 +389,7 @@ main() {
     latest.packages.tsv
     latest.spdx
     latest.build-inputs.txt
-    latest.aur-packages.manifest.txt
+    latest.nvidia-packages.manifest.txt
     latest.manifest.txt.sig
     latest.manifest.txt
   )

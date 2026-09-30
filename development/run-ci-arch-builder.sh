@@ -68,10 +68,10 @@ Environment:
   VELDMUIS_RELEASE_TAG
   VELDMUIS_RELEASE_SHA
   VELDMUIS_PACKAGER
-  VELDMUIS_AUR_SOURCE
-  VELDMUIS_AUR_REF_MODE
-  VELDMUIS_AUR_ENABLE_FALLBACK
-  VELDMUIS_SIMULATE_AUR_BUILD_FAILURE
+  VELDMUIS_NVIDIA_SOURCE
+  VELDMUIS_NVIDIA_REF_MODE
+  VELDMUIS_NVIDIA_ENABLE_FALLBACK
+  VELDMUIS_SIMULATE_BUILD_FAILURE
   PACKAGE_BASE_URL
   RUNNER_TEMP
 EOF
@@ -111,7 +111,7 @@ validate_target() {
 
 validate_stage() {
   case "$1" in
-    packages|aur|sign|iso|release-metadata) ;;
+    packages|nvidia|sign|iso|release-metadata) ;;
     *)
       usage >&2
       die "Unsupported container stage: $1"
@@ -148,20 +148,20 @@ prepare_builder_user() {
   install -d -m 700 -o "${BUILDER_USER}" -g "${BUILDER_USER}" "${GNUPGHOME}"
 
   if [[ "${allow_pacman}" == "1" ]]; then
-    [[ -x "${container_support_root}/development/install-aur-build-dependency.sh" ]] || \
-      die "Restricted AUR dependency installer is missing"
+    [[ -x "${container_support_root}/development/install-nvidia-build-dependency.sh" ]] || \
+      die "Restricted NVIDIA dependency installer is missing"
     require_cmd visudo
     install -d -m 0750 /etc/sudoers.d
-    local sudoers_file="/etc/sudoers.d/veldmuis-builder-aur-dependency"
+    local sudoers_file="/etc/sudoers.d/veldmuis-builder-nvidia-dependency"
     printf '%s ALL=(root) NOPASSWD: %s\n' "${BUILDER_USER}" \
-      "${container_support_root}/development/install-aur-build-dependency.sh \"\"" \
+      "${container_support_root}/development/install-nvidia-build-dependency.sh \"\"" \
       > "${sudoers_file}"
     chmod 0440 "${sudoers_file}"
     visudo -cf "${sudoers_file}"
   fi
 }
 
-validate_aur_dependency_roots() {
+validate_nvidia_dependency_roots() {
   local dependency
   local -a missing_dependencies=()
 
@@ -218,51 +218,51 @@ run_package_build_stage() {
   chown_output_paths "${container_workspace}/packages"
 }
 
-run_aur_build_stage() {
+run_nvidia_build_stage() {
   require_cmd su
   require_env BUILDER_USER
   require_env GNUPGHOME
   require_env HOST_UID
   require_env HOST_GID
 
-  validate_aur_dependency_roots
+  validate_nvidia_dependency_roots
   prepare_builder_user 1
 
   local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
-  local aur_ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
-  local aur_source="${VELDMUIS_AUR_SOURCE:-local}"
-  local aur_dependency_installer="${container_support_root}/development/install-aur-build-dependency.sh"
-  local aur_build_status=0
-  local build_aur_command
+  local nvidia_ref_mode="${VELDMUIS_NVIDIA_REF_MODE:-locked}"
+  local nvidia_source="${VELDMUIS_NVIDIA_SOURCE:-local}"
+  local nvidia_dependency_installer="${container_support_root}/development/install-nvidia-build-dependency.sh"
+  local nvidia_build_status=0
+  local build_nvidia_command
   local override_name
 
-  build_aur_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_AUR_SOURCE=$(shell_quote "${aur_source}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") VELDMUIS_AUR_DEPENDENCY_INSTALLER=$(shell_quote "${aur_dependency_installer}")"
+  build_nvidia_command="PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_NVIDIA_SOURCE=$(shell_quote "${nvidia_source}") VELDMUIS_NVIDIA_REF_MODE=$(shell_quote "${nvidia_ref_mode}") VELDMUIS_NVIDIA_DEPENDENCY_INSTALLER=$(shell_quote "${nvidia_dependency_installer}")"
   for override_name in \
-    VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS \
-    VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS \
-    VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS
+    VELDMUIS_NVIDIA_REF_NVIDIA_580XX_UTILS \
+    VELDMUIS_NVIDIA_REF_LIB32_NVIDIA_580XX_UTILS \
+    VELDMUIS_NVIDIA_REF_NVIDIA_580XX_SETTINGS
   do
     if [[ -n "${!override_name:-}" ]]; then
-      build_aur_command+=" ${override_name}=$(shell_quote "${!override_name}")"
+      build_nvidia_command+=" ${override_name}=$(shell_quote "${!override_name}")"
     fi
   done
 
-  if is_true "${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE:-0}"; then
-    echo "[run-ci-arch-builder] Simulating AUR package build failure"
-    aur_build_status=1
-  elif run_as_builder "${build_aur_command} ${container_support_root}/development/build-aur-packages.sh"; then
-    aur_build_status=0
+  if is_true "${VELDMUIS_SIMULATE_BUILD_FAILURE:-0}"; then
+    echo "[run-ci-arch-builder] Simulating NVIDIA package build failure"
+    nvidia_build_status=1
+  elif run_as_builder "${build_nvidia_command} ${container_support_root}/development/build-nvidia-packages.sh"; then
+    nvidia_build_status=0
   else
-    aur_build_status=$?
+    nvidia_build_status=$?
   fi
 
-  if (( aur_build_status != 0 )); then
-    if ! is_true "${VELDMUIS_AUR_ENABLE_FALLBACK:-0}"; then
-      die "AUR package build failed and fallback is disabled"
+  if (( nvidia_build_status != 0 )); then
+    if ! is_true "${VELDMUIS_NVIDIA_ENABLE_FALLBACK:-0}"; then
+      die "NVIDIA package build failed and fallback is disabled"
     fi
 
-    echo "[run-ci-arch-builder] AUR package build failed, restoring known-good NVIDIA package set"
-    run_as_builder "PACKAGE_BASE_URL=$(shell_quote "${PACKAGE_BASE_URL:-}") VELDMUIS_AUR_REF_MODE=$(shell_quote "${aur_ref_mode}") ${container_support_root}/development/restore-known-good-nvidia-packages.sh"
+    echo "[run-ci-arch-builder] NVIDIA package build failed, restoring known-good NVIDIA package set"
+    run_as_builder "PACKAGE_BASE_URL=$(shell_quote "${PACKAGE_BASE_URL:-}") VELDMUIS_NVIDIA_REF_MODE=$(shell_quote "${nvidia_ref_mode}") ${container_support_root}/development/restore-known-good-nvidia-packages.sh"
   fi
 
   chown_output_paths "${container_workspace}/artifacts"
@@ -281,7 +281,7 @@ run_signing_stage() {
   require_env HOST_GID
 
   prepare_builder_user
-  run_as_builder "${container_support_root}/development/build-aur-packages.sh --validate-only"
+  run_as_builder "${container_support_root}/development/build-nvidia-packages.sh --validate-only"
   import_signing_key
   run_as_builder "GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_KEY_FPR_FILE=$(shell_quote "${VELDMUIS_KEY_FPR_FILE}") ${container_support_root}/development/build-local-repo.sh"
   run_as_builder "GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_KEY_FPR_FILE=$(shell_quote "${VELDMUIS_KEY_FPR_FILE}") ${container_support_root}/development/publish-known-good-nvidia-packages.sh --prepare-only"
@@ -385,22 +385,22 @@ run_container_stage() {
     -e HOST_GID="$(id -g)"
   )
 
-  if [[ "${stage}" == "packages" || "${stage}" == "aur" ]]; then
+  if [[ "${stage}" == "packages" || "${stage}" == "nvidia" ]]; then
     docker_args+=(
       -e VELDMUIS_PACKAGER
     )
   fi
 
-  if [[ "${stage}" == "aur" ]]; then
+  if [[ "${stage}" == "nvidia" ]]; then
     mount_mode="ro"
     docker_args+=(
-      -e VELDMUIS_AUR_SOURCE="${VELDMUIS_AUR_SOURCE:-local}"
-      -e VELDMUIS_AUR_REF_MODE="${VELDMUIS_AUR_REF_MODE:-}"
-      -e VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_NVIDIA_580XX_UTILS:-}"
-      -e VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS="${VELDMUIS_AUR_REF_LIB32_NVIDIA_580XX_UTILS:-}"
-      -e VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS="${VELDMUIS_AUR_REF_NVIDIA_580XX_SETTINGS:-}"
-      -e VELDMUIS_AUR_ENABLE_FALLBACK="${VELDMUIS_AUR_ENABLE_FALLBACK:-}"
-      -e VELDMUIS_SIMULATE_AUR_BUILD_FAILURE="${VELDMUIS_SIMULATE_AUR_BUILD_FAILURE:-}"
+      -e VELDMUIS_NVIDIA_SOURCE="${VELDMUIS_NVIDIA_SOURCE:-local}"
+      -e VELDMUIS_NVIDIA_REF_MODE="${VELDMUIS_NVIDIA_REF_MODE:-}"
+      -e VELDMUIS_NVIDIA_REF_NVIDIA_580XX_UTILS="${VELDMUIS_NVIDIA_REF_NVIDIA_580XX_UTILS:-}"
+      -e VELDMUIS_NVIDIA_REF_LIB32_NVIDIA_580XX_UTILS="${VELDMUIS_NVIDIA_REF_LIB32_NVIDIA_580XX_UTILS:-}"
+      -e VELDMUIS_NVIDIA_REF_NVIDIA_580XX_SETTINGS="${VELDMUIS_NVIDIA_REF_NVIDIA_580XX_SETTINGS:-}"
+      -e VELDMUIS_NVIDIA_ENABLE_FALLBACK="${VELDMUIS_NVIDIA_ENABLE_FALLBACK:-}"
+      -e VELDMUIS_SIMULATE_BUILD_FAILURE="${VELDMUIS_SIMULATE_BUILD_FAILURE:-}"
       -e PACKAGE_BASE_URL="${PACKAGE_BASE_URL:-}"
     )
   elif [[ "${stage}" == "sign" ]]; then
@@ -441,7 +441,7 @@ run_container_stage() {
     -w "${container_workspace}"
   )
 
-  if [[ "${stage}" == "aur" ]]; then
+  if [[ "${stage}" == "nvidia" ]]; then
     mkdir -p "${repo_root}/artifacts"
     docker_args+=(-v "${repo_root}/artifacts:${container_workspace}/artifacts:rw")
   elif [[ "${stage}" == "sign" ]]; then
@@ -488,7 +488,7 @@ run_build_in_containers() {
   trap cleanup_outer_resources EXIT
   prepare_builder_image "${target}"
   run_container_stage packages "${target}"
-  run_container_stage aur "${target}"
+  run_container_stage nvidia "${target}"
   if [[ "${target}" != candidate ]]; then
     run_container_stage sign "${target}"
   fi
@@ -521,8 +521,8 @@ main() {
       packages)
         run_package_build_stage
         ;;
-      aur)
-        run_aur_build_stage
+      nvidia)
+        run_nvidia_build_stage
         ;;
       sign)
         run_signing_stage

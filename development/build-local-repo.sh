@@ -3,13 +3,13 @@
 set -euo pipefail
 
 # The extra repo intentionally includes CI-built NVIDIA 580xx artifacts from the
-# active AUR flow. See development/nvidia-580xx-package-flow.md before changing
-# the AUR artifact handling below.
+# active NVIDIA flow. See development/nvidia-580xx-package-flow.md before changing
+# the NVIDIA artifact handling below.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
 packages_root="${repo_root}/packages"
 repos_root="${repo_root}/repos"
-aur_package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
+nvidia_package_dir="${VELDMUIS_NVIDIA_PACKAGE_DIR:-${repo_root}/artifacts/nvidia-packages/current}"
 arch="${VELDMUIS_ARCH:-x86_64}"
 core_repo="veldmuis-core"
 extra_repo="veldmuis-extra"
@@ -127,23 +127,23 @@ for pkg_name in "${veldmuis_extra_package_order[@]}"; do
   copy_signed_package "${pkg_path}" "${extra_dir}" extra_packages
 done
 
-if [[ ! -d "${aur_package_dir}" ]]; then
-  echo "AUR package artifact directory not found: ${aur_package_dir}" >&2
-  echo "Run development/build-aur-packages.sh first, preferably inside the disposable Arch builder." >&2
+if [[ ! -d "${nvidia_package_dir}" ]]; then
+  echo "NVIDIA package artifact directory not found: ${nvidia_package_dir}" >&2
+  echo "Run development/build-nvidia-packages.sh first, preferably inside the disposable Arch builder." >&2
   exit 1
 fi
 
 while IFS= read -r pkg_path; do
   copy_signed_package "${pkg_path}" "${extra_dir}" extra_packages
 done < <(
-  find "${aur_package_dir}" -maxdepth 1 -type f \
+  find "${nvidia_package_dir}" -maxdepth 1 -type f \
     -name '*.pkg.tar.zst' \
     ! -name '*-debug-*.pkg.tar.zst' \
     | sort -V
 )
 
 if ((${#extra_packages[@]} == ${#veldmuis_extra_package_order[@]})); then
-  echo "No AUR package artifacts found under: ${aur_package_dir}" >&2
+  echo "No NVIDIA package artifacts found under: ${nvidia_package_dir}" >&2
   exit 1
 fi
 
