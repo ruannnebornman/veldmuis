@@ -17,7 +17,7 @@ Veldmuis currently builds two package repositories:
 - `veldmuis-core`
   Native Veldmuis packages and the Calamares package used by the installer.
 - `veldmuis-extra`
-  Optional NVIDIA 580xx support packages and AUR-derived NVIDIA artifacts.
+  Optional NVIDIA 580xx support packages and the vendored NVIDIA artifacts.
 
 Installed systems receive repository configuration from `veldmuis-release`.
 

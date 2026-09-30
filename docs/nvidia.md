@@ -10,8 +10,8 @@ The NVIDIA 580xx path is:
 - Optional.
 - Proprietary-driver dependent.
 - DKMS and kernel-header dependent.
-- Built from configured AUR package bases, then signed into the Veldmuis
-  package repository.
+- Built from vendored package recipes, then signed into the Veldmuis package
+  repository.
 - Higher risk than the open-source graphics choices on a rolling Arch base.
 
 It is not a general NVIDIA support promise. If the open-source Nouveau path is
@@ -54,7 +54,8 @@ dependencies.
 `veldmuis-nvidia-legacy` is only a metapackage. It does not build driver
 binaries itself.
 
-The real NVIDIA 580xx package artifacts are built from these AUR package bases:
+The real NVIDIA 580xx package artifacts are built from these vendored package
+recipes under `packages/nvidia-580xx-src`:
 
 ```text
 nvidia-580xx-utils
@@ -78,35 +79,38 @@ development/nvidia-580xx-package-flow.md
 
 The current automation:
 
-- Resolves AUR refs from the committed lock file by default; the scheduled
-  package refresh may pin audited latest refs for routine updates.
-- Builds AUR packages without the Veldmuis signing key.
+- Builds the vendored recipes under `packages/nvidia-580xx-src` from the
+  repository checkout, so the build does not depend on AUR availability.
+- Builds the packages without the Veldmuis signing key.
 - Validates the expected package names and license metadata.
-- Records the checked-out `PKGBUILD` and pre-build source-input hashes.
+- Records the recipe content hash and pre-build source-input hashes.
 - Signs packages only in a later network-disabled signing stage.
 - Publishes the signed package set through `veldmuis-extra`.
 - Publishes a known-good NVIDIA package cache after successful non-fallback
   builds, then prunes cached objects the new manifest no longer references.
-- Can restore the known-good NVIDIA package set if a fresh AUR build fails.
-- Publishes routine NVIDIA AUR updates without waiting for a lock pull request
-  when the audited diff changes only an allowlisted version, source, checksum,
-  or signing-key metadata assignment in `PKGBUILD`, then opens a quiet lock
-  sync for the baseline.
-- Keeps recipe logic, dependency, install, privileged-path, and payload-scan
-  changes on the manual review path with a labeled, assigned pull request.
+- Can restore the known-good NVIDIA package set if a fresh build fails.
+- Rebuilds and publishes automatically when the vendored recipes or other
+  package inputs change on `main`.
+- Runs a scheduled `NVIDIA Recipe Watch` job that compares the vendored recipes
+  against the upstream AUR package repositories and opens an issue when they
+  differ. Syncing a recipe change is a reviewed commit.
+- Runs a payload scan over the built package set and records its findings. The
+  scan is a tripwire, not a gate: the NVIDIA packages always carry setuid and
+  privileged integration paths, so it does not block publishing.
 
-These controls reduce risk, but they do not remove the upstream risk. The AUR
-`PKGBUILD` and NVIDIA source archives are third-party inputs; Veldmuis does not
-claim to have performed a full source audit or an independent byte-for-byte
-rebuild before signing them. A locked ref makes an update reviewable, not
+These controls reduce risk, but they do not remove the upstream risk. The
+vendored recipes and the NVIDIA source archives are third-party inputs;
+Veldmuis does not claim to have performed a full source audit or an independent
+byte-for-byte rebuild before signing them. Vendoring a recipe makes the build
+reproducible from this repository and makes an upstream change reviewable, not
 trusted by itself. DKMS rebuild failures and rolling-kernel incompatibility
 remain possible.
 
-The metadata-only classification is an automation rule, not a claim that the
-upstream source is trusted. Every candidate still uses pinned AUR commits,
-the isolated build, package-set and license validation, payload scan, and later
-network-disabled signing controls. A successful candidate remains subject to
-the repository's normal protected integration path.
+The vendored recipe is a snapshot, not a standing trust decision. Review the
+`NVIDIA Recipe Watch` diff before syncing an upstream change, and treat the
+payload scan findings as review signals rather than proof. The isolated build,
+package-set and license validation, and network-disabled signing controls still
+run for every build.
 
 ## Update Precautions
 

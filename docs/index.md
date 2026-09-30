@@ -41,7 +41,7 @@ Veldmuis is already installed, use the updating and troubleshooting guides.
 ## Build And Release
 
 - [Building packages and ISOs](building.md)
-  Local and CI-oriented build flow for packages, repositories, AUR artifacts,
+  Local and CI-oriented build flow for packages, repositories, NVIDIA artifacts,
   and ISO images.
 - [Release process](release.md)
   Tag formats, release workflow behavior, published artifacts, and release-note

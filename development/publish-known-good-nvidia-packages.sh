@@ -5,10 +5,10 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${CI_REPO_ROOT:-$(cd "${script_dir}/.." && pwd)}"
 repos_root="${REPOS_ROOT:-${repo_root}/repos}"
-package_dir="${VELDMUIS_AUR_PACKAGE_DIR:-${repo_root}/artifacts/aur-packages/current}"
-aur_manifest_path="${VELDMUIS_AUR_MANIFEST:-${package_dir}/veldmuis-aur-packages.manifest.txt}"
+package_dir="${VELDMUIS_NVIDIA_PACKAGE_DIR:-${repo_root}/artifacts/nvidia-packages/current}"
+nvidia_manifest_path="${VELDMUIS_NVIDIA_MANIFEST:-${package_dir}/veldmuis-nvidia-packages.manifest.txt}"
 manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
-aur_manifest_name="${R2_AUR_MANIFEST_NAME:-veldmuis-aur-packages.manifest.txt}"
+nvidia_manifest_name="${R2_NVIDIA_MANIFEST_NAME:-veldmuis-nvidia-packages.manifest.txt}"
 prefix="${KNOWN_GOOD_NVIDIA_PREFIX:-_known-good/nvidia-580xx/current}"
 arch="${VELDMUIS_ARCH:-x86_64}"
 extra_repo="${VELDMUIS_EXTRA_REPO:-veldmuis-extra}"
@@ -42,8 +42,8 @@ expected_packages=("${veldmuis_nvidia_580xx_repository_packages[@]}")
 operation="publish"
 signing_fingerprint=""
 fallback_skip=0
-source_aur_manifest_name=""
-source_aur_manifest_sha256=""
+source_nvidia_manifest_name=""
+source_nvidia_manifest_sha256=""
 prune_dry_run="${KNOWN_GOOD_PRUNE_DRY_RUN:-0}"
 
 log() {
@@ -188,10 +188,10 @@ copy_known_good_files() {
   rm -rf "${stage_dir}"
   mkdir -p "${stage_dir}"
 
-  [[ -r "${aur_manifest_path}" ]] || die "AUR manifest not readable: ${aur_manifest_path}"
-  source_aur_manifest_sha256="$(sha256sum "${aur_manifest_path}" | awk '{print $1}')"
-  source_aur_manifest_name="veldmuis-aur-packages-${source_aur_manifest_sha256}.manifest.txt"
-  cp -f "${aur_manifest_path}" "${stage_dir}/${source_aur_manifest_name}"
+  [[ -r "${nvidia_manifest_path}" ]] || die "NVIDIA manifest not readable: ${nvidia_manifest_path}"
+  source_nvidia_manifest_sha256="$(sha256sum "${nvidia_manifest_path}" | awk '{print $1}')"
+  source_nvidia_manifest_name="veldmuis-nvidia-packages-${source_nvidia_manifest_sha256}.manifest.txt"
+  cp -f "${nvidia_manifest_path}" "${stage_dir}/${source_nvidia_manifest_name}"
 
   for package_name in "${expected_packages[@]}"; do
     package_path="$(find_package "${package_name}")"
@@ -205,16 +205,16 @@ render_manifest() {
   local source_commit="unknown"
 
   source_commit="$(git -C "${repo_root}" rev-parse HEAD 2>/dev/null || printf 'unknown')"
-  [[ -n "${source_aur_manifest_name}" && -n "${source_aur_manifest_sha256}" ]] || \
-    die "Source AUR manifest identity was not prepared"
+  [[ -n "${source_nvidia_manifest_name}" && -n "${source_nvidia_manifest_sha256}" ]] || \
+    die "Source NVIDIA manifest identity was not prepared"
 
   {
     printf 'schema_version=2\n'
     printf 'created_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'source_commit=%s\n' "${source_commit}"
     printf 'cache_prefix=%s\n' "${prefix}"
-    printf 'source_aur_manifest=%s\n' "${source_aur_manifest_name}"
-    printf 'source_aur_manifest_sha256=%s\n' "${source_aur_manifest_sha256}"
+    printf 'source_nvidia_manifest=%s\n' "${source_nvidia_manifest_name}"
+    printf 'source_nvidia_manifest_sha256=%s\n' "${source_nvidia_manifest_sha256}"
     printf 'signing_fingerprint=%s\n' "${signing_fingerprint}"
     printf 'fallback_used=false\n'
     printf '\n[package_bases]\n'
@@ -230,7 +230,7 @@ render_manifest() {
       in_package_bases && NF >= 2 && $1 !~ /^#/ {
         print
       }
-    ' "${stage_dir}/${source_aur_manifest_name}"
+    ' "${stage_dir}/${source_nvidia_manifest_name}"
     printf '\n[source_inputs]\n'
     awk '
       /^\[source_inputs\]$/ {
@@ -244,7 +244,7 @@ render_manifest() {
       in_source_inputs && NF >= 2 && $1 !~ /^#/ {
         print
       }
-    ' "${stage_dir}/${source_aur_manifest_name}"
+    ' "${stage_dir}/${source_nvidia_manifest_name}"
     printf '\n[package_files]\n'
     find "${stage_dir}" -maxdepth 1 -type f \
       -name '*.pkg.tar.zst' \
@@ -368,7 +368,7 @@ verify_package_signatures() {
 verify_local_stage() {
   local manifest_path="${stage_dir}/${manifest_name}"
   local signature_path="${manifest_path}.sig"
-  local source_aur_manifest source_aur_manifest_path expected_source_hash actual_source_hash
+  local source_nvidia_manifest source_nvidia_manifest_path expected_source_hash actual_source_hash
   local stage_signing_fingerprint
 
   [[ -r "${manifest_path}" ]] || die "Known-good manifest is missing: ${manifest_path}"
@@ -379,17 +379,17 @@ verify_local_stage() {
   [[ "$(manifest_value "${manifest_path}" schema_version)" == "2" ]] || \
     die "Known-good manifest schema_version must be 2"
 
-  source_aur_manifest="$(manifest_value "${manifest_path}" source_aur_manifest)"
-  safe_file_name "${source_aur_manifest}" || die "Unsafe source_aur_manifest in known-good manifest: ${source_aur_manifest}"
-  source_aur_manifest_path="${stage_dir}/${source_aur_manifest}"
-  [[ -r "${source_aur_manifest_path}" ]] || die "Source AUR manifest is missing: ${source_aur_manifest}"
+  source_nvidia_manifest="$(manifest_value "${manifest_path}" source_nvidia_manifest)"
+  safe_file_name "${source_nvidia_manifest}" || die "Unsafe source_nvidia_manifest in known-good manifest: ${source_nvidia_manifest}"
+  source_nvidia_manifest_path="${stage_dir}/${source_nvidia_manifest}"
+  [[ -r "${source_nvidia_manifest_path}" ]] || die "Source NVIDIA manifest is missing: ${source_nvidia_manifest}"
 
-  expected_source_hash="$(manifest_value "${manifest_path}" source_aur_manifest_sha256)"
+  expected_source_hash="$(manifest_value "${manifest_path}" source_nvidia_manifest_sha256)"
   [[ "${expected_source_hash}" =~ ^[0-9a-fA-F]{64}$ ]] || \
-    die "Known-good manifest has an invalid source AUR manifest checksum"
-  actual_source_hash="$(sha256sum "${source_aur_manifest_path}" | awk '{print $1}')"
+    die "Known-good manifest has an invalid source NVIDIA manifest checksum"
+  actual_source_hash="$(sha256sum "${source_nvidia_manifest_path}" | awk '{print $1}')"
   [[ "${actual_source_hash}" == "${expected_source_hash}" ]] || \
-    die "Source AUR manifest checksum does not match known-good manifest"
+    die "Source NVIDIA manifest checksum does not match known-good manifest"
 
   stage_signing_fingerprint="$(manifest_value "${manifest_path}" signing_fingerprint)"
   [[ "${stage_signing_fingerprint}" =~ ^[0-9A-Fa-f]{40}$ ]] || \
@@ -404,7 +404,7 @@ upload_known_good() {
 
   log "Publishing known-good NVIDIA package set to ${target}"
 
-  # Keep mutable metadata out of the bulk sync. Payloads and the source AUR
+  # Keep mutable metadata out of the bulk sync. Payloads and the source NVIDIA
   # manifest become available first; the manifest and its signature are the
   # final two objects written so readers never trust an unverified manifest.
   aws s3 cp "${stage_dir}" "${target}" \
@@ -453,8 +453,8 @@ collect_keep_files() {
 
   printf '%s\n' "${manifest_name}"
   printf '%s.sig\n' "${manifest_name}"
-  source_manifest="$(manifest_value "${manifest_file}" source_aur_manifest)"
-  [[ -n "${source_manifest}" ]] || die "Prepared known-good manifest is missing source_aur_manifest"
+  source_manifest="$(manifest_value "${manifest_file}" source_nvidia_manifest)"
+  [[ -n "${source_manifest}" ]] || die "Prepared known-good manifest is missing source_nvidia_manifest"
   printf '%s\n' "${source_manifest}"
   parse_package_files "${manifest_file}" | awk '{ print $2 }'
   parse_signature_files "${manifest_file}" | awk '{ print $2 }'
@@ -534,9 +534,9 @@ prune_superseded_known_good() {
 prepare_known_good() {
   [[ -d "${package_dir}" ]] || die "Package artifact directory not found: ${package_dir}"
   [[ -d "${signed_package_dir}" ]] || die "Signed package directory not found: ${signed_package_dir}"
-  [[ -r "${aur_manifest_path}" ]] || die "AUR manifest not readable: ${aur_manifest_path}"
+  [[ -r "${nvidia_manifest_path}" ]] || die "NVIDIA manifest not readable: ${nvidia_manifest_path}"
 
-  if is_fallback_manifest "${aur_manifest_path}"; then
+  if is_fallback_manifest "${nvidia_manifest_path}"; then
     log "Skipping known-good update because current package set came from fallback"
     fallback_skip=1
     return 0
@@ -551,27 +551,27 @@ prepare_known_good() {
 
 publish_prepared_known_good() {
   local prepared_manifest="${stage_dir}/${manifest_name}"
-  local stage_aur_manifest=""
+  local stage_nvidia_manifest=""
 
   [[ -d "${stage_dir}" ]] || die "Known-good stage directory not found: ${stage_dir}"
 
   # Support the pre-content-addressed prepared-stage fallback marker as well
   # as the current manifest-driven source filename.
-  if [[ -r "${stage_dir}/${aur_manifest_name}" ]] && \
-    is_fallback_manifest "${stage_dir}/${aur_manifest_name}"; then
+  if [[ -r "${stage_dir}/${nvidia_manifest_name}" ]] && \
+    is_fallback_manifest "${stage_dir}/${nvidia_manifest_name}"; then
     log "Skipping known-good update because prepared package set came from fallback"
     fallback_skip=1
     return 0
   fi
 
   [[ -r "${prepared_manifest}" ]] || die "Prepared known-good manifest is missing: ${prepared_manifest}"
-  stage_aur_manifest="$(manifest_value "${prepared_manifest}" source_aur_manifest)"
-  safe_file_name "${stage_aur_manifest}" || \
-    die "Unsafe source_aur_manifest in prepared known-good manifest: ${stage_aur_manifest}"
-  stage_aur_manifest="${stage_dir}/${stage_aur_manifest}"
-  [[ -r "${stage_aur_manifest}" ]] || die "Prepared source AUR manifest is missing: ${stage_aur_manifest}"
+  stage_nvidia_manifest="$(manifest_value "${prepared_manifest}" source_nvidia_manifest)"
+  safe_file_name "${stage_nvidia_manifest}" || \
+    die "Unsafe source_nvidia_manifest in prepared known-good manifest: ${stage_nvidia_manifest}"
+  stage_nvidia_manifest="${stage_dir}/${stage_nvidia_manifest}"
+  [[ -r "${stage_nvidia_manifest}" ]] || die "Prepared source NVIDIA manifest is missing: ${stage_nvidia_manifest}"
 
-  if is_fallback_manifest "${stage_aur_manifest}"; then
+  if is_fallback_manifest "${stage_nvidia_manifest}"; then
     log "Skipping known-good update because prepared package set came from fallback"
     fallback_skip=1
     return 0
@@ -587,17 +587,17 @@ publish_prepared_known_good() {
 
 prune_prepared_known_good() {
   local prepared_manifest="${stage_dir}/${manifest_name}"
-  local stage_aur_manifest=""
+  local stage_nvidia_manifest=""
 
   [[ -d "${stage_dir}" ]] || die "Known-good stage directory not found: ${stage_dir}"
   [[ -r "${prepared_manifest}" ]] || die "Prepared known-good manifest is missing: ${prepared_manifest}"
-  stage_aur_manifest="$(manifest_value "${prepared_manifest}" source_aur_manifest)"
-  safe_file_name "${stage_aur_manifest}" || \
-    die "Unsafe source_aur_manifest in prepared known-good manifest: ${stage_aur_manifest}"
-  [[ -r "${stage_dir}/${stage_aur_manifest}" ]] || \
-    die "Prepared source AUR manifest is missing: ${stage_dir}/${stage_aur_manifest}"
+  stage_nvidia_manifest="$(manifest_value "${prepared_manifest}" source_nvidia_manifest)"
+  safe_file_name "${stage_nvidia_manifest}" || \
+    die "Unsafe source_nvidia_manifest in prepared known-good manifest: ${stage_nvidia_manifest}"
+  [[ -r "${stage_dir}/${stage_nvidia_manifest}" ]] || \
+    die "Prepared source NVIDIA manifest is missing: ${stage_dir}/${stage_nvidia_manifest}"
 
-  if is_fallback_manifest "${stage_dir}/${stage_aur_manifest}"; then
+  if is_fallback_manifest "${stage_dir}/${stage_nvidia_manifest}"; then
     log "Skipping known-good prune because prepared package set came from fallback"
     fallback_skip=1
     return 0
@@ -632,7 +632,7 @@ main() {
       log "Prepared and validated known-good NVIDIA package stage: ${stage_dir}"
       ;;
     publish-only)
-      if [[ -r "${aur_manifest_path}" ]] && is_fallback_manifest "${aur_manifest_path}"; then
+      if [[ -r "${nvidia_manifest_path}" ]] && is_fallback_manifest "${nvidia_manifest_path}"; then
         log "Skipping known-good update because current package set came from fallback"
         exit 0
       fi
@@ -643,7 +643,7 @@ main() {
       log "Published known-good NVIDIA package set"
       ;;
     prune-only)
-      if [[ -r "${aur_manifest_path}" ]] && is_fallback_manifest "${aur_manifest_path}"; then
+      if [[ -r "${nvidia_manifest_path}" ]] && is_fallback_manifest "${nvidia_manifest_path}"; then
         log "Skipping known-good prune because current package set came from fallback"
         exit 0
       fi

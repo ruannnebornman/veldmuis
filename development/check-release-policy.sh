@@ -71,7 +71,7 @@ select_release_manifest_url() {
     return 0
   fi
 
-  awk '/\.manifest\.txt$/ && !/\.aur-packages\.manifest\.txt$/ { print; exit }' \
+  awk '/\.manifest\.txt$/ && !/\.nvidia-packages\.manifest\.txt$/ { print; exit }' \
     <<<"${asset_urls}"
 }
 
@@ -84,7 +84,7 @@ check_release_asset_selection() {
   local selected_signature=""
 
   asset_urls="$(printf '%s\n' \
-    "${release_base}/veldmuis-2099.12-network-x86_64.aur-packages.manifest.txt" \
+    "${release_base}/veldmuis-2099.12-network-x86_64.nvidia-packages.manifest.txt" \
     "${manifest_url}" \
     "${signature_url}")"
   selected_signature="$(select_release_signature_url "${asset_urls}")"

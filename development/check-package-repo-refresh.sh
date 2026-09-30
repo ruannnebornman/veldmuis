@@ -4,23 +4,22 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
-ref_mode="${VELDMUIS_AUR_REF_MODE:-locked}"
 force_refresh="${VELDMUIS_PACKAGE_REFRESH_FORCE:-0}"
 package_base="${PACKAGE_BASE_URL:-https://packages.veldmuislinux.org}"
 package_manifest_url="${PUBLISHED_PACKAGE_MANIFEST_URL:-}"
-aur_manifest_url="${PUBLISHED_AUR_MANIFEST_URL:-}"
+nvidia_manifest_url="${PUBLISHED_NVIDIA_MANIFEST_URL:-}"
 known_good_url="${VELDMUIS_KNOWN_GOOD_NVIDIA_URL:-}"
 known_good_manifest_name="${KNOWN_GOOD_NVIDIA_MANIFEST_NAME:-veldmuis-known-good-nvidia-580xx.manifest.txt}"
 known_good_manifest_signature_name="${known_good_manifest_name}.sig"
 package_keyring="${VELDMUIS_PACKAGE_KEYRING:-${repo_root}/packages/veldmuis-keyring/veldmuis.gpg}"
 work_root="${RUNNER_TEMP:-/tmp}/veldmuis-package-refresh"
-resolved_refs_file="${VELDMUIS_AUR_RESOLVED_REFS_FILE:-${work_root}/resolved-aur-refs.txt}"
+resolved_refs_file="${VELDMUIS_NVIDIA_RESOLVED_REFS_FILE:-${work_root}/resolved-nvidia-refs.txt}"
 published_package_manifest="${work_root}/published-package-manifest.txt"
-published_aur_manifest="${work_root}/published-aur-manifest.txt"
-published_refs_file="${work_root}/published-aur-refs.txt"
+published_nvidia_manifest="${work_root}/published-nvidia-manifest.txt"
+published_refs_file="${work_root}/published-nvidia-refs.txt"
 known_good_manifest="${work_root}/${known_good_manifest_name}"
 known_good_manifest_signature="${work_root}/${known_good_manifest_signature_name}"
-known_good_source_manifest="${work_root}/known-good-aur-manifest.txt"
+known_good_source_manifest="${work_root}/known-good-nvidia-manifest.txt"
 current_source_commit=""
 published_source_commit=""
 
@@ -65,12 +64,11 @@ write_summary() {
     echo "- Reason: ${reason}"
     echo "- Current source commit: \`${current_source_commit}\`"
     echo "- Published source commit: \`${published_source_commit:-unavailable}\`"
-    echo "- AUR ref mode: \`${ref_mode}\`"
     echo "- Published package manifest: ${package_manifest_url}"
-    echo "- Published AUR manifest: ${aur_manifest_url}"
+    echo "- Published NVIDIA manifest: ${nvidia_manifest_url}"
     if [[ -s "${resolved_refs_file}" ]]; then
       echo
-      echo "### Resolved AUR Refs"
+      echo "### Resolved NVIDIA Recipe Hashes"
       echo
       echo '```text'
       cat "${resolved_refs_file}"
@@ -86,11 +84,10 @@ finish() {
   log "${reason}"
   write_output "refresh_needed" "${refresh_needed}"
   write_output "reason" "${reason}"
-  write_output "ref_mode" "${ref_mode}"
   write_output "current_source_commit" "${current_source_commit}"
   write_output "published_source_commit" "${published_source_commit}"
   write_output "package_manifest_url" "${package_manifest_url}"
-  write_output "aur_manifest_url" "${aur_manifest_url}"
+  write_output "nvidia_manifest_url" "${nvidia_manifest_url}"
   write_output "resolved_refs_file" "${resolved_refs_file}"
   write_summary "${refresh_needed}" "${reason}"
 }
@@ -140,7 +137,7 @@ configure_known_good_url() {
 }
 
 validate_known_good_cache() {
-  local source_aur_manifest source_aur_manifest_hash actual_source_aur_manifest_hash
+  local source_nvidia_manifest source_nvidia_manifest_hash actual_source_nvidia_manifest_hash
   local signing_fingerprint
 
   configure_known_good_url
@@ -159,16 +156,23 @@ validate_known_good_cache() {
   signing_fingerprint="$(manifest_value "${known_good_manifest}" signing_fingerprint)"
   [[ "${signing_fingerprint}" =~ ^[0-9A-Fa-f]{40}$ ]] || return 1
 
-  source_aur_manifest="$(manifest_value "${known_good_manifest}" source_aur_manifest)"
-  safe_file_name "${source_aur_manifest}" || return 1
+  source_nvidia_manifest="$(manifest_value "${known_good_manifest}" source_nvidia_manifest)"
+  if [[ -z "${source_nvidia_manifest}" ]]; then
+    # Fallback for known-good manifests written before the rename.
+    source_nvidia_manifest="$(manifest_value "${known_good_manifest}" source_aur_manifest)"
+  fi
+  safe_file_name "${source_nvidia_manifest}" || return 1
   curl --fail --silent --show-error --location \
-    "${known_good_url}/${source_aur_manifest}" \
+    "${known_good_url}/${source_nvidia_manifest}" \
     --output "${known_good_source_manifest}" || return 1
 
-  source_aur_manifest_hash="$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
-  [[ "${source_aur_manifest_hash}" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
-  actual_source_aur_manifest_hash="$(sha256sum "${known_good_source_manifest}" | awk '{print $1}')"
-  [[ "${actual_source_aur_manifest_hash}" == "${source_aur_manifest_hash}" ]]
+  source_nvidia_manifest_hash="$(manifest_value "${known_good_manifest}" source_nvidia_manifest_sha256)"
+  if [[ -z "${source_nvidia_manifest_hash}" ]]; then
+    source_nvidia_manifest_hash="$(manifest_value "${known_good_manifest}" source_aur_manifest_sha256)"
+  fi
+  [[ "${source_nvidia_manifest_hash}" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
+  actual_source_nvidia_manifest_hash="$(sha256sum "${known_good_source_manifest}" | awk '{print $1}')"
+  [[ "${actual_source_nvidia_manifest_hash}" == "${source_nvidia_manifest_hash}" ]]
 }
 
 main() {
@@ -188,7 +192,7 @@ main() {
   package_base="${package_base%/}"
   [[ -n "${package_base}" ]] || die "PACKAGE_BASE_URL resolves to an empty value"
   package_manifest_url="${package_manifest_url:-${package_base}/veldmuis-package-repo.manifest.txt}"
-  aur_manifest_url="${aur_manifest_url:-${package_base}/veldmuis-aur-packages.manifest.txt}"
+  nvidia_manifest_url="${nvidia_manifest_url:-${package_base}/veldmuis-nvidia-packages.manifest.txt}"
 
   if is_force_refresh; then
     finish "true" "Manual force refresh requested."
@@ -222,29 +226,28 @@ main() {
     return 0
   fi
 
-  log "Resolving AUR refs with VELDMUIS_AUR_REF_MODE=${ref_mode}"
-  VELDMUIS_AUR_REF_MODE="${ref_mode}" \
-    "${repo_root}/development/build-aur-packages.sh" --resolve-only \
+  log "Resolving NVIDIA recipe content hashes"
+  "${repo_root}/development/build-nvidia-packages.sh" --resolve-only \
     | sort > "${resolved_refs_file}"
 
-  if ! curl --fail --silent --show-error --location "${aur_manifest_url}" \
-    --output "${published_aur_manifest}"
+  if ! curl --fail --silent --show-error --location "${nvidia_manifest_url}" \
+    --output "${published_nvidia_manifest}"
   then
-    finish "true" "Published AUR manifest is missing or unavailable."
+    finish "true" "Published NVIDIA manifest is missing or unavailable."
     return 0
   fi
 
-  parse_manifest_refs "${published_aur_manifest}" > "${published_refs_file}"
+  parse_manifest_refs "${published_nvidia_manifest}" > "${published_refs_file}"
 
   if [[ ! -s "${published_refs_file}" ]]; then
-    finish "true" "Published AUR manifest did not contain package base refs."
+    finish "true" "Published NVIDIA manifest did not contain package base refs."
     return 0
   fi
 
   if cmp -s "${resolved_refs_file}" "${published_refs_file}"; then
-    finish "false" "Published source commit and AUR refs are current."
+    finish "false" "Published source commit and NVIDIA recipe hashes are current."
   else
-    finish "true" "Resolved AUR refs differ from published refs."
+    finish "true" "Resolved NVIDIA recipe hashes differ from published refs."
   fi
 }
 

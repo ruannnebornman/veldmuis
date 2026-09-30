@@ -3,13 +3,13 @@
 set -euo pipefail
 
 # This helper is mounted read-only by run-ci-arch-builder.sh and is the only
-# package-install capability granted to the untrusted AUR build user.
+# package-install capability granted to the untrusted package build user.
 # The container workspace is fixed by run-ci-arch-builder.sh. Do not accept a
 # path from the build user's environment.
-work_root="/workspace/veldmuis/artifacts/aur-packages/work/nvidia-580xx-utils"
+work_root="/workspace/veldmuis/artifacts/nvidia-packages/work/nvidia-580xx-utils"
 
 die() {
-  printf '[install-aur-build-dependency] ERROR: %s\n' "$*" >&2
+  printf '[install-nvidia-build-dependency] ERROR: %s\n' "$*" >&2
   exit 1
 }
 

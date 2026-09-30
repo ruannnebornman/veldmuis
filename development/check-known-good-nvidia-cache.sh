@@ -29,7 +29,7 @@ package_keyring="${temp_root}/veldmuis.gpg"
 fingerprint_file="${temp_root}/current-signing-key.fpr"
 fake_bin="${temp_root}/bin"
 aws_log="${temp_root}/aws.log"
-manifest_path="${package_dir}/veldmuis-aur-packages.manifest.txt"
+manifest_path="${package_dir}/veldmuis-nvidia-packages.manifest.txt"
 restore_package_dir="${temp_root}/restored"
 restore_work_root="${temp_root}/restore-work"
 remote_source_dir="${temp_root}/remote-source"
@@ -121,8 +121,8 @@ done
 
 publisher_env=(
   "REPOS_ROOT=${repos_root}"
-  "VELDMUIS_AUR_PACKAGE_DIR=${package_dir}"
-  "VELDMUIS_AUR_MANIFEST=${manifest_path}"
+  "VELDMUIS_NVIDIA_PACKAGE_DIR=${package_dir}"
+  "VELDMUIS_NVIDIA_MANIFEST=${manifest_path}"
   "VELDMUIS_SIGNED_PACKAGE_DIR=${signed_package_dir}"
   "KNOWN_GOOD_STAGE_DIR=${stage_dir}"
   "VELDMUIS_PACKAGE_KEYRING=${package_keyring}"
@@ -150,8 +150,8 @@ run_restore() {
   env \
     "PATH=${fake_bin}:${PATH}" \
     "FAKE_SOURCE_ROOT=${stage_dir}" \
-    "VELDMUIS_AUR_PACKAGE_DIR=${restore_package_dir}" \
-    "VELDMUIS_AUR_MANIFEST=${restore_package_dir}/veldmuis-aur-packages.manifest.txt" \
+    "VELDMUIS_NVIDIA_PACKAGE_DIR=${restore_package_dir}" \
+    "VELDMUIS_NVIDIA_MANIFEST=${restore_package_dir}/veldmuis-nvidia-packages.manifest.txt" \
     "VELDMUIS_KNOWN_GOOD_WORK_ROOT=${restore_work_root}" \
     VELDMUIS_KNOWN_GOOD_NVIDIA_URL=https://cache.example.invalid/_known-good/nvidia-580xx/current \
     "VELDMUIS_PACKAGE_KEYRING=${package_keyring}" \
@@ -178,28 +178,28 @@ reset_stage() {
 run_prepare >/dev/null
 cp -a "${stage_dir}" "${pristine_stage}"
 known_good_manifest="${stage_dir}/veldmuis-known-good-nvidia-580xx.manifest.txt"
-source_manifest_name="$(awk -F= '$1 == "source_aur_manifest" {print $2; exit}' "${known_good_manifest}")"
-source_manifest_hash="$(awk -F= '$1 == "source_aur_manifest_sha256" {print $2; exit}' "${known_good_manifest}")"
+source_manifest_name="$(awk -F= '$1 == "source_nvidia_manifest" {print $2; exit}' "${known_good_manifest}")"
+source_manifest_hash="$(awk -F= '$1 == "source_nvidia_manifest_sha256" {print $2; exit}' "${known_good_manifest}")"
 known_good_manifest_hash="$(sha256sum "${known_good_manifest}" | awk '{print $1}')"
-[[ "${source_manifest_name}" == "veldmuis-aur-packages-${source_manifest_hash}.manifest.txt" ]] || {
-  printf '[check-known-good-nvidia-cache] ERROR: Source AUR manifest is not content-addressed\n' >&2
+[[ "${source_manifest_name}" == "veldmuis-nvidia-packages-${source_manifest_hash}.manifest.txt" ]] || {
+  printf '[check-known-good-nvidia-cache] ERROR: Source NVIDIA manifest is not content-addressed\n' >&2
   exit 1
 }
 [[ "$(sha256sum "${stage_dir}/${source_manifest_name}" | awk '{print $1}')" == "${source_manifest_hash}" ]] || {
-  printf '[check-known-good-nvidia-cache] ERROR: Source AUR manifest filename hash does not match content\n' >&2
+  printf '[check-known-good-nvidia-cache] ERROR: Source NVIDIA manifest filename hash does not match content\n' >&2
   exit 1
 }
 mkdir -p "${remote_source_dir}"
 cp -f "${stage_dir}/${source_manifest_name}" "${remote_source_dir}/${source_manifest_name}"
 run_restore >/dev/null
-restored_manifest="${restore_package_dir}/veldmuis-aur-packages.manifest.txt"
+restored_manifest="${restore_package_dir}/veldmuis-nvidia-packages.manifest.txt"
 grep -q '^fallback_used=true$' "${restored_manifest}"
 grep -q '^known_good_manifest_url=https://cache.example.invalid/_known-good/nvidia-580xx/current/veldmuis-known-good-nvidia-580xx.manifest.txt$' \
   "${restored_manifest}"
 grep -q "^known_good_manifest_sha256=${known_good_manifest_hash}$" "${restored_manifest}"
 run_publish >/dev/null
 
-cp -f "${manifest_path}" "${temp_root}/non-fallback-aur-manifest.txt"
+cp -f "${manifest_path}" "${temp_root}/non-fallback-nvidia-manifest.txt"
 printf 'fallback_used=true\n' > "${manifest_path}"
 rm -rf "${stage_dir}"
 : > "${aws_log}"
@@ -212,7 +212,7 @@ run_publish >/dev/null
   printf '[check-known-good-nvidia-cache] ERROR: Current fallback publish-only path recreated the stage\n' >&2
   exit 1
 }
-cp -f "${temp_root}/non-fallback-aur-manifest.txt" "${manifest_path}"
+cp -f "${temp_root}/non-fallback-nvidia-manifest.txt" "${manifest_path}"
 
 reset_stage
 source_manifest_path="${stage_dir}/${source_manifest_name}"
@@ -232,7 +232,7 @@ expect_publish_failure 'modified known-good manifest' run_publish
 
 reset_stage
 printf 'modified\n' >> "${stage_dir}/${source_manifest_name}"
-expect_publish_failure 'modified source AUR manifest' run_publish
+expect_publish_failure 'modified source NVIDIA manifest' run_publish
 
 reset_stage
 rm -f "${known_good_manifest}.sig"
@@ -261,14 +261,14 @@ reset_stage
 printf 'new source generation\n' >> "${manifest_path}"
 run_prepare >/dev/null
 new_known_good_manifest="${stage_dir}/veldmuis-known-good-nvidia-580xx.manifest.txt"
-new_source_manifest_name="$(awk -F= '$1 == "source_aur_manifest" {print $2; exit}' "${new_known_good_manifest}")"
+new_source_manifest_name="$(awk -F= '$1 == "source_nvidia_manifest" {print $2; exit}' "${new_known_good_manifest}")"
 [[ "${new_source_manifest_name}" != "${source_manifest_name}" ]] || {
-  printf '[check-known-good-nvidia-cache] ERROR: Source AUR manifest filename was reused across generations\n' >&2
+  printf '[check-known-good-nvidia-cache] ERROR: Source NVIDIA manifest filename was reused across generations\n' >&2
   exit 1
 }
 cp -f "${stage_dir}/${new_source_manifest_name}" "${remote_source_dir}/${new_source_manifest_name}"
 cmp -s "${pristine_stage}/${source_manifest_name}" "${remote_source_dir}/${source_manifest_name}" || {
-  printf '[check-known-good-nvidia-cache] ERROR: Previous source AUR manifest was overwritten\n' >&2
+  printf '[check-known-good-nvidia-cache] ERROR: Previous source NVIDIA manifest was overwritten\n' >&2
   exit 1
 }
 : > "${aws_log}"
@@ -328,7 +328,7 @@ write_keep_state
 {
   printf '_known-good/nvidia-580xx/current/nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst\n'
   printf '_known-good/nvidia-580xx/current/nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst.sig\n'
-  printf '_known-good/nvidia-580xx/current/veldmuis-aur-packages-0000000000000000000000000000000000000000000000000000000000000000.manifest.txt\n'
+  printf '_known-good/nvidia-580xx/current/veldmuis-nvidia-packages-0000000000000000000000000000000000000000000000000000000000000000.manifest.txt\n'
 } >> "${prune_state}"
 : > "${prune_aws_log}"
 run_prune >/dev/null
@@ -342,7 +342,7 @@ cmp -s "${temp_root}/expected-keep.txt" <(sort "${prune_state}") || {
 for stale_name in \
   nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst \
   nvidia-580xx-utils-1.0-1-x86_64+build20200101.pkg.tar.zst.sig \
-  veldmuis-aur-packages-0000000000000000000000000000000000000000000000000000000000000000.manifest.txt
+  veldmuis-nvidia-packages-0000000000000000000000000000000000000000000000000000000000000000.manifest.txt
 do
   grep -qF -- "--key _known-good/nvidia-580xx/current/${stale_name}" "${prune_aws_log}" || {
     printf '[check-known-good-nvidia-cache] ERROR: Prune did not delete %s\n' "${stale_name}" >&2

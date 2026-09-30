@@ -3,7 +3,7 @@
 
 # Sourced by NVIDIA package build, publish, restore, and metapackage helpers.
 
-veldmuis_nvidia_580xx_aur_package_bases=(
+veldmuis_nvidia_580xx_package_bases=(
   "nvidia-580xx-utils"
   "lib32-nvidia-580xx-utils"
   "nvidia-580xx-settings"

@@ -25,7 +25,7 @@ write_fixture() {
     "${artifact_stem}.packages.tsv"
     "${artifact_stem}.spdx"
     "${artifact_stem}.build-inputs.txt"
-    "${artifact_stem}.aur-packages.manifest.txt"
+    "${artifact_stem}.nvidia-packages.manifest.txt"
     "${manifest_name}.sig"
   )
 

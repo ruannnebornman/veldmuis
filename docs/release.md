@@ -65,7 +65,7 @@ At a high level, the workflow:
 1. Resolves a valid tag and exact `main` commit.
 2. Checks out that commit with persisted credentials disabled.
 3. Checks repository hygiene and the release environment contract.
-4. Builds native packages and resolved AUR-derived artifacts without signing
+4. Builds native packages and the vendored NVIDIA artifacts without signing
    material.
 5. Signs packages and repository databases in a network-disabled container.
 6. Builds the ISO without signing material.
@@ -158,7 +158,7 @@ veldmuis-TAG-network-x86_64.manifest.txt.sig
 veldmuis-TAG-network-x86_64.packages.tsv
 veldmuis-TAG-network-x86_64.spdx
 veldmuis-TAG-network-x86_64.build-inputs.txt
-veldmuis-TAG-network-x86_64.aur-packages.manifest.txt
+veldmuis-TAG-network-x86_64.nvidia-packages.manifest.txt
 ```
 
 Small channel documents identify the promoted installer release:
@@ -175,8 +175,8 @@ copied to small channel-specific paths for command-line verification. The JSON
 document is promoted last and no mutable path contains ISO bytes.
 
 The currently published release retains the checksum, signed manifest and
-signature, package inventory, SPDX SBOM, build inputs, and exact AUR-input
-manifest. Release notes retain authenticated metadata for historical releases,
+signature, package inventory, SPDX SBOM, build inputs, and the exact NVIDIA
+recipe manifest. Release notes retain authenticated metadata for historical releases,
 but their object-storage ISO links expire when the next release prunes the old
 prefix. Release-specific paths are never reused.
 
@@ -199,8 +199,8 @@ sbom_name
 sbom_sha256
 build_inputs_name
 build_inputs_sha256
-aur_manifest_name
-aur_manifest_sha256
+nvidia_manifest_name
+nvidia_manifest_sha256
 signing_fingerprint
 builder_base_digest
 built_at_utc
@@ -208,8 +208,8 @@ built_at_utc
 
 The build-input record adds the requested builder image, immutable base-image
 digest, resulting builder image ID, Docker version, repository source commit,
-build-tool versions, and exact AUR refs. The TSV and SPDX files record the
-installed ISO package names, exact versions, and source repository
+build-tool versions, and NVIDIA recipe content hashes. The TSV and SPDX files
+record the installed ISO package names, exact versions, and source repository
 classification.
 
 See [Security Policy](../SECURITY.md) for the signature-first verification
@@ -229,7 +229,7 @@ The package repository publication writes:
 - `veldmuis-package-repo.manifest.txt`
 - Repository databases and signatures.
 - Package files and detached package signatures.
-- `veldmuis-aur-packages.manifest.txt` when AUR artifacts are present.
+- `veldmuis-nvidia-packages.manifest.txt` when NVIDIA artifacts are present.
 
 Veldmuis pacman configurations require both package and repository-database
 signatures.
