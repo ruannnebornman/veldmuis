@@ -84,9 +84,15 @@ local_recipe_ref() {
 
   (
     cd "${recipe_dir}"
-    find . -type f -not -path './.git/*' -print0 \
+    find . \( -type f -o -type l \) -not -path './.git/*' -print0 \
       | LC_ALL=C sort -z \
-      | xargs -0 -r sha256sum \
+      | while IFS= read -r -d '' entry; do
+          if [[ -L "${entry}" ]]; then
+            printf '%s symlink %s\n' "${entry}" "$(readlink "${entry}")"
+          else
+            printf '%s %s\n' "${entry}" "$(sha256sum "${entry}" | awk '{print $1}')"
+          fi
+        done \
       | sha256sum \
       | awk '{print $1}'
   )
