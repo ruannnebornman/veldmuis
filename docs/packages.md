@@ -151,11 +151,13 @@ terminal emulator of choice.
 `veldmuis-muis` is a separate, opt-in package for the muis terminal. It is not
 part of any metapackage and installs nothing by default; install it with
 `pacman -S veldmuis-muis`. The package repackages the prebuilt binaries from the
-latest signed muis GitHub release, so it tracks muis automatically without a
-Veldmuis pull request. `development/check-package-repo-refresh.sh` compares the
-published `muis_version` against the newest signed release, and
+latest signed muis GitHub release. `development/check-package-repo-refresh.sh`
+compares the published `muis_version` against the newest signed release, and
 `development/resolve-muis-release.sh` verifies the release signature against the
-vendored key in `development/muis-keyring/` before pinning the version.
+vendored key in `development/muis-keyring/` before pinning the version. The
+scheduled package refresh commits the updated pin to `main` before building and
+publishing, so the published package always matches the recipe in the repository
+and no pull request is needed.
 
 ## Branding
 
