@@ -7,9 +7,13 @@ on:
     paths:
       - packages/nvidia-580xx-src/**
       - packages/veldmuis-nvidia-legacy/**
+      - packages/veldmuis-muis/**
       - development/build-nvidia-packages.sh
       - development/scan-nvidia-packages.sh
       - development/check-package-repo-refresh.sh
+      - development/resolve-muis-release.sh
+      - development/publish-r2-package-repo.sh
+      - development/muis-keyring/**
   schedule:
     # 12:17 Africa/Johannesburg. GitHub cron uses UTC.
     - cron: "17 10 * * *"
@@ -115,6 +119,8 @@ jobs:
       - name: Check whether package refresh is needed
         id: refresh_check
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           ./development/check-package-repo-refresh.sh
@@ -125,6 +131,15 @@ jobs:
         run: |
           set -euo pipefail
           echo "Package repo is current: ${{ steps.refresh_check.outputs.reason }}"
+
+      - name: Resolve the latest signed muis release
+        if: steps.refresh_check.outputs.refresh_needed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ./development/resolve-muis-release.sh --update-package
 
       - name: Build and sign package repo in isolated Arch containers
         if: steps.refresh_check.outputs.refresh_needed == 'true'
@@ -217,12 +232,18 @@ jobs:
         run: |
           set -euo pipefail
 
+          muis_version="unknown"
+          if [[ -r packages/veldmuis-muis/PKGBUILD ]]; then
+            muis_version="$(awk -F= '$1 == "pkgver" { print $2; exit }' packages/veldmuis-muis/PKGBUILD)"
+          fi
+
           {
             echo "## Package Repo Refresh Result"
             echo
             echo "- Refresh needed: \`${{ steps.refresh_check.outputs.refresh_needed }}\`"
             echo "- Reason: ${{ steps.refresh_check.outputs.reason }}"
             echo "- Recipe source: \`local (packages/nvidia-580xx-src)\`"
+            echo "- muis version: \`${muis_version}\`"
             echo "- Scan risk: \`${{ steps.nvidia_scan.outputs.risk }}\`"
             echo "- Current source commit: \`${{ steps.refresh_check.outputs.current_source_commit }}\`"
             echo "- Published source commit: \`${{ steps.refresh_check.outputs.published_source_commit || 'unavailable' }}\`"

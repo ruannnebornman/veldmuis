@@ -149,6 +149,15 @@ installer always provides exactly one: plain `konsole` by default, or the
 when the personal overlay checkbox is selected. Manual `veldmuis-desktop`
 installs outside the installer need a terminal emulator of choice.
 
+`veldmuis-muis` is a separate, opt-in package for the muis terminal. It is not
+part of any metapackage and installs nothing by default; install it with
+`pacman -S veldmuis-muis`. The package repackages the prebuilt binaries from the
+latest signed muis GitHub release, so it tracks muis automatically without a
+Veldmuis pull request. `development/check-package-repo-refresh.sh` compares the
+published `muis_version` against the newest signed release, and
+`development/resolve-muis-release.sh` verifies the release signature against the
+vendored key in `development/muis-keyring/` before pinning the version.
+
 ## Branding
 
 `veldmuis-branding` owns Veldmuis visual defaults and KDE configuration assets,

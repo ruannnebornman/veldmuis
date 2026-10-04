@@ -1,0 +1,34 @@
+pkgname=veldmuis-muis
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="muis terminal emulator (prebuilt signed upstream release)"
+arch=("x86_64")
+url="https://github.com/ruannnebornman/muis"
+license=("MIT")
+depends=(
+  "webkit2gtk-4.1"
+  "gtk3"
+  "libsoup3"
+  "libjavascriptcoregtk-4.1"
+)
+optdepends=(
+  "fish: OSC 133 shell integration for the last-command bar"
+)
+provides=("muis")
+conflicts=("muis")
+options=("!strip" "!debug")
+source=("muis-${pkgver}-x86_64-linux.tar.gz::${url}/releases/download/v${pkgver}/muis-${pkgver}-x86_64-linux.tar.gz")
+sha256sums=("6080826b2c2b2c666f45e4a5e854fe15966609b3b064a08f8531099c0b809891")
+
+package() {
+  cd "${srcdir}/muis-${pkgver}-x86_64-linux"
+
+  install -Dm755 muis "${pkgdir}/usr/bin/muis"
+  install -Dm755 muis-worker "${pkgdir}/usr/bin/muis-worker"
+  if [[ -f muis-notify ]]; then
+    install -Dm755 muis-notify "${pkgdir}/usr/bin/muis-notify"
+  fi
+  install -Dm644 muis.desktop "${pkgdir}/usr/share/applications/muis.desktop"
+  install -Dm644 icons/muis.png \
+    "${pkgdir}/usr/share/icons/hicolor/512x512/apps/muis.png"
+}
