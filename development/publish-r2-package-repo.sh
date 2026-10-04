@@ -170,9 +170,13 @@ render_manifest() {
   local commit="unknown"
   local published_at
   local nvidia_fallback_used=""
+  local muis_version=""
 
   published_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   commit="$(git -C "${repo_root}" rev-parse HEAD 2>/dev/null || printf 'unknown')"
+  if [[ -r "${repo_root}/packages/veldmuis-muis/PKGBUILD" ]]; then
+    muis_version="$(awk -F= '$1 == "pkgver" { print $2; exit }' "${repo_root}/packages/veldmuis-muis/PKGBUILD")"
+  fi
   if [[ -r "${stage_dir}/${nvidia_manifest_name}" ]]; then
     nvidia_fallback_used="$(awk -F '=' '$1 == "fallback_used" { print $2; found = 1; exit } END { exit !found }' "${stage_dir}/${nvidia_manifest_name}" 2>/dev/null || true)"
   fi
@@ -184,6 +188,9 @@ render_manifest() {
     printf 'bucket=%s\n' "${bucket}"
     printf 'arch=%s\n' "${arch}"
     printf 'repositories=%s,%s\n' "${core_repo}" "${extra_repo}"
+    if [[ -n "${muis_version}" ]]; then
+      printf 'muis_version=%s\n' "${muis_version}"
+    fi
     if [[ -f "${stage_dir}/${nvidia_manifest_name}" ]]; then
       printf 'nvidia_manifest=%s\n' "${nvidia_manifest_name}"
       if [[ -n "${nvidia_fallback_used}" ]]; then

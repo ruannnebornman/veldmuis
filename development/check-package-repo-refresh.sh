@@ -175,6 +175,29 @@ validate_known_good_cache() {
   [[ "${actual_source_nvidia_manifest_hash}" == "${source_nvidia_manifest_hash}" ]]
 }
 
+check_muis_refresh() {
+  local published_muis=""
+  local latest_muis=""
+  local resolver="${repo_root}/development/resolve-muis-release.sh"
+
+  [[ -x "${resolver}" ]] || return 1
+
+  published_muis="$(manifest_value "${published_package_manifest}" muis_version)"
+  if [[ -z "${published_muis}" ]]; then
+    log "Published package manifest records no muis version; a muis refresh is needed."
+    return 0
+  fi
+
+  latest_muis="$("${resolver}" --print-version 2>/dev/null || true)"
+
+  if [[ -n "${latest_muis}" && "${latest_muis}" != "${published_muis}" ]]; then
+    log "Latest signed muis release ${latest_muis} differs from published ${published_muis}."
+    return 0
+  fi
+
+  return 1
+}
+
 main() {
   require_cmd awk
   require_cmd curl
@@ -218,6 +241,11 @@ main() {
 
   if [[ "${published_source_commit}" != "${current_source_commit}" ]]; then
     finish "true" "Repository source commit differs from the published package repository."
+    return 0
+  fi
+
+  if check_muis_refresh; then
+    finish "true" "The published muis version differs from the latest signed muis release."
     return 0
   fi
 
