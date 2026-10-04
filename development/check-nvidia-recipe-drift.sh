@@ -78,21 +78,31 @@ read_synced_refs() {
   done < "${upstream_refs}"
 }
 
+recipe_entry_digest() {
+  local path="$1"
+
+  if [[ -L "${path}" ]]; then
+    printf 'symlink -> %s' "$(readlink "${path}")"
+  else
+    sha256sum "${path}" | awk '{print $1}'
+  fi
+}
+
 compare_recipe() {
   local base="$1"
   local upstream_dir="$2"
   local local_dir="${source_dir}/${base}"
   local status="current"
-  local entry upstream_hash local_hash
+  local entry upstream_digest local_digest
   local -a upstream_files=() local_files=() notes=()
 
   [[ -d "${local_dir}" ]] || die "Vendored recipe directory is missing: ${local_dir}"
 
   mapfile -t upstream_files < <(
-    cd "${upstream_dir}" && find . -type f -not -path './.git/*' | LC_ALL=C sort
+    cd "${upstream_dir}" && find . \( -type f -o -type l \) -not -path './.git/*' | LC_ALL=C sort
   )
   mapfile -t local_files < <(
-    cd "${local_dir}" && find . -type f -not -path './.git/*' | LC_ALL=C sort
+    cd "${local_dir}" && find . \( -type f -o -type l \) -not -path './.git/*' | LC_ALL=C sort
   )
 
   while IFS= read -r entry; do
@@ -108,10 +118,10 @@ compare_recipe() {
   done < <(comm -23 <(printf '%s\n' "${local_files[@]}") <(printf '%s\n' "${upstream_files[@]}"))
 
   for entry in "${upstream_files[@]}"; do
-    [[ -f "${local_dir}/${entry}" ]] || continue
-    upstream_hash="$(sha256sum "${upstream_dir}/${entry}" | awk '{print $1}')"
-    local_hash="$(sha256sum "${local_dir}/${entry}" | awk '{print $1}')"
-    if [[ "${upstream_hash}" != "${local_hash}" ]]; then
+    [[ -e "${local_dir}/${entry}" || -L "${local_dir}/${entry}" ]] || continue
+    upstream_digest="$(recipe_entry_digest "${upstream_dir}/${entry}")"
+    local_digest="$(recipe_entry_digest "${local_dir}/${entry}")"
+    if [[ "${upstream_digest}" != "${local_digest}" ]]; then
       status="drift"
       notes+=("modified upstream: ${entry#./}")
     fi

@@ -15,6 +15,7 @@ veldmuis_nvidia_580xx_official_build_dependency_roots=(
   "dkms"
   "egl-gbm"
   "egl-wayland"
+  "egl-wayland2"
   "egl-x11"
   "gtk3"
   "jansson"
