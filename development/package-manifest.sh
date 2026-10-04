@@ -15,7 +15,6 @@ veldmuis_core_package_order=(
   "veldmuis-boot"
   "veldmuis-displaymanager"
   "veldmuis-muis"
-  "veldmuis-kaazrot"
   "veldmuis-desktop-kde"
   "veldmuis-development"
   "veldmuis-gaming"

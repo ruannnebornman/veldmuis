@@ -144,10 +144,9 @@ It also installs the Veldmuis `mpv` configuration.
 ## Terminal
 
 Veldmuis ships no terminal emulator in its metapackages. The Calamares
-installer always provides exactly one: plain `konsole` by default, or the
-`veldmuis-kaazrot` overlay stack (WezTerm, Fish, Atuin plus personal configs)
-when the personal overlay checkbox is selected. Manual `veldmuis-desktop`
-installs outside the installer need a terminal emulator of choice.
+installer always provides `konsole`, and Veldmuis sets it as the KDE default
+terminal. Manual `veldmuis-desktop` installs outside the installer need a
+terminal emulator of choice.
 
 `veldmuis-muis` is a separate, opt-in package for the muis terminal. It is not
 part of any metapackage and installs nothing by default; install it with
@@ -198,21 +197,6 @@ helper, and a one-time editable Firefox bookmark for the local Syncthing UI.
 code
 github-cli
 ```
-
-`veldmuis-kaazrot`:
-
-```text
-veldmuis-kaazrot
-```
-
-`veldmuis-kaazrot` is a personal overlay, not a general application group.
-It ships kaazrot terminal, editor, and agent-default templates plus the
-`veldmuis-kaazrot-apply` helper, which copies them into `$HOME` (backing up
-differing files) and releases Fish and WezTerm from legacy distro user-defaults
-management. Apply runs automatically at login through a systemd user service
-and tracks template versions, so package updates sync untouched files on next
-login while user-edited files are backed up and left alone. It is unchecked by
-default in the installer.
 
 ## Graphics Choices
 
