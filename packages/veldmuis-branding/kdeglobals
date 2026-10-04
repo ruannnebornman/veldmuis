@@ -1,8 +1,8 @@
 [General]
 AccentColor=240,176,48
 LastUsedCustomAccentColor=240,176,48
-TerminalApplication=wezterm start --cwd .
-TerminalService=org.wezfurlong.wezterm.desktop
+TerminalApplication=konsole
+TerminalService=org.kde.konsole.desktop
 
 [KDE]
 DefaultDarkLookAndFeel=org.veldmuis.desktop
