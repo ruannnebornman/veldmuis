@@ -6,10 +6,9 @@ arch=("x86_64")
 url="https://github.com/ruannnebornman/muis"
 license=("MIT")
 depends=(
-  "webkit2gtk-4.1"
   "gtk3"
   "libsoup3"
-  "libjavascriptcoregtk-4.1"
+  "webkit2gtk-4.1"
 )
 optdepends=(
   "fish: OSC 133 shell integration for the last-command bar"
