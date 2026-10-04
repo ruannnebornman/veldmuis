@@ -1,6 +1,6 @@
 pkgname=veldmuis-branding
 pkgver=20260306
-pkgrel=18
+pkgrel=19
 pkgdesc="Branding assets and default theme configuration for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -28,7 +28,7 @@ _payload_sha256sums=(
   "9bceaaf249a947f4d41529902cdaa796b79978cbd4bffa4bcb359f5fb0c9393d  veldmuis-wallpaper/contents/screenshot.png"
   "a3ef2b240a54e83f3235b5a371dd159324b4a9b7611e3c66511834f98cb1cf7b  org.veldmuis.desktop/metadata.json"
   "7e049ffc21a57df24b41688286f06ea66de4248f07835c9db921d84bb8bb5834  org.veldmuis.desktop/contents/defaults"
-  "f2b5c24bd8a420f50c0a4c1fd3a66547591bfbf91596784fe5245050dd8b832c  org.veldmuis.desktop/contents/layouts/org.kde.plasma.desktop-layout.js"
+  "fb0494c1cec1b826754f16f3e167af3c81ecfd4019d74832d31a1910d131917d  org.veldmuis.desktop/contents/layouts/org.kde.plasma.desktop-layout.js"
 )
 
 verify() {
