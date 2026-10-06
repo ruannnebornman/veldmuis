@@ -7,8 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: veldmuis-muis-release-watch
@@ -19,8 +18,6 @@ jobs:
     name: Propose the latest signed muis pin
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +35,8 @@ jobs:
       - name: Resolve the latest signed muis release
         id: muis
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -58,8 +57,16 @@ jobs:
       - name: Open the muis pin pull request
         if: steps.muis.outputs.stale == 'true'
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.VELDMUIS_SYNC_TOKEN }}
         run: |
           set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "The VELDMUIS_SYNC_TOKEN secret is not set; cannot open the muis pin pull request." >&2
+            echo "Create a fine-grained PAT with Contents and Pull requests read/write access and store it as the VELDMUIS_SYNC_TOKEN repository secret." >&2
+            exit 1
+          fi
 
           branch="chore/muis-release-pin"
           body="${RUNNER_TEMP}/veldmuis-muis-release-pin-pr.md"
@@ -109,5 +116,4 @@ jobs:
             --base main \
             --head "${branch}" \
             --title "chore(muis): pin ${version}" \
-            --body-file "${body}" \
-            --assignee "${GITHUB_REPOSITORY_OWNER}"
+            --body-file "${body}"

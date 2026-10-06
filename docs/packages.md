@@ -154,7 +154,10 @@ part of any metapackage and installs nothing by default; install it with
 latest signed muis GitHub release. `development/resolve-muis-release.sh` verifies
 the release signature against the vendored key in `development/muis-keyring/`
 before pinning the version. The scheduled `muis Release Watch` workflow runs that
-resolver and opens a pull request when the pin changes; merging it triggers the
+resolver and opens a pull request when the pin changes; the pull request is
+opened with the `VELDMUIS_SYNC_TOKEN` repository secret (a fine-grained PAT with
+Contents and Pull requests read/write access) instead of the workflow token, so
+its pull-request checks run without an approval prompt. Merging it triggers the
 package refresh, which rebuilds and publishes.
 `development/check-package-repo-refresh.sh` compares the pinned recipe against
 the published `muis_version` to decide when to publish.
