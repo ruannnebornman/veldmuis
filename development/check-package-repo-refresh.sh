@@ -176,11 +176,14 @@ validate_known_good_cache() {
 }
 
 check_muis_refresh() {
+  local pinned_muis=""
   local published_muis=""
-  local latest_muis=""
-  local resolver="${repo_root}/development/resolve-muis-release.sh"
+  local pkgbuild="${repo_root}/packages/veldmuis-muis/PKGBUILD"
 
-  [[ -x "${resolver}" ]] || return 1
+  [[ -r "${pkgbuild}" ]] || return 1
+
+  pinned_muis="$(awk -F= '$1 == "pkgver" { print $2; exit }' "${pkgbuild}")"
+  [[ -n "${pinned_muis}" ]] || return 1
 
   published_muis="$(manifest_value "${published_package_manifest}" muis_version)"
   if [[ -z "${published_muis}" ]]; then
@@ -188,10 +191,8 @@ check_muis_refresh() {
     return 0
   fi
 
-  latest_muis="$("${resolver}" --print-version 2>/dev/null || true)"
-
-  if [[ -n "${latest_muis}" && "${latest_muis}" != "${published_muis}" ]]; then
-    log "Latest signed muis release ${latest_muis} differs from published ${published_muis}."
+  if [[ "${pinned_muis}" != "${published_muis}" ]]; then
+    log "Pinned muis version ${pinned_muis} differs from published ${published_muis}."
     return 0
   fi
 
@@ -245,7 +246,7 @@ main() {
   fi
 
   if check_muis_refresh; then
-    finish "true" "The published muis version differs from the latest signed muis release."
+    finish "true" "The published muis version differs from the pinned recipe."
     return 0
   fi
 
