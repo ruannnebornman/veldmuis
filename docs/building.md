@@ -295,7 +295,12 @@ It compares:
 - vendored recipe content hashes versus the published NVIDIA manifest
 
 The workflow can force a refresh or simulate an NVIDIA build failure to test the
-known-good NVIDIA fallback path.
+failure path.
+
+A failed NVIDIA build fails the refresh so a stale known-good set is never
+published silently. GitHub emails the failure to watchers who have Actions
+failure notifications enabled (Settings > Notifications > Actions). The monthly
+ISO release pipeline still uses the known-good fallback.
 
 ## Package Build Cache
 
