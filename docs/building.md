@@ -145,6 +145,16 @@ approval prompt. The signed package
 repository refresh then rebuilds and publishes the vendored recipes after that
 pull request is merged.
 
+## muis Release Watch
+
+The `muis Release Watch` workflow resolves the latest signed muis release with
+`development/resolve-muis-release.sh`. When the pinned version in
+`packages/veldmuis-muis/PKGBUILD` differs, it pins the new version on a
+`chore/muis-release-pin` branch and opens a pull request for review. The pull
+request is opened with the `VELDMUIS_SYNC_TOKEN` repository secret so its checks
+run without an approval prompt. The package refresh rebuilds and publishes
+`veldmuis-muis` after that pull request is merged.
+
 ## Build The Local Package Repository
 
 After native packages and NVIDIA artifacts exist, build signed local repositories:
