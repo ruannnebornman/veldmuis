@@ -60,7 +60,10 @@ package-set, license, signature, and repository checks all run for every
 refresh. The payload scan runs and records review signals for the built package
 set, but it does not block publishing: the NVIDIA packages always carry setuid
 and privileged integration paths, so the scan is a tripwire rather than a gate,
-and the recipes are reviewed when they are synced.
+and the recipes are reviewed when they are synced. Reviewed paths are listed in
+`development/nvidia-scan-reviewed.txt` and recorded under "Reviewed findings"
+in the scan report; only findings outside that list raise the risk level and
+emit a workflow warning.
 
 Upstream recipe changes are surfaced by the scheduled `NVIDIA Recipe Watch`
 workflow. It runs `development/check-nvidia-recipe-drift.sh`, which compares the

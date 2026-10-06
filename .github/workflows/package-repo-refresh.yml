@@ -173,12 +173,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Report high-risk scan findings
+      - name: Report unexpected scan findings
         if: steps.nvidia_scan.outputs.risk == 'high'
         shell: bash
         run: |
           set -euo pipefail
-          echo "::warning::Built NVIDIA package set has payload-scan review signals; publishing continues because the vendored recipes are reviewed at sync time."
+          echo "::warning::Built NVIDIA package set has scan findings outside the reviewed allowlist; review the report before publishing."
           cat "${{ steps.nvidia_scan.outputs.report_file }}"
 
       - name: Ensure AWS CLI is available

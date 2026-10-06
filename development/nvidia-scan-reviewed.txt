@@ -1,0 +1,35 @@
+# Reviewed NVIDIA scan findings.
+#
+# One signature per line. Blank lines and text after '#' are ignored.
+# A signature is "<category>:<path>" where category is command, privileged,
+# or setuid. Shell glob patterns are supported.
+#
+# Findings whose signature matches an entry here are recorded in the scan
+# report as reviewed and do not raise the risk level. Anything else still
+# raises risk and triggers the workflow warning, so this list must only
+# contain paths that were reviewed as part of the vendored recipe sync
+# (see development/nvidia-580xx-package-flow.md).
+
+# NVIDIA-shipped payload scripts that integrate with the running system.
+command:usr/bin/nvidia-bug-report.sh
+command:usr/bin/nvidia-sleep.sh
+
+# DKMS kernel-module build helper shipped inside the package.
+command:usr/src/nvidia-*/conftest.sh
+
+# Vendored recipe install script and upstream installer sources reviewed at
+# recipe sync time.
+command:source:nvidia-580xx-utils.install
+command:source:*conftest.sh
+command:source:*nvidia-bug-report.sh
+command:source:*nvidia-sleep.sh
+command:source:*makeself-help-script.sh
+command:source:*nvidia-persistenced-init/install.sh
+
+# Reviewed privileged integration paths (systemd units, modprobe.d, drop-ins).
+privileged:usr/lib/modprobe.d/nvidia-*
+privileged:usr/lib/systemd/system/nvidia-*
+privileged:usr/lib/systemd/system/systemd-*.service.d/*nvidia*
+
+# Reviewed setuid helper required by the proprietary driver.
+setuid:usr/bin/nvidia-modprobe

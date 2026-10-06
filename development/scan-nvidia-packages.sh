@@ -8,8 +8,11 @@ package_dir="${VELDMUIS_NVIDIA_PACKAGE_DIR:-${repo_root}/artifacts/nvidia-packag
 source_root="${VELDMUIS_NVIDIA_WORK_ROOT:-${repo_root}/artifacts/nvidia-packages/work}"
 report_file="${VELDMUIS_NVIDIA_SCAN_REPORT:-}"
 nvidia_package_set="${VELDMUIS_NVIDIA_580XX_PACKAGE_SET:-${repo_root}/packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh}"
+reviewed_file="${VELDMUIS_NVIDIA_SCAN_REVIEWED:-${repo_root}/development/nvidia-scan-reviewed.txt}"
 
 declare -a findings=()
+declare -a reviewed_findings=()
+declare -a reviewed_patterns=()
 scan_risk=low
 
 die() {
@@ -24,12 +27,55 @@ Usage:
 
 The scanner reports package paths, executable content, privileged files, and
 setuid entries. Findings require risk review; they are not proof of malware.
+Findings whose signature matches development/nvidia-scan-reviewed.txt are
+recorded as reviewed and do not raise the risk level.
 EOF
 }
 
 add_finding() {
   scan_risk=high
   findings+=("$1")
+}
+
+is_reviewed_finding() {
+  local signature="$1"
+  local pattern
+
+  for pattern in "${reviewed_patterns[@]}"; do
+    # shellcheck disable=SC2254
+    case "${signature}" in
+      ${pattern}) return 0 ;;
+    esac
+  done
+
+  return 1
+}
+
+record_finding() {
+  local signature="$1"
+  local message="$2"
+
+  if is_reviewed_finding "${signature}"; then
+    reviewed_findings+=("${message}")
+    return 0
+  fi
+
+  add_finding "${message}"
+}
+
+load_reviewed_patterns() {
+  local line
+
+  reviewed_patterns=()
+  [[ -r "${reviewed_file}" ]] || die "Reviewed-pattern list not readable: ${reviewed_file}"
+
+  while IFS= read -r line; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -n "${line}" ]] || continue
+    reviewed_patterns+=("${line}")
+  done <"${reviewed_file}"
 }
 
 package_path_for() {
@@ -52,7 +98,6 @@ scan_package() {
   local entry
   local package_info_name
   local entries_file
-  local privileged_entries
   local setuid_entries
 
   package_info_name="$(bsdtar -xOf "${package_path}" .PKGINFO | awk -F ' = ' '$1 == "pkgname" {print $2; exit}')"
@@ -71,21 +116,22 @@ scan_package() {
       *.install|*.hook|*.service|*.sh)
         if bsdtar -xOf "${package_path}" "${entry}" 2>/dev/null \
           | LC_ALL=C grep -Eiq 'curl|wget|nc[[:space:]]|/dev/tcp|systemctl|pacman[[:space:]]|chmod[[:space:]].*\+s|setcap|mkfs|dd[[:space:]]+if='; then
-          add_finding "${package_name}: suspicious command in ${entry}"
+          record_finding "command:${entry}" "${package_name}: suspicious command in ${entry}"
         fi
         ;;
     esac
   done <"${entries_file}"
 
-  privileged_entries="$(awk '/^(etc\/(pacman\.d\/hooks|systemd)|usr\/(lib\/(systemd\/system|pacman\/hooks|modules-load\.d|modprobe\.d)|share\/libalpm\/hooks))\// {print}' "${entries_file}")"
-  if [[ -n "${privileged_entries}" ]]; then
-    add_finding "${package_name}: privileged integration paths present"
-  fi
+  while IFS= read -r entry; do
+    [[ -n "${entry}" && "${entry}" != */ ]] || continue
+    record_finding "privileged:${entry}" "${package_name}: privileged integration path ${entry}"
+  done < <(awk '/^(etc\/(pacman\.d\/hooks|systemd)|usr\/(lib\/(systemd\/system|pacman\/hooks|modules-load\.d|modprobe\.d)|share\/libalpm\/hooks))\// {print}' "${entries_file}")
 
   setuid_entries="$(bsdtar -tvf "${package_path}" | awk '$1 ~ /s/ {print $NF}')"
-  if [[ -n "${setuid_entries}" ]]; then
-    add_finding "${package_name}: setuid or setgid entry present"
-  fi
+  while IFS= read -r entry; do
+    [[ -n "${entry}" ]] || continue
+    record_finding "setuid:${entry}" "${package_name}: setuid or setgid entry ${entry}"
+  done <<<"${setuid_entries}"
 
   rm -f -- "${entries_file}"
 }
@@ -112,7 +158,7 @@ scan_source_checkout() {
       PKGBUILD|*.install|*.hook|*.service|*.sh)
         if grep -Eiq 'curl|wget|nc[[:space:]]|/dev/tcp|systemctl|pacman[[:space:]]|chmod[[:space:]].*\+s|setcap|mkfs|dd[[:space:]]+if=' \
           "${checkout_path}/${source_file}"; then
-          add_finding "${package_base}: suspicious command in source file ${source_file}"
+          record_finding "command:source:${source_file}" "${package_base}: suspicious command in source file ${source_file}"
         fi
         ;;
     esac
@@ -158,6 +204,7 @@ main() {
   # shellcheck source=packages/veldmuis-nvidia-legacy/nvidia-580xx-package-set.sh
   . "${nvidia_package_set}"
   package_names=("${veldmuis_nvidia_580xx_repository_packages[@]}")
+  load_reviewed_patterns
 
   for package_name in "${package_names[@]}"; do
     package_path="$(package_path_for "${package_name}")"
@@ -169,15 +216,22 @@ main() {
 
   {
     printf '# NVIDIA Package Scan\n\n'
-    printf 'Scanner version: 1\n'
+    printf 'Scanner version: 2\n'
     printf 'Package directory: %s\n' "${package_dir}"
     printf 'Source checkout root: %s\n' "${source_root}"
+    printf 'Reviewed-pattern list: %s\n' "${reviewed_file}"
     printf 'Risk: %s\n' "${scan_risk}"
     printf '\nFindings:\n'
     if ((${#findings[@]} == 0)); then
       printf '%s\n' '(none)'
     else
       printf -- '- %s\n' "${findings[@]}"
+    fi
+    printf '\nReviewed findings:\n'
+    if ((${#reviewed_findings[@]} == 0)); then
+      printf '%s\n' '(none)'
+    else
+      printf -- '- %s\n' "${reviewed_findings[@]}"
     fi
     printf '\nThis scan detects review signals; it does not prove that third-party code is safe.\n'
   } >"${report_file}"
