@@ -9,7 +9,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 concurrency:
   group: veldmuis-nvidia-recipe-watch
@@ -100,5 +99,4 @@ jobs:
             --base main \
             --head "${branch}" \
             --title "${title}" \
-            --body-file "${body}" \
-            --assignee "${GITHUB_REPOSITORY_OWNER}"
+            --body-file "${body}"
