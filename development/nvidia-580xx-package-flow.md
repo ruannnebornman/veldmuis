@@ -67,8 +67,11 @@ workflow. It runs `development/check-nvidia-recipe-drift.sh`, which compares the
 vendored recipes against the upstream AUR package repositories. When they
 differ, `development/sync-nvidia-recipes.sh` mirrors the changed recipes into
 `packages/nvidia-580xx-src/<package_base>/` and updates
-`packages/nvidia-580xx-src/upstream-refs.txt`, and the workflow opens an assigned
-pull request on a `chore/nvidia-recipe-sync` branch for review. The package
+`packages/nvidia-580xx-src/upstream-refs.txt`, and the workflow opens a pull
+request on a `chore/nvidia-recipe-sync` branch for review. The pull request is
+opened with the `VELDMUIS_SYNC_TOKEN` repository secret (a fine-grained PAT with
+Contents and Pull requests read/write access) instead of the workflow token, so
+its pull-request checks run without an approval prompt. The package
 refresh rebuilds and publishes only after that pull request is merged. This
 keeps the build independent of AUR availability while still making upstream
 changes visible and reviewable.
