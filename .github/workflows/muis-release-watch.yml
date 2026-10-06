@@ -1,0 +1,113 @@
+name: muis Release Watch
+
+on:
+  schedule:
+    # 11:47 Africa/Johannesburg. GitHub cron uses UTC.
+    - cron: "47 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: veldmuis-muis-release-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Propose the latest signed muis pin
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/heads/main
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
+      - name: Resolve the latest signed muis release
+        id: muis
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest="$(./development/resolve-muis-release.sh --print-version || true)"
+          pinned="$(awk -F= '$1 == "pkgver" { print $2; exit }' packages/veldmuis-muis/PKGBUILD)"
+
+          if [[ -z "${latest}" ]]; then
+            echo "No signed muis release is available; nothing to propose."
+            echo "stale=false" >> "${GITHUB_OUTPUT}"
+          elif [[ "${latest}" == "${pinned}" ]]; then
+            echo "The pinned muis version (${pinned}) already matches the latest signed release."
+            echo "stale=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Latest signed muis release ${latest} differs from pinned ${pinned}."
+            echo "stale=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Open the muis pin pull request
+        if: steps.muis.outputs.stale == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          branch="chore/muis-release-pin"
+          body="${RUNNER_TEMP}/veldmuis-muis-release-pin-pr.md"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+
+          git fetch --no-tags origin main
+          main_ref="$(git rev-parse FETCH_HEAD)"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            git fetch --no-tags origin "${branch}"
+            git checkout -B "${branch}" FETCH_HEAD
+            if ! git merge --no-edit --no-ff "${main_ref}"; then
+              git merge --abort || true
+              echo "The ${branch} branch conflicts with main; resolve it by hand." >&2
+              exit 1
+            fi
+          else
+            git checkout -B "${branch}" "${main_ref}"
+          fi
+
+          ./development/resolve-muis-release.sh --update-package
+          version="$(awk -F= '$1 == "pkgver" { print $2; exit }' packages/veldmuis-muis/PKGBUILD)"
+
+          git add -- packages/veldmuis-muis/PKGBUILD
+          if git diff --cached --quiet; then
+            echo "The pinned muis version already matches the latest signed release on ${branch}."
+          else
+            git commit -m "chore(muis): pin ${version}"
+            git push origin "HEAD:refs/heads/${branch}"
+          fi
+
+          if gh pr list --head "${branch}" --state open --json number --jq 'length' | grep -Eq '^[1-9]'; then
+            echo "A pull request for ${branch} is already open; leaving it in place."
+            exit 0
+          fi
+
+          {
+            printf 'The scheduled muis Release Watch workflow found a newer signed muis release and pinned it in `packages/veldmuis-muis/PKGBUILD`.\n\n'
+            printf 'Version: `%s`\n\n' "${version}"
+            printf 'The release signature was verified against the vendored key in `development/muis-keyring/`. '
+            printf 'Review the diff, then merge to let the package refresh rebuild and publish `veldmuis-muis`.\n'
+          } > "${body}"
+
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "chore(muis): pin ${version}" \
+            --body-file "${body}" \
+            --assignee "${GITHUB_REPOSITORY_OWNER}"

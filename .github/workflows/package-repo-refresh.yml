@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment: release
     permissions:
-      contents: write
+      contents: read
     outputs:
       scan_risk: ${{ steps.nvidia_scan.outputs.risk }}
       refresh_needed: ${{ steps.refresh_check.outputs.refresh_needed }}
@@ -131,46 +131,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "Package repo is current: ${{ steps.refresh_check.outputs.reason }}"
-
-      - name: Resolve the latest signed muis release
-        if: steps.refresh_check.outputs.refresh_needed == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          ./development/resolve-muis-release.sh --update-package
-
-      - name: Record the muis pin on main
-        if: steps.refresh_check.outputs.refresh_needed == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          # resolve-muis-release.sh --update-package rewrites the PKGBUILD in the
-          # workspace only. Record the pin in git so the published package always
-          # matches the recipe on main. The push uses GITHUB_TOKEN, and pushes
-          # made with GITHUB_TOKEN do not re-trigger workflows, so there is no
-          # loop even though this workflow also triggers on veldmuis-muis paths.
-          # This requires main to permit the Actions token to push (add the
-          # GitHub Actions app as a branch-ruleset bypass actor), otherwise the
-          # push is rejected.
-          if git diff --quiet -- packages/veldmuis-muis/PKGBUILD; then
-            echo "muis PKGBUILD is already current; nothing to commit."
-            exit 0
-          fi
-
-          muis_version="$(awk -F= '$1 == "pkgver" { print $2; exit }' packages/veldmuis-muis/PKGBUILD)"
-
-          git add -- packages/veldmuis-muis/PKGBUILD
-          git -c user.name='Veldmuis update process' \
-              -c user.email='veldmuis@veldmuislinux.org' \
-              commit -m "chore(muis): pin ${muis_version}"
-          git push \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            HEAD:main
 
       - name: Build and sign package repo in isolated Arch containers
         if: steps.refresh_check.outputs.refresh_needed == 'true'
