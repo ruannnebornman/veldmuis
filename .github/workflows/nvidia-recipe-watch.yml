@@ -7,8 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: veldmuis-nvidia-recipe-watch
@@ -19,8 +18,6 @@ jobs:
     name: Check upstream NVIDIA recipe drift
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,9 +45,16 @@ jobs:
         if: steps.drift.outputs.drift == 'true'
         shell: bash
         env:
+          GH_TOKEN: ${{ secrets.VELDMUIS_SYNC_TOKEN }}
           VELDMUIS_RECIPE_DRIFT_REPORT: ${{ runner.temp }}/veldmuis-nvidia-recipe-drift.md
         run: |
           set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "The VELDMUIS_SYNC_TOKEN secret is not set; cannot open the recipe sync pull request." >&2
+            echo "Create a fine-grained PAT with Contents and Pull requests read/write access and store it as the VELDMUIS_SYNC_TOKEN repository secret." >&2
+            exit 1
+          fi
 
           branch="chore/nvidia-recipe-sync"
           title="NVIDIA 580xx recipe sync"

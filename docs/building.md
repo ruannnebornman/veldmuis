@@ -139,7 +139,9 @@ The `NVIDIA Recipe Watch` workflow compares the vendored recipes with the
 upstream AUR package repositories. When they differ, it mirrors the changed
 recipes into `packages/nvidia-580xx-src/<package_base>/`, updates
 `packages/nvidia-580xx-src/upstream-refs.txt`, and opens a pull request on a
-`chore/nvidia-recipe-sync` branch for review. The signed package
+`chore/nvidia-recipe-sync` branch for review. The pull request is opened with
+the `VELDMUIS_SYNC_TOKEN` repository secret so its checks run without an
+approval prompt. The signed package
 repository refresh then rebuilds and publishes the vendored recipes after that
 pull request is merged.
 
