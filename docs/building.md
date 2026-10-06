@@ -297,6 +297,19 @@ It compares:
 The workflow can force a refresh or simulate an NVIDIA build failure to test the
 known-good NVIDIA fallback path.
 
+## Package Build Cache
+
+The refresh workflow caches built packages keyed by a content hash of each
+package directory (`development/package-build-cache.sh`). On a refresh, packages
+whose inputs did not change are restored from the cache instead of being rebuilt;
+signing, repository assembly, and publication still stage and sign the full set.
+
+The cache is a GitHub Actions cache scoped to `main`. It does not invalidate when
+the builder base image changes, so unchanged packages keep their last built
+artifact across toolchain updates. To force a full rebuild, run the workflow with
+`rebuild_all` enabled, or bump `VELDMUIS_PACKAGE_BUILD_CACHE_SCHEMA` in
+`development/package-build-cache.sh` to invalidate every entry.
+
 ## Local VM And USB Helpers
 
 Rebuild changed packages, rebuild the local repo and ISO, then create a fresh
