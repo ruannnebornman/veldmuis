@@ -53,8 +53,8 @@ official NVIDIA `.run` installer referenced by each PKGBUILD.
 
 ## Recipe Sync Policy
 
-The vendored recipes are the build source, so there is no lock pull request to
-merge. The scheduled package refresh rebuilds and publishes whenever the
+The vendored recipes are the build source, so there is no dependency lock pull
+request to merge. The scheduled package refresh rebuilds and publishes whenever the
 vendored recipes or other package inputs change on `main`. The build,
 package-set, license, signature, and repository checks all run for every
 refresh. The payload scan runs and records review signals for the built package
@@ -64,12 +64,14 @@ and the recipes are reviewed when they are synced.
 
 Upstream recipe changes are surfaced by the scheduled `NVIDIA Recipe Watch`
 workflow. It runs `development/check-nvidia-recipe-drift.sh`, which compares the
-vendored recipes against the upstream AUR package repositories, and opens an
-issue when they differ. Syncing is manual: copy the changed files into
-`packages/nvidia-580xx-src/<package_base>/`, update
-`packages/nvidia-580xx-src/upstream-refs.txt`, review the diff, and let the
-package refresh rebuild. This keeps the build independent of AUR availability
-while still making upstream changes visible.
+vendored recipes against the upstream AUR package repositories. When they
+differ, `development/sync-nvidia-recipes.sh` mirrors the changed recipes into
+`packages/nvidia-580xx-src/<package_base>/` and updates
+`packages/nvidia-580xx-src/upstream-refs.txt`, and the workflow opens an assigned
+pull request on a `chore/nvidia-recipe-sync` branch for review. The package
+refresh rebuilds and publishes only after that pull request is merged. This
+keeps the build independent of AUR availability while still making upstream
+changes visible and reviewable.
 
 The signing key must never be passed to either package build container. The
 signing stage may read completed package artifacts but must not execute

@@ -136,10 +136,12 @@ package can be rebuilt byte-for-byte.
 ## NVIDIA Recipe Watch
 
 The `NVIDIA Recipe Watch` workflow compares the vendored recipes with the
-upstream AUR package repositories and opens an issue when they differ. To sync,
-copy the changed files into `packages/nvidia-580xx-src/<package_base>/`, update
-`packages/nvidia-580xx-src/upstream-refs.txt`, and commit. The signed package
-repository refresh then rebuilds and publishes the vendored recipes.
+upstream AUR package repositories. When they differ, it mirrors the changed
+recipes into `packages/nvidia-580xx-src/<package_base>/`, updates
+`packages/nvidia-580xx-src/upstream-refs.txt`, and opens an assigned pull
+request on a `chore/nvidia-recipe-sync` branch for review. The signed package
+repository refresh then rebuilds and publishes the vendored recipes after that
+pull request is merged.
 
 ## Build The Local Package Repository
 

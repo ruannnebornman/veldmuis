@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   issues: write
 
 concurrency:
@@ -25,6 +26,7 @@ jobs:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
           ref: refs/heads/main
 
@@ -43,23 +45,60 @@ jobs:
           set -euo pipefail
           ./development/check-nvidia-recipe-drift.sh --report "${VELDMUIS_RECIPE_DRIFT_REPORT}"
 
-      - name: Open drift issue when needed
+      - name: Open recipe sync pull request
         if: steps.drift.outputs.drift == 'true'
         shell: bash
         env:
           VELDMUIS_RECIPE_DRIFT_REPORT: ${{ runner.temp }}/veldmuis-nvidia-recipe-drift.md
         run: |
           set -euo pipefail
-          title="NVIDIA 580xx recipe drift detected"
-          existing="$(
-            gh issue list --state open --limit 100 --json number,title \
-              --jq '.[] | select(.title=="NVIDIA 580xx recipe drift detected") | .number' \
-              | head -n1
-          )"
-          if [[ -n "${existing}" ]]; then
-            echo "Open drift issue #${existing} already tracks this; leaving it in place."
+
+          branch="chore/nvidia-recipe-sync"
+          title="NVIDIA 580xx recipe sync"
+          body="${RUNNER_TEMP}/veldmuis-nvidia-recipe-sync-pr.md"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
+
+          git fetch --no-tags origin main
+          main_ref="$(git rev-parse FETCH_HEAD)"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            git fetch --no-tags origin "${branch}"
+            git checkout -B "${branch}" FETCH_HEAD
+            if ! git merge --no-edit --no-ff "${main_ref}"; then
+              git merge --abort || true
+              echo "The ${branch} branch conflicts with main; resolve it by hand." >&2
+              exit 1
+            fi
+          else
+            git checkout -B "${branch}" "${main_ref}"
+          fi
+
+          ./development/sync-nvidia-recipes.sh
+
+          git add -A packages/nvidia-580xx-src
+          if git diff --cached --quiet; then
+            echo "Vendored recipes already match upstream on ${branch}."
+          else
+            git commit -m "chore(nvidia): sync vendored 580xx recipes"
+            git push origin "HEAD:refs/heads/${branch}"
+          fi
+
+          if gh pr list --head "${branch}" --state open --json number --jq 'length' | grep -Eq '^[1-9]'; then
+            echo "A pull request for ${branch} is already open; leaving it in place."
             exit 0
           fi
-          gh issue create \
+
+          {
+            printf 'The scheduled NVIDIA Recipe Watch workflow found upstream recipe drift and mirrored the vendored recipes under `packages/nvidia-580xx-src` from the upstream AUR package repositories.\n\n'
+            printf 'Review the recipe diff, then merge to let the package refresh rebuild.\n\n'
+            cat "${VELDMUIS_RECIPE_DRIFT_REPORT}"
+          } > "${body}"
+
+          gh pr create \
+            --base main \
+            --head "${branch}" \
             --title "${title}" \
-            --body-file "${VELDMUIS_RECIPE_DRIFT_REPORT}"
+            --body-file "${body}" \
+            --assignee "${GITHUB_REPOSITORY_OWNER}"
