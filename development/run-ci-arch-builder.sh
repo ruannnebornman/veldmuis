@@ -214,8 +214,8 @@ run_package_build_stage() {
 
   local packager="${VELDMUIS_PACKAGER:-Veldmuis Linux <veldmuis@veldmuislinux.org>}"
 
-  run_as_builder "PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") ${container_support_root}/development/build-all-packages.sh"
-  chown_output_paths "${container_workspace}/packages"
+  run_as_builder "PACKAGER=$(shell_quote "${packager}") GNUPGHOME=$(shell_quote "${GNUPGHOME}") VELDMUIS_PACKAGE_BUILD_CACHE_ENABLE=$(shell_quote "${VELDMUIS_PACKAGE_BUILD_CACHE_ENABLE:-}") ${container_support_root}/development/build-all-packages.sh"
+  chown_output_paths "${container_workspace}/packages" "${container_workspace}/artifacts/package-build-cache"
 }
 
 run_nvidia_build_stage() {
@@ -388,6 +388,12 @@ run_container_stage() {
   if [[ "${stage}" == "packages" || "${stage}" == "nvidia" ]]; then
     docker_args+=(
       -e VELDMUIS_PACKAGER
+    )
+  fi
+
+  if [[ "${stage}" == "packages" ]]; then
+    docker_args+=(
+      -e VELDMUIS_PACKAGE_BUILD_CACHE_ENABLE="${VELDMUIS_PACKAGE_BUILD_CACHE_ENABLE:-}"
     )
   fi
 

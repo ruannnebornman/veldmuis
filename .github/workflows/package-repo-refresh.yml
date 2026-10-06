@@ -29,6 +29,11 @@ on:
         required: false
         type: boolean
         default: false
+      rebuild_all:
+        description: Ignore the package build cache and rebuild every package
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -132,6 +137,24 @@ jobs:
           set -euo pipefail
           echo "Package repo is current: ${{ steps.refresh_check.outputs.reason }}"
 
+      - name: Compute package build cache key
+        id: package_cache
+        if: steps.refresh_check.outputs.refresh_needed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.rebuild_all)
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="$(./development/package-build-cache.sh aggregate)"
+          echo "key=${key}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore package build cache
+        if: steps.package_cache.outputs.key != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: artifacts/package-build-cache
+          key: veldmuis-package-cache-${{ steps.package_cache.outputs.key }}
+          restore-keys: |
+            veldmuis-package-cache-
+
       - name: Build and sign package repo in isolated Arch containers
         if: steps.refresh_check.outputs.refresh_needed == 'true'
         shell: bash
@@ -139,6 +162,7 @@ jobs:
           CI_REPO_ROOT: ${{ github.workspace }}
           VELDMUIS_GPG_PRIVATE_KEY: ${{ secrets.VELDMUIS_GPG_PRIVATE_KEY }}
           VELDMUIS_GPG_FPR: ${{ secrets.VELDMUIS_GPG_FPR }}
+          VELDMUIS_PACKAGE_BUILD_CACHE_ENABLE: ${{ (github.event_name == 'workflow_dispatch' && inputs.rebuild_all) && 'false' || 'true' }}
         run: |
           set -euo pipefail
           ./development/run-ci-arch-builder.sh packages
@@ -233,6 +257,7 @@ jobs:
             echo
             echo "- Refresh needed: \`${{ steps.refresh_check.outputs.refresh_needed }}\`"
             echo "- Reason: ${{ steps.refresh_check.outputs.reason }}"
+            echo "- Package build cache key: \`${{ steps.package_cache.outputs.key || 'disabled' }}\`"
             echo "- Recipe source: \`local (packages/nvidia-580xx-src)\`"
             echo "- muis version: \`${muis_version}\`"
             echo "- Scan risk: \`${{ steps.nvidia_scan.outputs.risk }}\`"
