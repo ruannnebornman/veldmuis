@@ -258,9 +258,11 @@ run_nvidia_build_stage() {
 
   if (( nvidia_build_status != 0 )); then
     if ! is_true "${VELDMUIS_NVIDIA_ENABLE_FALLBACK:-0}"; then
+      echo "::error::NVIDIA package build failed; aborting so the published repository keeps its previous package set."
       die "NVIDIA package build failed and fallback is disabled"
     fi
 
+    echo "::warning::NVIDIA package build failed; restored the known-good package set and will publish it."
     echo "[run-ci-arch-builder] NVIDIA package build failed, restoring known-good NVIDIA package set"
     run_as_builder "PACKAGE_BASE_URL=$(shell_quote "${PACKAGE_BASE_URL:-}") VELDMUIS_NVIDIA_REF_MODE=$(shell_quote "${nvidia_ref_mode}") ${container_support_root}/development/restore-known-good-nvidia-packages.sh"
   fi

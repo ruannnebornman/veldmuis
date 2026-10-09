@@ -25,7 +25,7 @@ on:
         type: boolean
         default: false
       simulate_build_failure:
-        description: Simulate an NVIDIA build failure to test known-good fallback
+        description: Simulate an NVIDIA build failure to test the failure path
         required: false
         type: boolean
         default: false
@@ -64,7 +64,10 @@ jobs:
       PACKAGE_BASE_URL: ${{ vars.PACKAGE_BASE_URL }}
       VELDMUIS_PACKAGER: ${{ vars.VELDMUIS_PACKAGER }}
       VELDMUIS_PACKAGE_REFRESH_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && 'true' || 'false' }}
-      VELDMUIS_NVIDIA_ENABLE_FALLBACK: true
+      # A failed NVIDIA build fails the refresh so a stale known-good set is never
+      # published silently. GitHub emails the failure to watchers with Actions
+      # notifications enabled.
+      VELDMUIS_NVIDIA_ENABLE_FALLBACK: false
       VELDMUIS_SIMULATE_BUILD_FAILURE: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_build_failure && 'true' || 'false' }}
     steps:
       - name: Check out source
@@ -266,7 +269,7 @@ jobs:
             echo "- Published source commit: \`${{ steps.refresh_check.outputs.published_source_commit || 'unavailable' }}\`"
             echo "- Package repo: ${PACKAGE_BASE_URL}"
             echo "- Package bucket: \`${CF_R2_PACKAGE_BUCKET}\`"
-            echo "- Fallback enabled: \`${VELDMUIS_NVIDIA_ENABLE_FALLBACK}\`"
+            echo "- NVIDIA fallback enabled: \`${VELDMUIS_NVIDIA_ENABLE_FALLBACK}\`"
             echo "- Simulated NVIDIA build failure: \`${VELDMUIS_SIMULATE_BUILD_FAILURE}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
 
