@@ -1,6 +1,6 @@
 pkgname=veldmuis-muis
 pkgver=1.6.1
-pkgrel=1
+pkgrel=2
 pkgdesc="muis terminal emulator (prebuilt signed upstream release)"
 arch=("x86_64")
 url="https://github.com/ruannnebornman/muis"
@@ -24,9 +24,8 @@ package() {
 
   install -Dm755 muis "${pkgdir}/usr/bin/muis"
   install -Dm755 muis-worker "${pkgdir}/usr/bin/muis-worker"
-  if [[ -f muis-notify ]]; then
-    install -Dm755 muis-notify "${pkgdir}/usr/bin/muis-notify"
-  fi
+  install -Dm755 muis-notify "${pkgdir}/usr/bin/muis-notify"
+  install -Dm755 muis-agent "${pkgdir}/usr/bin/muis-agent"
   install -Dm644 muis.desktop "${pkgdir}/usr/share/applications/muis.desktop"
   install -Dm644 icons/muis.png \
     "${pkgdir}/usr/share/icons/hicolor/512x512/apps/muis.png"
