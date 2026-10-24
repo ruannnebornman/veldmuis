@@ -1,5 +1,5 @@
 # Upstream AUR commits that the vendored recipes were copied from.
 # Update this file together with packages/nvidia-580xx-src/<base> when syncing.
-nvidia-580xx-utils 29eca3400a1143e09a714d467783f4d119c4bb02
-lib32-nvidia-580xx-utils bbe7b771c897f78e518ab4453b0bc9210ef2f201
-nvidia-580xx-settings a5f3d6e5584376722e4921c6a91aaca4ca762cf2
+nvidia-580xx-utils 0b45a07013d6cc1d19dbf61c110f9b97d6fc429b
+lib32-nvidia-580xx-utils 489271acfd01c91bc07201300e6b63f3d2a8e2ba
+nvidia-580xx-settings 93bae6d551ec308b3dca6bcd8c1ad18d332c967d
