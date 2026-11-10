@@ -11,6 +11,7 @@ usb_device="${USB_DEVICE:-}"
 dd_bs="${DD_BS:-4M}"
 sudo_cmd=(sudo)
 makepkg_config_override=""
+force_usb_write=0
 
 log() {
   printf '[rebuild-iso-usb] %s\n' "$*"
@@ -57,8 +58,7 @@ EOF
 usage() {
   cat <<'EOF'
 Usage:
-  rebuild-iso-usb.sh
-  rebuild-iso-usb.sh veldmuis-branding veldmuis-desktop-kde
+  rebuild-iso-usb.sh [--force] [PACKAGE ...]
 
 Behavior:
   - rebuilds the listed packages with makepkg, or auto-detects changed package
@@ -66,7 +66,12 @@ Behavior:
   - rebuilds the local Veldmuis repo
   - rebuilds the ISO
   - keeps only a rolling window of local archiso build trees and ISOs
-  - writes the newest ISO to a USB disk
+  - shows the target device, requires typing its path, and then writes the
+    newest ISO to it
+
+Options:
+  --force  Allow writing to a device that does not report itself as removable.
+           Some USB bridges report removable=0; use this only when certain.
 
 Environment overrides:
   USB_DEVICE  Explicit block device path, for example /dev/sda
@@ -146,6 +151,29 @@ show_target_device() {
   lsblk -o NAME,SIZE,TYPE,MODEL,TRAN,HOTPLUG,MOUNTPOINTS "${usb_device}"
 }
 
+device_is_removable() {
+  local device="$1"
+  local disk=""
+
+  disk="$(lsblk -no PKNAME "${device}" 2>/dev/null | head -n 1)"
+  if [[ -z "${disk}" ]]; then
+    disk="$(basename "$(readlink -f "${device}")")"
+  fi
+
+  [[ -r "/sys/block/${disk}/removable" ]] || return 1
+  [[ "$(cat "/sys/block/${disk}/removable")" == "1" ]]
+}
+
+confirm_usb_device() {
+  local typed=""
+
+  printf '[rebuild-iso-usb] Type the target device path to confirm (%s): ' \
+    "${usb_device}" >&2
+  IFS= read -r typed || typed=""
+  [[ "${typed}" == "${usb_device}" ]] || \
+    die "Device confirmation did not match: ${typed}"
+}
+
 unmount_usb_partitions() {
   local -a partitions=()
 
@@ -157,18 +185,31 @@ unmount_usb_partitions() {
 
 main() {
   local -a package_targets=()
+  local arg
   local iso_path
 
   if (( EUID == 0 )); then
     die "Do not run this script with sudo. Run it as your normal user; it will use sudo only for the ISO write step."
   fi
 
-  case "${1:-}" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
-  esac
+  for arg in "$@"; do
+    case "${arg}" in
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      --force)
+        force_usb_write=1
+        ;;
+      -*)
+        usage >&2
+        die "Unsupported option: ${arg}"
+        ;;
+      *)
+        package_targets+=("${arg}")
+        ;;
+    esac
+  done
 
   require_cmd makepkg
   require_cmd lsblk
@@ -184,9 +225,7 @@ main() {
   trap cleanup EXIT
   setup_askpass_support
 
-  if (($# > 0)); then
-    package_targets=("$@")
-  else
+  if ((${#package_targets[@]} == 0)); then
     mapfile -t package_targets < <(collect_changed_packages | awk '!seen[$0]++')
   fi
 
@@ -214,6 +253,16 @@ main() {
 
   log "Target USB device: ${usb_device}"
   show_target_device
+
+  if ! device_is_removable "${usb_device}"; then
+    if (( force_usb_write == 1 )); then
+      log "WARNING: ${usb_device} is not marked removable; continuing because --force was supplied."
+    else
+      die "${usb_device} is not marked removable; refusing to write. Use --force only if you are certain."
+    fi
+  fi
+
+  confirm_usb_device
 
   log "Unmounting partitions on ${usb_device}"
   unmount_usb_partitions
