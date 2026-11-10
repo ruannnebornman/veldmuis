@@ -1,6 +1,6 @@
 pkgname=veldmuis-common
 pkgver=20260305
-pkgrel=5
+pkgrel=6
 pkgdesc="Common user-facing metapackage for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -10,6 +10,7 @@ depends=(
   "fuse2"
   "bash-completion"
   "fish"
+  "veldmuis-muis"
   "nano"
   "git"
   "openssh"

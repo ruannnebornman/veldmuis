@@ -1,8 +1,8 @@
 [General]
 AccentColor=240,176,48
 LastUsedCustomAccentColor=240,176,48
-TerminalApplication=konsole
-TerminalService=org.kde.konsole.desktop
+TerminalApplication=muis
+TerminalService=muis.desktop
 
 [KDE]
 DefaultDarkLookAndFeel=org.veldmuis.desktop
