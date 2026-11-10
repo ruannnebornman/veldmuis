@@ -22,6 +22,10 @@ with real payloads include release files, keyring files, mirror tooling, boot
 hooks, installer configuration, multimedia defaults, Syncthing integration, and
 branding assets.
 
+`veldmuis-release` installs `/etc/os-release`, which takes precedence over
+`/usr/lib/os-release` under `os-release(5)`. The `/usr/lib/os-release` file
+remains the Arch `filesystem` file; tools should read `/etc/os-release` first.
+
 ## Repository Layer
 
 `development/build-local-repo.sh` copies the latest built packages into:
