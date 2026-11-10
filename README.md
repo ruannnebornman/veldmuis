@@ -95,7 +95,7 @@ an unlisted channel.
 The current supported install target requires:
 
 - An x86_64 computer with UEFI firmware.
-- At least 2 GiB of RAM and 12 GiB of available storage.
+- At least 8 GiB of RAM and 12 GiB of available storage.
 - A working internet connection throughout installation.
 - Secure Boot disabled.
 - A backup of data that could be affected by partitioning.

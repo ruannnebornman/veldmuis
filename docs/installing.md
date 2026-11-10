@@ -11,7 +11,7 @@ important data before changing disk partitions.
 
 - An x86_64 computer.
 - UEFI firmware. BIOS and legacy boot are not supported.
-- At least 2 GiB of RAM and 12 GiB of available storage. These are installer
+- At least 8 GiB of RAM and 12 GiB of available storage. These are installer
   minimums; normal desktop use needs additional capacity.
 - A working internet connection throughout installation.
 - A USB drive or other bootable medium large enough for the ISO.
