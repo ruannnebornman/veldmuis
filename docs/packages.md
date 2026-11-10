@@ -62,6 +62,7 @@ xfsprogs
 ```text
 fuse2
 bash-completion
+fish
 nano
 git
 openssh
@@ -76,6 +77,7 @@ noto-fonts-emoji
 ```
 
 `fuse2` provides the legacy `libfuse.so.2` runtime required by many AppImages.
+`fish` is the default interactive shell configured by the installer.
 
 ## Boot Policy
 
