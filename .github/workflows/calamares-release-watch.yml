@@ -1,0 +1,88 @@
+name: Calamares Release Watch
+
+on:
+  schedule:
+    # 11:11 Africa/Johannesburg. GitHub cron uses UTC.
+    - cron: "11 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: veldmuis-calamares-release-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Check upstream Calamares releases
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: refs/heads/main
+
+      - name: Check repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./development/check-repo-hygiene.sh
+
+      - name: Compare upstream release to the pinned Calamares version
+        id: calamares
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          latest="$(gh api repos/calamares/calamares/releases/latest --jq '.tag_name' | sed 's/^v//')"
+          pinned="$(awk -F= '$1 == "pkgver" { print $2; exit }' packages/calamares/PKGBUILD)"
+
+          [[ -n "${latest}" ]] || {
+            echo "No upstream Calamares release was found; nothing to compare."
+            exit 0
+          }
+          [[ -n "${pinned}" ]] || {
+            echo "The pinned Calamares version is missing from the PKGBUILD." >&2
+            exit 1
+          }
+
+          echo "latest=${latest}" >> "${GITHUB_OUTPUT}"
+          echo "pinned=${pinned}" >> "${GITHUB_OUTPUT}"
+          if [[ "${latest}" == "${pinned}" ]]; then
+            echo "The pinned Calamares version (${pinned}) matches the latest release."
+            echo "stale=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Latest Calamares release ${latest} differs from pinned ${pinned}."
+            echo "stale=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Open an upstream review issue
+        if: steps.calamares.outputs.stale == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.calamares.outputs.latest }}
+          PINNED: ${{ steps.calamares.outputs.pinned }}
+        run: |
+          set -euo pipefail
+
+          title="Calamares ${LATEST} is available"
+          if gh issue list --state open --search "${title} in:title" --json title --jq '.[].title' | grep -Fxq "${title}"; then
+            echo "An open issue already tracks ${LATEST}."
+            exit 0
+          fi
+
+          body="$(mktemp)"
+          {
+            printf 'The pinned Calamares version is `%s`, but the latest upstream release is `%s`.\n\n' "${PINNED}" "${LATEST}"
+            printf 'Review the upstream release and the local patches under `packages/calamares/` before bumping `pkgver`.\n'
+          } > "${body}"
+          gh issue create --title "${title}" --body-file "${body}"

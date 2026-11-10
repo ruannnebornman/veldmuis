@@ -7,3 +7,12 @@ After=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/veldmuis-refresh-arch-mirrors
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+ReadWritePaths=/etc/pacman.d
