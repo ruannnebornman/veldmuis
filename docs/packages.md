@@ -168,6 +168,11 @@ the published `muis_version` to decide when to publish.
 including wallpaper, KDE defaults, wallet defaults, and the Plasma desktop
 layout package.
 
+KWallet is disabled by default through `/etc/xdg/kwalletrc`. Veldmuis expects
+secret storage to be handled by `gpg-agent`/`ssh-agent`; users who prefer
+KWallet can enable it in System Settings. The disabled default is intentional
+so that a missing or locked wallet does not block login or prompt unexpectedly.
+
 ## Optional Application Groups
 
 Optional groups are installed only when selected in the installer or installed
