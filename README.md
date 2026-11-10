@@ -103,6 +103,11 @@ The current supported install target requires:
 BIOS and legacy boot are not supported. The listed RAM and storage values are
 installer minimums, not recommended capacity for normal desktop use.
 
+Veldmuis does not currently ship a Microsoft-signed shim or support Secure
+Boot; disabling Secure Boot is required, not optional. The installer is a
+network installer, so a working internet connection is required and there is no
+offline image.
+
 Read [Installing Veldmuis](docs/installing.md) before writing the ISO or
 changing disk partitions.
 

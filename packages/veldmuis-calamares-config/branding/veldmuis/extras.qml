@@ -336,7 +336,7 @@ Rectangle {
 
                     Text {
                         width: parent.width
-                        text: qsTr("Code - OSS")
+                        text: qsTr("Visual Studio Code")
                         color: "#c9b8aa"
                         font.pixelSize: 14
                         elide: Text.ElideRight

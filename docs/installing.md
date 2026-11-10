@@ -17,8 +17,11 @@ important data before changing disk partitions.
 - A USB drive or other bootable medium large enough for the ISO.
 - A backup of any data that must survive repartitioning.
 
-Secure Boot is not part of the current supported target. Disable Secure Boot in
-the system firmware before booting the installer.
+Secure Boot is not part of the current supported target. Veldmuis does not
+currently ship a Microsoft-signed shim or support Secure Boot; disabling it in
+the system firmware is required, not optional. The installer is a network
+installer, so a working internet connection is required and there is no offline
+image.
 
 ## 1. Download And Verify The ISO
 

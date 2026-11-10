@@ -58,6 +58,13 @@ signed metadata have built successfully. A later external publication failure
 can still consume a tag; recovery uses the next valid tag rather than moving or
 reusing the failed one.
 
+### Failed Publication
+
+If a build or publication step fails after the release tag is created, do not
+move or reuse the tag. Fix the cause, confirm that no GitHub release exists for
+the failed tag, and publish the next valid tag. Release-specific paths are never
+reused.
+
 ## Current Workflow Shape
 
 At a high level, the workflow:
@@ -88,8 +95,9 @@ not receive bucket-administration credentials or modify bucket configuration.
 ## Protected Release Environment
 
 The hosted environment must be named `release` and restricted to `main`.
-Required reviewers may be enabled when practical for the maintainer model. Its
-secret inventory is limited to:
+Required reviewers are not enabled in the current solo-maintainer setup. The
+merge to `main` is the publication gate; this is a deliberate trade-off and is
+documented in `SECURITY.md`. Its secret inventory is limited to:
 
 ```text
 VELDMUIS_GPG_PRIVATE_KEY
@@ -108,6 +116,13 @@ maintainer-access change.
 The two `CF_R2_*` credential pairs use Object Read & Write access scoped to
 their respective buckets. Do not grant the release environment administrative
 bucket permissions.
+
+### Watcher Credentials
+
+The scheduled `muis Release Watch` and `NVIDIA Recipe Watch` workflows use the
+`VELDMUIS_SYNC_TOKEN` repository secret: a fine-grained PAT with Contents and
+Pull requests write access. It is long-lived; rotate it on a schedule and keep
+it scoped to this repository.
 
 ## Cloudflare R2 Bucket Configuration
 
@@ -177,7 +192,12 @@ The currently published release retains the checksum, signed manifest and
 signature, package inventory, SPDX SBOM, build inputs, and the exact NVIDIA
 recipe manifest. Release notes retain authenticated metadata for historical releases,
 but their object-storage ISO links expire when the next release prunes the old
-prefix. Release-specific paths are never reused.
+prefix. Release-specific paths are never reused. The ISO bytes themselves are
+not retained after pruning.
+
+The SPDX file is a package inventory, not a full SBOM: it records package
+names, versions, and source repositories, with `NOASSERTION` for licenses and
+download locations.
 
 ## Manifest And Build Inputs
 
