@@ -442,17 +442,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Remove previous installer releases
-        shell: bash
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          VELDMUIS_RELEASE_TAG: ${{ needs.validate-release.outputs.release_tag }}
-        run: |
-          set -euo pipefail
-          ./development/prune-release-storage.sh
-
       - name: Publish immutable network installer
         shell: bash
         env:
@@ -640,6 +629,17 @@ jobs:
           VELDMUIS_RELEASE_KEYRING="./packages/veldmuis-keyring/veldmuis.gpg" \
           VELDMUIS_REQUIRED_SIGNED_RELEASE_TAG="${RELEASE_TAG}" \
           ./development/check-release-policy.sh --remote
+
+      - name: Remove previous installer releases
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CF_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CF_R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          VELDMUIS_RELEASE_TAG: ${{ needs.validate-release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          ./development/prune-release-storage.sh
 
       - name: Write release summary
         shell: bash

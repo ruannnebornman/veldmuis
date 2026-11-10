@@ -217,14 +217,14 @@ run_aws() {
   aws "$@"
 }
 
-sync_repo_prefix() {
+upload_repo_payloads() {
   local repo_name="$1"
   local source_dir="${stage_dir}/${repo_name}"
   local target="s3://${bucket}/${repo_name}"
 
   # Package filenames can be reused when a signed package is rebuilt with the
-  # same upstream pkgver/pkgrel. Force-copy payloads before syncing deletes so
-  # package blobs and detached signatures cannot drift apart.
+  # same upstream pkgver/pkgrel. Force-copy payloads before touching the
+  # database so package blobs and detached signatures cannot drift apart.
   run_aws s3 cp "${source_dir}" "${target}" \
     --recursive \
     --exclude "${repo_name}.db*" \
@@ -232,14 +232,51 @@ sync_repo_prefix() {
     --cache-control "${repo_cache_control}" \
     --endpoint-url "${endpoint}" \
     --only-show-errors
+}
 
+prune_repo_payloads() {
+  local repo_name="$1"
+  local source_dir="${stage_dir}/${repo_name}"
+  local target="s3://${bucket}/${repo_name}"
+
+  # Remove payloads that the new database no longer references. This runs only
+  # after the new database and signatures have been uploaded and verified, so a
+  # failed metadata upload leaves the previous database and its payloads intact.
   run_aws s3 sync "${source_dir}" "${target}" \
     --exclude "${repo_name}.db*" \
     --exclude "${repo_name}.files*" \
     --cache-control "${repo_cache_control}" \
+    --size-only \
     --delete \
     --endpoint-url "${endpoint}" \
     --only-show-errors
+}
+
+verify_repo_metadata_bucket() {
+  local repo_name="$1"
+  local file_name
+
+  for file_name in \
+    "${repo_name}.db" \
+    "${repo_name}.db.sig" \
+    "${repo_name}.db.tar.gz" \
+    "${repo_name}.db.tar.gz.sig" \
+    "${repo_name}.files" \
+    "${repo_name}.files.sig" \
+    "${repo_name}.files.tar.gz" \
+    "${repo_name}.files.tar.gz.sig"
+  do
+    verify_bucket_object "${repo_name}/os/${arch}/${file_name}"
+  done
+}
+
+publish_repo() {
+  local repo_name="$1"
+
+  upload_repo_payloads "${repo_name}"
+  upload_repo_metadata "${repo_name}"
+  verify_repo_metadata_bucket "${repo_name}"
+  prune_repo_payloads "${repo_name}"
 }
 
 upload_repo_metadata() {
@@ -361,10 +398,8 @@ main() {
   log "Package base URL: ${package_base}"
   log "Dry run: ${dry_run}"
 
-  sync_repo_prefix "${core_repo}"
-  sync_repo_prefix "${extra_repo}"
-  upload_repo_metadata "${core_repo}"
-  upload_repo_metadata "${extra_repo}"
+  publish_repo "${core_repo}"
+  publish_repo "${extra_repo}"
   upload_file "${stage_dir}/index.html" "index.html" "${root_cache_control}"
   if [[ -f "${stage_dir}/${nvidia_manifest_name}" ]]; then
     upload_file "${stage_dir}/${nvidia_manifest_name}" "${nvidia_manifest_name}" "${metadata_cache_control}"
