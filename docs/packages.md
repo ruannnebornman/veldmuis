@@ -62,6 +62,7 @@ xfsprogs
 ```text
 fuse2
 bash-completion
+fish
 nano
 git
 openssh
@@ -76,6 +77,7 @@ noto-fonts-emoji
 ```
 
 `fuse2` provides the legacy `libfuse.so.2` runtime required by many AppImages.
+`fish` is the default interactive shell configured by the installer.
 
 ## Boot Policy
 
@@ -126,6 +128,11 @@ Current non-defaults:
 - Syncthing is optional through `veldmuis-sync`.
 - Yakuake and Spice guest tools are not in the default KDE package set.
 
+Veldmuis does not force a CPU governor or a PowerDevil dim/suspend policy. On
+first boot, `veldmuis-power-profile.service` sets the
+`power-profiles-daemon` profile to `performance` once; after that the user
+controls the profile and PowerDevil settings in System Settings.
+
 ## Multimedia
 
 `veldmuis-multimedia` provides the default audio/video stack:
@@ -167,6 +174,11 @@ the published `muis_version` to decide when to publish.
 `veldmuis-branding` owns Veldmuis visual defaults and KDE configuration assets,
 including wallpaper, KDE defaults, wallet defaults, and the Plasma desktop
 layout package.
+
+KWallet is disabled by default through `/etc/xdg/kwalletrc`. Veldmuis expects
+secret storage to be handled by `gpg-agent`/`ssh-agent`; users who prefer
+KWallet can enable it in System Settings. The disabled default is intentional
+so that a missing or locked wallet does not block login or prompt unexpectedly.
 
 ## Optional Application Groups
 
