@@ -155,6 +155,14 @@ request is opened with the `VELDMUIS_SYNC_TOKEN` repository secret so its checks
 run without an approval prompt. The package refresh rebuilds and publishes
 `veldmuis-muis` after that pull request is merged.
 
+## Calamares Release Watch
+
+Calamares is not in the Arch repositories, so `packages/calamares/` is a
+vendored package with local patches. The `Calamares Release Watch` workflow
+compares the pinned `pkgver` with the latest upstream release and opens an issue
+when they differ. Review the upstream release and the local patches before
+bumping the version.
+
 ## Build The Local Package Repository
 
 After native packages and NVIDIA artifacts exist, build signed local repositories:

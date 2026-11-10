@@ -211,11 +211,16 @@ latest_built_package() {
 install_built_dependencies() {
   local package_base="$1"
   local build_dir="$2"
+  local checksum_file
   local package_path
 
   case "${package_base}" in
     nvidia-580xx-utils)
       package_path="$(latest_built_package "${build_dir}" "nvidia-580xx-utils")"
+      checksum_file="${build_dir}/.veldmuis-nvidia-utils.sha256"
+      sha256sum "${package_path}" | awk '{ print $1 }' > "${checksum_file}"
+      chmod 644 "${checksum_file}"
+      log "Recorded build-dependency checksum: $(cat "${checksum_file}")"
       log "Installing build dependency from local artifact: $(basename "${package_path}")"
       if [[ -n "${dependency_installer}" ]]; then
         sudo "${dependency_installer}"
