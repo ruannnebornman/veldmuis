@@ -62,6 +62,7 @@ xfsprogs
 ```text
 fuse2
 bash-completion
+fish
 nano
 git
 openssh
@@ -76,6 +77,7 @@ noto-fonts-emoji
 ```
 
 `fuse2` provides the legacy `libfuse.so.2` runtime required by many AppImages.
+`fish` is the default interactive shell configured by the installer.
 
 ## Boot Policy
 
@@ -167,6 +169,11 @@ the published `muis_version` to decide when to publish.
 `veldmuis-branding` owns Veldmuis visual defaults and KDE configuration assets,
 including wallpaper, KDE defaults, wallet defaults, and the Plasma desktop
 layout package.
+
+KWallet is disabled by default through `/etc/xdg/kwalletrc`. Veldmuis expects
+secret storage to be handled by `gpg-agent`/`ssh-agent`; users who prefer
+KWallet can enable it in System Settings. The disabled default is intentional
+so that a missing or locked wallet does not block login or prompt unexpectedly.
 
 ## Optional Application Groups
 
