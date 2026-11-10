@@ -230,11 +230,12 @@ check_workflow_action_pins() {
 
   while IFS= read -r workflow; do
     while IFS= read -r line; do
-      action="$(sed -E 's/^[[:space:]]*-[[:space:]]+uses:[[:space:]]+([^[:space:]#]+).*/\1/' <<<"${line}")"
+      action="$(sed -E 's/^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+([^[:space:]#]+).*/\2/' <<<"${line}")"
+      [[ -n "${action}" ]] || continue
       [[ "${action}" == ./* ]] && continue
       [[ "${action}" =~ @([0-9a-f]{40})$ ]] || \
         die "Workflow action is not pinned to a full commit SHA: ${workflow#"${repo_root}"/}: ${action}"
-    done < <(grep -E '^[[:space:]]*-[[:space:]]+uses:' "${workflow}" || true)
+    done < <(grep -E '^[[:space:]]*(-[[:space:]]+)?uses:' "${workflow}" || true)
   done < <(find "${repo_root}/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print)
 
   log "Workflow actions are pinned to immutable commit SHAs"
