@@ -63,6 +63,7 @@ xfsprogs
 fuse2
 bash-completion
 fish
+veldmuis-muis
 nano
 git
 openssh
@@ -150,21 +151,20 @@ It also installs the Veldmuis `mpv` configuration.
 
 ## Terminal
 
-Veldmuis ships no terminal emulator in its metapackages. The Calamares
-installer always provides `konsole`, and Veldmuis sets it as the KDE default
-terminal. Manual `veldmuis-desktop` installs outside the installer need a
-terminal emulator of choice.
+Veldmuis uses `muis` as its terminal. `veldmuis-muis` is part of
+`veldmuis-common`, so the live image and every default install include it. KDE's
+default terminal is set to `muis`, and the Calamares installer installs it
+explicitly. `konsole` is not installed by default; it remains available from
+the Arch repositories as an emergency fallback.
 
-`veldmuis-muis` is a separate, opt-in package for the muis terminal. It is not
-part of any metapackage and installs nothing by default; install it with
-`pacman -S veldmuis-muis`. The package repackages the prebuilt binaries from the
-latest signed muis GitHub release. `development/resolve-muis-release.sh` verifies
-the release signature against the vendored key in `development/muis-keyring/`
-before pinning the version. The scheduled `muis Release Watch` workflow runs that
-resolver and opens a pull request when the pin changes; the pull request is
-opened with the `VELDMUIS_SYNC_TOKEN` repository secret (a fine-grained PAT with
-Contents and Pull requests read/write access) instead of the workflow token, so
-its pull-request checks run without an approval prompt. Merging it triggers the
+`veldmuis-muis` repackages the prebuilt binaries from the latest signed muis
+GitHub release. `development/resolve-muis-release.sh` verifies the release
+signature against the vendored key in `development/muis-keyring/` before pinning
+the version. The scheduled `muis Release Watch` workflow runs that resolver and
+opens a pull request when the pin changes; the pull request is opened with the
+`VELDMUIS_SYNC_TOKEN` repository secret (a fine-grained PAT with Contents and
+Pull requests read/write access) instead of the workflow token, so its
+pull-request checks run without an approval prompt. Merging it triggers the
 package refresh, which rebuilds and publishes.
 `development/check-package-repo-refresh.sh` compares the pinned recipe against
 the published `muis_version` to decide when to publish.

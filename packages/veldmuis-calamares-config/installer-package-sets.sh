@@ -76,7 +76,7 @@ declare -ag veldmuis_installer_development_packages=(
   veldmuis-development
 )
 
-# The installer always provides the KDE terminal.
+# The installer always provides the Veldmuis terminal.
 declare -ag veldmuis_installer_terminal_packages=(
-  konsole
+  veldmuis-muis
 )

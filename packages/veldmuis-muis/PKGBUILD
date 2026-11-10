@@ -1,6 +1,6 @@
 pkgname=veldmuis-muis
 pkgver=1.7.0
-pkgrel=2
+pkgrel=3
 pkgdesc="muis terminal emulator (prebuilt signed upstream release)"
 arch=("x86_64")
 url="https://github.com/ruannnebornman/muis"
@@ -21,6 +21,13 @@ sha256sums=("ccffabd5351817c34744c1d7d87a4537daea57ca1727126367fc2cb962d26ebd")
 
 package() {
   cd "${srcdir}/muis-${pkgver}-x86_64-linux"
+
+  if ! grep -q '^GenericName=' muis.desktop; then
+    sed -i '/^\[Desktop Entry\]/a GenericName=Terminal' muis.desktop
+  fi
+  if ! grep -q '^Keywords=' muis.desktop; then
+    sed -i '/^\[Desktop Entry\]/a Keywords=terminal;console;shell;command;command-line;' muis.desktop
+  fi
 
   install -Dm755 muis "${pkgdir}/usr/bin/muis"
   install -Dm755 muis-worker "${pkgdir}/usr/bin/muis-worker"
