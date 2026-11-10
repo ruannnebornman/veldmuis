@@ -1,0 +1,15 @@
+[Unit]
+Description=Apply the default Veldmuis power profile once
+After=power-profiles-daemon.service
+Wants=power-profiles-daemon.service
+ConditionPathExists=!/var/lib/veldmuis/power-profile-initialized
+
+[Service]
+Type=oneshot
+StateDirectory=veldmuis
+ExecStart=/bin/sh -c 'powerprofilesctl list | grep -q performance && powerprofilesctl set performance || true'
+ExecStartPost=/usr/bin/touch /var/lib/veldmuis/power-profile-initialized
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

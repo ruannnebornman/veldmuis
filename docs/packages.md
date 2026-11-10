@@ -126,6 +126,11 @@ Current non-defaults:
 - Syncthing is optional through `veldmuis-sync`.
 - Yakuake and Spice guest tools are not in the default KDE package set.
 
+Veldmuis does not force a CPU governor or a PowerDevil dim/suspend policy. On
+first boot, `veldmuis-power-profile.service` sets the
+`power-profiles-daemon` profile to `performance` once; after that the user
+controls the profile and PowerDevil settings in System Settings.
+
 ## Multimedia
 
 `veldmuis-multimedia` provides the default audio/video stack:
