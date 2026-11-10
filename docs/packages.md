@@ -75,6 +75,7 @@ htop
 btop
 noto-fonts
 noto-fonts-emoji
+adobe-source-han-sans-jp-fonts
 ```
 
 `fuse2` provides the legacy `libfuse.so.2` runtime required by many AppImages.
@@ -97,6 +98,7 @@ entries after kernel package transactions.
 `veldmuis-displaymanager` currently uses Plasma Login Manager:
 
 ```text
+veldmuis-base
 plasma-login-manager
 polkit
 veldmuis-branding
@@ -202,11 +204,18 @@ qbittorrent
 `veldmuis-sync`:
 
 ```text
+bash
+firefox
 syncthing
 ```
 
 `veldmuis-sync` also installs Syncthing user-service integration, a setup
 helper, and a one-time editable Firefox bookmark for the local Syncthing UI.
+
+`veldmuis-sync` is opt-in. When installed, its install script adds a
+`syncthing.localhost` alias to `/etc/hosts` and adds the Firefox bookmark. Those
+changes are not reverted when the package is removed, and a Firefox update may
+overwrite the bookmark. Users who do not install the group are not affected.
 
 `veldmuis-development`:
 
@@ -214,6 +223,9 @@ helper, and a one-time editable Firefox bookmark for the local Syncthing UI.
 code
 github-cli
 ```
+
+`code` is the proprietary Visual Studio Code package from the Arch
+repositories; it is not the open-source Code - OSS build.
 
 ## Graphics Choices
 

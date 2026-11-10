@@ -83,6 +83,8 @@ The current automation:
   repository checkout, so the build does not depend on AUR availability.
 - Builds the packages without the Veldmuis signing key.
 - Validates the expected package names and license metadata.
+- Records and verifies the built `nvidia-580xx-utils` checksum before the root
+  helper installs it as a build dependency.
 - Records the recipe content hash and pre-build source-input hashes.
 - Signs packages only in a later network-disabled signing stage.
 - Publishes the signed package set through `veldmuis-extra`.
@@ -92,8 +94,8 @@ The current automation:
 - Rebuilds and publishes automatically when the vendored recipes or other
   package inputs change on `main`.
 - Runs a scheduled `NVIDIA Recipe Watch` job that compares the vendored recipes
-  against the upstream AUR package repositories and opens an issue when they
-  differ. Syncing a recipe change is a reviewed commit.
+  against the upstream AUR package repositories and opens a pull request when
+  they differ. Syncing a recipe change is a reviewed pull request.
 - Runs a payload scan over the built package set and records its findings. The
   scan is a tripwire, not a gate: the NVIDIA packages always carry setuid and
   privileged integration paths, so it does not block publishing.
@@ -106,9 +108,10 @@ reproducible from this repository and makes an upstream change reviewable, not
 trusted by itself. DKMS rebuild failures and rolling-kernel incompatibility
 remain possible.
 
-The vendored recipe is a snapshot, not a standing trust decision. Review the
-`NVIDIA Recipe Watch` diff before syncing an upstream change, and treat the
-payload scan findings as review signals rather than proof. The isolated build,
+The vendored recipe is a snapshot, not a standing trust decision. Treat the
+`NVIDIA Recipe Watch` pull request as a security review, not a routine
+dependency bump, and treat the payload scan findings as review signals rather
+than proof. The isolated build,
 package-set and license validation, and network-disabled signing controls still
 run for every build.
 

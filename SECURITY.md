@@ -62,6 +62,10 @@ The release and package workflows sign:
 The manifest has a detached OpenPGP signature. The ISO does not have a separate
 detached signature; its SHA-256 digest is authenticated by the signed manifest.
 
+The signed manifest is the release trust anchor. Release tags are created by the
+hosted workflow and are not separately GPG-signed; verify the manifest
+signature, not the tag object.
+
 ## Verify The Current ISO
 
 First obtain the public key from the source repository and confirm its
@@ -123,7 +127,9 @@ For a historical release:
 After a new installer release is published and its channel is verified, the
 publication workflow removes older release-specific objects. Historical tags,
 signed manifests, checksums, and other authenticated metadata remain on the
-corresponding GitHub release. Release-specific paths are never reused.
+corresponding GitHub release. Release-specific paths are never reused. The ISO
+bytes themselves are not retained; a historical release remains verifiable as
+signed metadata, but its ISO object is not available from the public origin.
 
 ## Package Repository Trust
 
@@ -146,6 +152,12 @@ Arch repositories retain their upstream-compatible database-signature policy.
 Pacman checks package and repository signatures automatically under this policy;
 do not bypass it with `SigLevel = Never` or an untrusted replacement keyring.
 
+Arch repositories keep `DatabaseOptional` because Arch does not publish signed
+repository databases. Arch package signatures are still required, so a
+compromised mirror or HTTPS path can select older, validly signed packages but
+cannot inject an unsigned package. Veldmuis repositories require both package
+and database signatures.
+
 ## Vendored NVIDIA Packages
 
 The NVIDIA 580xx packages are built from recipes vendored under
@@ -156,8 +168,8 @@ build-input manifests.
 
 The NVIDIA build stage does not receive the signing key. Signing happens later in
 a network-disabled stage after artifact validation. A scheduled drift watcher
-compares the vendored recipes against the upstream AUR repositories and opens an
-issue when they differ. See
+compares the vendored recipes against the upstream AUR repositories and opens a
+pull request when they differ. See
 [NVIDIA 580xx Package Flow](development/nvidia-580xx-package-flow.md) and
 [NVIDIA 580xx Support](docs/nvidia.md).
 
@@ -168,6 +180,15 @@ Normal signing uses its signing subkey. The helpers under
 `development/key-rotation/` are limited to encrypted backup, verify/restore,
 and signing-subkey export; they do not generate, delete, revoke, or replace
 keys. See the [signing-key operations runbook](development/key-rotation/README.md).
+
+## Release Signing Model
+
+The release and package-refresh workflows run from `main`. A change merged to
+`main` can be rebuilt, signed, and published by the scheduled package refresh
+without a separate approval step. The protected `release` environment is
+restricted to protected branches; the current solo-maintainer model relies on
+branch protection and the maintainer's merge decision as the publication gate.
+This is a deliberate trade-off, not an unreviewed default.
 
 ## Report A Vulnerability
 
@@ -202,6 +223,14 @@ and provide explicit recovery instructions before normal publication resumes.
 
 - Arch repository inputs are not pinned to an Arch Linux Archive snapshot, so
   byte-for-byte rebuilds are not currently guaranteed.
+- The builder image is resolved from a floating `archlinux:base-devel` tag at
+  build time. The resolved digest is recorded, but the full builder package set
+  is not pinned.
+- There is no offline installer image. The current installer resolves Arch
+  packages from mirrors during installation.
+- The SPDX document is a package inventory. It records package names, versions,
+  and source repositories, with `NOASSERTION` for licenses and download
+  locations; it is not a full source or license audit.
 - The NVIDIA 580xx path depends on vendored third-party package recipes and
   NVIDIA's proprietary driver archives.
 - Build-input manifests authenticate the recorded refs, source hashes, and build

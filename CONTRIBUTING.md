@@ -78,6 +78,10 @@ from `main`. A manually dispatched workflow may technically target another
 branch, but release-environment policy and workflow-level checks must prevent a
 non-main ref from receiving production secrets.
 
+Merging to `main` can trigger the scheduled package refresh, which rebuilds,
+signs, and publishes Veldmuis packages. Treat a merge as a publication decision,
+not only a code-review decision.
+
 Pull requests should:
 
 - Keep branch names, titles, descriptions, commit messages, and generated docs
