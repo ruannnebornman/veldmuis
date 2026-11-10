@@ -712,6 +712,19 @@ Add appropriate hardening (`NoNewPrivileges`, `ProtectSystem`, restricted
 
 ---
 
+## Additional Finding
+
+### R31. Workflow action-pin check was a no-op
+
+- [x] Fixed in PR #104
+
+**Problem:** `development/check-release-policy.sh` only matched `- uses:` list
+entries, but every workflow puts `uses:` on its own line. The check therefore
+passed without inspecting any action.
+
+**Fix:** The check now matches both `- uses:` and indented `uses:` lines and
+verifies every action reference ends in a full 40-character commit SHA.
+
 ## Already Good — Keep Doing This
 
 - Signed packages and signed Veldmuis repository databases
