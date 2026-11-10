@@ -39,11 +39,11 @@ if `2026.04.22` exists, the next release on that date must be
 ## Immutability Policy
 
 Release tags and release-specific object paths are immutable while published.
-Do not move, overwrite, or reuse them. Before publishing a new network
-installer, the workflow removes every older release prefix while protecting
-the new tag. Git tags, GitHub releases, and their authenticated metadata remain
-the historical record. If a published release is wrong, fix the source and
-publish the next valid release tag.
+Do not move, overwrite, or reuse them. After publishing and verifying a new
+network installer and its channel, the workflow removes every older release
+prefix while protecting the new tag. Git tags, GitHub releases, and their
+authenticated metadata remain the historical record. If a published release is
+wrong, fix the source and publish the next valid release tag.
 
 The workflow rejects a release if:
 
@@ -72,13 +72,12 @@ At a high level, the workflow:
 7. Generates the package inventory, SPDX SBOM, build-input record, checksum,
    and signed manifest in a network-disabled container.
 8. Creates the annotated tag for the exact built commit.
-9. Removes all earlier installer release prefixes while protecting the new tag.
-10. Uploads and verifies immutable network-installer release objects.
-11. Promotes the small network channel document and signed channel manifest.
-12. Removes legacy mutable ISO aliases after the channel is usable.
-13. Creates the GitHub release and attaches the authenticated metadata.
-14. Downloads the published manifest and signature and verifies them with the
-    packaged public key.
+9. Uploads and verifies immutable network-installer release objects.
+10. Promotes the small network channel document and signed channel manifest.
+11. Removes legacy mutable ISO aliases after the channel is usable.
+12. Creates the GitHub release and attaches the authenticated metadata.
+13. Verifies the published channel and release policy.
+14. Removes all earlier installer release prefixes while protecting the new tag.
 
 Reusable workflow actions are pinned to complete commit SHAs. Workflow token
 permissions are read-only by default and elevated only for the publication job.
