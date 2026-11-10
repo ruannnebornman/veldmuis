@@ -39,10 +39,10 @@ Tick the checkbox only when the fix is merged and verified.
 | ID | Decision | Status |
 | --- | --- | --- |
 | R1 | Keep the `fish` dependency; add it to `veldmuis-common`. | Done in PR #95 |
-| R2 | Enable autolock and lock-on-resume with a 10-minute timeout. | Next |
-| R3 | Keep KWallet disabled and document the intended secrets workflow. | Pending |
-| R4 | Remove the custom CPU service; set performance once on first boot through PPD; remove forced PowerDevil overrides. | Pending |
-| R5 | Remove `volume=0` and `loop-file=inf` from the system mpv config. | Pending |
+| R2 | Enable autolock and lock-on-resume with a 10-minute timeout. | Done in PR #96 |
+| R3 | Keep KWallet disabled and document the intended secrets workflow. | Done in PR #97 |
+| R4 | Remove the custom CPU service; set performance once on first boot through PPD; remove forced PowerDevil overrides. | Done in PR #100 (stacked on #96) |
+| R5 | Remove `volume=0` and `loop-file=inf` from the system mpv config. | Done in PR #98 |
 | R6 | Accept the merge-to-main signing model and document the trade-off. | Pending |
 | R7 | Publish and verify the new release/channel first, then prune older releases. | Pending |
 | R8 | Upload new payloads, upload/verify the new database, then delete unreferenced old payloads. | Pending |
