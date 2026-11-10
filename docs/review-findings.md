@@ -43,31 +43,31 @@ Tick the checkbox only when the fix is merged and verified.
 | R3 | Keep KWallet disabled and document the intended secrets workflow. | Done in PR #97 |
 | R4 | Remove the custom CPU service; set performance once on first boot through PPD; remove forced PowerDevil overrides. | Done in PR #100 (stacked on #96) |
 | R5 | Remove `volume=0` and `loop-file=inf` from the system mpv config. | Done in PR #98 |
-| R6 | Accept the merge-to-main signing model and document the trade-off. | Pending |
-| R7 | Publish and verify the new release/channel first, then prune older releases. | Pending |
-| R8 | Upload new payloads, upload/verify the new database, then delete unreferenced old payloads. | Pending |
-| R9 | Require typed device confirmation, check removable, allow explicit `--force`. | Pending |
-| R10 | Enable the EFI fallback loader. | Pending |
-| R11 | Raise the minimum RAM to 8 GiB; keep no swap. | Pending |
-| R12 | Leave the opt-in sync integration as-is and document the caveat; downgrade to P3. | Pending |
-| R13 | Keep the `/etc/os-release` override, add `VERSION_ID=rolling`, document `/usr/lib`. | Pending |
-| R14 | Make muis the default terminal everywhere; remove konsole from the default set but keep it installable. | Pending |
-| R15 | Document the Arch database-signature limitation in `SECURITY.md`. | Pending |
+| R6 | Accept the merge-to-main signing model and document the trade-off. | Done in PR #107 |
+| R7 | Publish and verify the new release/channel first, then prune older releases. | Done in PR #102 |
+| R8 | Upload new payloads, upload/verify the new database, then delete unreferenced old payloads. | Done in PR #102 |
+| R9 | Require typed device confirmation, check removable, allow explicit `--force`. | Done in PR #103 |
+| R10 | Enable the EFI fallback loader. | Done in PR #101 |
+| R11 | Raise the minimum RAM to 8 GiB; keep no swap. | Done in PR #101 |
+| R12 | Leave the opt-in sync integration as-is and document the caveat; downgrade to P3. | Done in PR #107 |
+| R13 | Keep the `/etc/os-release` override, add `VERSION_ID=rolling`, document `/usr/lib`. | Done in PR #105 |
+| R14 | Make muis the default terminal everywhere; remove konsole from the default set but keep it installable. | Done in PR #106 |
+| R15 | Document the Arch database-signature limitation in `SECURITY.md`. | Done in PR #107 |
 | R16 | Deferred: handle the independent trust anchor through the website at the end. | Deferred |
-| R17 | Disable Actions PR approval and enable Dependabot alerts/security updates. | Pending |
-| R18 | Document the PAT and its reason; no token change now. | Pending |
-| R19 | Use the runner’s preinstalled AWS CLI and fail if absent. | Pending |
-| R20 | Validate the NVIDIA dependency package before the root install and require recipe-review discipline. | Pending |
-| R21 | Add a scheduled Calamares upstream watcher and document the fork. | Pending |
-| R22 | Fix the docs and the extras QML label. | Pending |
-| R23 | Document that historical metadata is retained but ISO bytes are pruned. | Pending |
-| R24 | Document the reproducibility limitation. | Pending |
-| R25 | Keep Secure Boot documented and add a visible installer/download warning. | Pending |
-| R26 | Document the network-installer limitation. | Pending |
-| R27 | Document the SBOM as a package inventory. | Pending |
-| R28 | Document the signed manifest as the trust anchor, not the tag. | Pending |
-| R29 | Add a failed-publication runbook entry. | Pending |
-| R30 | Add conservative systemd hardening to the mirror refresh service. | Pending |
+| R17 | Disable Actions PR approval and enable Dependabot alerts/security updates. | Done in repository settings |
+| R18 | Document the PAT and its reason; no token change now. | Done in PR #107 |
+| R19 | Use the runner’s preinstalled AWS CLI and fail if absent. | Done in PR #104 |
+| R20 | Validate the NVIDIA dependency package before the root install and require recipe-review discipline. | Done in PR #104 |
+| R21 | Add a scheduled Calamares upstream watcher and document the fork. | Done in PR #104 |
+| R22 | Fix the docs and the extras QML label. | Done in PR #107 |
+| R23 | Document that historical metadata is retained but ISO bytes are pruned. | Done in PR #107 |
+| R24 | Document the reproducibility limitation. | Done in PR #107 |
+| R25 | Keep Secure Boot documented and add a visible installer/download warning. | Done in PR #107 |
+| R26 | Document the network-installer limitation. | Done in PR #107 |
+| R27 | Document the SBOM as a package inventory. | Done in PR #107 |
+| R28 | Document the signed manifest as the trust anchor, not the tag. | Done in PR #107 |
+| R29 | Add a failed-publication runbook entry. | Done in PR #107 |
+| R30 | Add conservative systemd hardening to the mirror refresh service. | Done in PR #104 |
 
 ---
 
