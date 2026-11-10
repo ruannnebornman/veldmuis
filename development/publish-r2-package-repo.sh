@@ -227,8 +227,8 @@ upload_repo_payloads() {
   # database so package blobs and detached signatures cannot drift apart.
   run_aws s3 cp "${source_dir}" "${target}" \
     --recursive \
-    --exclude "${repo_name}.db*" \
-    --exclude "${repo_name}.files*" \
+    --exclude "os/${arch}/${repo_name}.db*" \
+    --exclude "os/${arch}/${repo_name}.files*" \
     --cache-control "${repo_cache_control}" \
     --endpoint-url "${endpoint}" \
     --only-show-errors
@@ -243,8 +243,8 @@ prune_repo_payloads() {
   # after the new database and signatures have been uploaded and verified, so a
   # failed metadata upload leaves the previous database and its payloads intact.
   run_aws s3 sync "${source_dir}" "${target}" \
-    --exclude "${repo_name}.db*" \
-    --exclude "${repo_name}.files*" \
+    --exclude "os/${arch}/${repo_name}.db*" \
+    --exclude "os/${arch}/${repo_name}.files*" \
     --cache-control "${repo_cache_control}" \
     --size-only \
     --delete \

@@ -27,20 +27,25 @@ pkg_info="$(/usr/bin/bsdtar -xOf "${package_path}" .PKGINFO)"
 package_name="$(/usr/bin/awk -F ' = ' '$1 == "pkgname" { print $2; exit }' <<<"${pkg_info}")"
 package_version="$(/usr/bin/awk -F ' = ' '$1 == "pkgver" { print $2; exit }' <<<"${pkg_info}")"
 package_release="$(/usr/bin/awk -F ' = ' '$1 == "pkgrel" { print $2; exit }' <<<"${pkg_info}")"
+package_version_release="${package_version}"
+if [[ -n "${package_release}" ]]; then
+  package_version_release="${package_version}-${package_release}"
+fi
 
 [[ "${package_name}" == nvidia-580xx-utils ]] || \
   die "Unexpected dependency package: ${package_name}"
-[[ -n "${package_version}" && -n "${package_release}" ]] || \
+[[ -n "${package_version_release}" ]] || \
   die "Dependency package metadata is incomplete"
 
 recipe="/workspace/veldmuis/packages/nvidia-580xx-src/nvidia-580xx-utils/PKGBUILD"
 [[ -r "${recipe}" ]] || die "Vendored dependency recipe is not readable: ${recipe}"
 recipe_version="$(/usr/bin/awk -F= '$1 == "pkgver" { print $2; exit }' "${recipe}")"
 recipe_release="$(/usr/bin/awk -F= '$1 == "pkgrel" { print $2; exit }' "${recipe}")"
-[[ "${package_version}" == "${recipe_version}" && "${package_release}" == "${recipe_release}" ]] || \
-  die "Dependency package version does not match the vendored recipe: ${package_version}-${package_release} vs ${recipe_version}-${recipe_release}"
+expected_version_release="${recipe_version}-${recipe_release}"
+[[ "${package_version_release}" == "${expected_version_release}" ]] || \
+  die "Dependency package version does not match the vendored recipe: ${package_version_release} vs ${expected_version_release}"
 
-expected_name="nvidia-580xx-utils-${package_version}-${package_release}-"
+expected_name="nvidia-580xx-utils-${package_version_release}-"
 [[ "$(/usr/bin/basename "${package_path}")" == "${expected_name}"*.pkg.tar.zst ]] || \
   die "Dependency package filename does not match its metadata: $(/usr/bin/basename "${package_path}")"
 
