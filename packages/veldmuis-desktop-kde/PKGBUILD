@@ -1,6 +1,6 @@
 pkgname=veldmuis-desktop-kde
 pkgver=20260306
-pkgrel=20
+pkgrel=21
 pkgdesc="KDE Plasma desktop package for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -51,10 +51,10 @@ depends=(
   "breeze"
   "breeze-gtk"
 )
-source=("cpu-max-performance.service")
-sha256sums=("f99068044431bee0f39d0f60a9d7dcd7d813fa9affba12b23d2d462e5a5995d5")
+source=("veldmuis-power-profile.service")
+sha256sums=("a3df35af3a351fbf3717a93aa215bea95295adff7736756142c38204ff2fb34c")
 
 package() {
-  install -Dm644 "${srcdir}/cpu-max-performance.service" \
-    "${pkgdir}/usr/lib/systemd/system/cpu-max-performance.service"
+  install -Dm644 "${srcdir}/veldmuis-power-profile.service" \
+    "${pkgdir}/usr/lib/systemd/system/veldmuis-power-profile.service"
 }
