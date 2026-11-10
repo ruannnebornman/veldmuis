@@ -211,10 +211,11 @@ check_workflow_source() {
   tag_line="$(grep -nF -- '- name: Create immutable release tag' "${workflow}" | cut -d: -f1)"
   cleanup_line="$(grep -nF -- './development/prune-release-storage.sh' "${workflow}" | cut -d: -f1)"
   publish_line="$(grep -nF -- './development/publish-r2-release.sh' "${workflow}" | head -n 1 | cut -d: -f1)"
-  [[ "${tag_line}" =~ ^[0-9]+$ && "${cleanup_line}" =~ ^[0-9]+$ && "${publish_line}" =~ ^[0-9]+$ ]] || \
+  verify_line="$(grep -nF -- '- name: Verify published release policy' "${workflow}" | cut -d: -f1)"
+  [[ "${tag_line}" =~ ^[0-9]+$ && "${cleanup_line}" =~ ^[0-9]+$ && "${publish_line}" =~ ^[0-9]+$ && "${verify_line}" =~ ^[0-9]+$ ]] || \
     die "Release workflow publication ordering could not be resolved."
-  ((tag_line < cleanup_line && cleanup_line < publish_line)) || \
-    die "Release workflow must tag, prune older releases, and then publish in that order."
+  ((tag_line < publish_line && publish_line < verify_line && verify_line < cleanup_line)) || \
+    die "Release workflow must tag, publish and verify the new release, and only then prune older releases."
   grep -q 'channels/network.manifest.txt.sig' "${workflow}" || \
     die "Network release workflow does not publish a channel-manifest signature."
   grep -q 'gpgv --keyring ./packages/veldmuis-keyring/veldmuis.gpg' "${workflow}" || \

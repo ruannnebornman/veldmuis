@@ -120,10 +120,10 @@ For a historical release:
 5. If the release is still current, download the ISO from `release_path=` and
    verify it against `sha256=`.
 
-Before a new installer release is published, the publication workflow removes
-older release-specific objects. Historical tags, signed manifests, checksums,
-and other authenticated metadata remain on the corresponding GitHub release.
-Release-specific paths are never reused.
+After a new installer release is published and its channel is verified, the
+publication workflow removes older release-specific objects. Historical tags,
+signed manifests, checksums, and other authenticated metadata remain on the
+corresponding GitHub release. Release-specific paths are never reused.
 
 ## Package Repository Trust
 
