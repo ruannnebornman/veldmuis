@@ -17,8 +17,43 @@ important data before changing disk partitions.
 - A USB drive or other bootable medium large enough for the ISO.
 - A backup of any data that must survive repartitioning.
 
-Secure Boot is not part of the current supported target. Disable Secure Boot in
-the system firmware before booting the installer.
+### Secure Boot
+
+Secure Boot is not part of the current supported target. Disable it in the
+system firmware before booting the installer, and leave it disabled after
+installation.
+
+Veldmuis ships no signed boot chain. On stock firmware the only way to chain
+into the built-in trust store is a `shim` signed by the Microsoft UEFI CA, and
+the project does not take part in that signing programme. Anything the project
+signed itself would only be trusted after the firmware, or the user, installed
+the matching keys. That trade-off is a scope decision, not an oversight: a
+signed chain costs an ongoing review and revocation obligation that a
+single-maintainer project does not want to carry.
+
+Booting a Veldmuis install with Secure Boot enabled is possible but explicitly
+unsupported. If you attempt it, these are the parts that matter:
+
+- The installer writes a systemd-boot layout with a plain kernel and initramfs
+  on the ESP (`/boot/vmlinuz-linux`, `/boot/initramfs-linux.img`), not a
+  unified kernel image. The kernel binary is therefore the object that has to
+  be signed.
+- `sbctl` is the least surprising path: create your own keys, put the firmware
+  into setup mode, enrol the keys, then sign `/boot/vmlinuz-linux`. `sbctl`
+  can install a pacman hook that re-signs the kernel whenever `kernel-install`
+  rewrites it, which is required for the chain to survive updates.
+- The NVIDIA DKMS packages build out-of-tree modules. With Secure Boot and
+  kernel lockdown enabled, unsigned modules do not load, so those modules need
+  to be signed with a key in the kernel keyring, or Secure Boot has to stay off
+  on those systems.
+- A kernel signed out-of-band loses its signature on the next kernel package
+  upgrade unless your own hook keeps up. A broken chain is a boot failure, and
+  recovery is the same as any other boot failure: see
+  [Troubleshooting](troubleshooting.md).
+
+No Veldmuis release artifact is signed for Secure Boot, and issues caused by a
+self-managed chain are outside the supported scope described in
+[Support scope](../SUPPORT.md).
 
 ## 1. Download And Verify The ISO
 

@@ -217,9 +217,14 @@ The public image resolves Arch packages from Arch mirrors during installation,
 so the download stays small and current.
 
 **Why is Secure Boot not supported?**
-The install path targets UEFI with systemd-boot and Secure Boot disabled. This
-is a documented limitation, not an oversight; see
-[Installing Veldmuis](docs/installing.md).
+The install path targets UEFI with systemd-boot and Secure Boot disabled.
+Supporting it on stock firmware would mean shipping a `shim` signed by the
+Microsoft UEFI CA and carrying the review, revocation, and re-signing
+obligations that come with that chain. Veldmuis does not participate in that
+programme, so the firmware trust store does not know the project. This is a
+documented limitation, not an oversight; see
+[Installing Veldmuis](docs/installing.md) for the unsupported self-signing
+path.
 
 **Is this a serious project?**
 It is a small project with a defined support scope. Releases are signed and

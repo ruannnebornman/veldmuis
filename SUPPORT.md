@@ -30,6 +30,10 @@ The issue tracker is not the right place for:
 
 - General Arch Linux support unrelated to Veldmuis packaging or configuration.
 - BIOS or legacy boot support.
+- Secure Boot enablement, including self-signed boot chains, custom `shim`
+  builds, and MOK enrolment on installed systems. The project ships no signed
+  boot chain; the unsupported approach is described in
+  [Installing Veldmuis](docs/installing.md).
 - Unsupported historical ISO downloads.
 - Third-party repositories, unofficial mirrors, or unofficial downloads.
 - Custom local package mixes that cannot be traced back to Veldmuis packages.
