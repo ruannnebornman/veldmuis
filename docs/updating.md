@@ -19,11 +19,16 @@ Veldmuis follows the Arch full-upgrade model. Partial upgrades are unsupported.
 
 ## Normal Update
 
-Refresh package databases and upgrade the complete system in one transaction:
+Use the Veldmuis update wrapper:
 
 ```sh
-sudo pacman -Syu
+sudo veldmuis-update
 ```
+
+It runs a full `pacman -Syu` transaction. If a mirror fails to serve a package
+or signature (for example, a 404), it removes the failing mirror from the
+current mirrorlist, refreshes the Arch mirrorlist, and retries once. Plain
+`sudo pacman -Syu` remains the underlying command and still works.
 
 Run the command regularly enough that individual updates remain understandable.
 Do not interrupt pacman while it is installing packages.

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mirrorlist="/etc/pacman.d/mirrorlist"
+backup_path="/etc/pacman.d/mirrorlist.veldmuis-update.bak"
+log_file=""
+mirrorlist_tmp=""
+
+log() {
+  printf '[veldmuis-update] %s\n' "$*"
+}
+
+die() {
+  printf '[veldmuis-update] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+cleanup() {
+  if [[ -n "${log_file}" ]]; then
+    rm -f "${log_file}"
+  fi
+  if [[ -n "${mirrorlist_tmp}" ]]; then
+    rm -f "${mirrorlist_tmp}"
+  fi
+}
+
+trap cleanup EXIT
+
+[[ ${EUID} -eq 0 ]] || \
+  die "Run this as root, for example: sudo veldmuis-update"
+[[ -r "${mirrorlist}" ]] || die "Arch mirrorlist is not readable: ${mirrorlist}"
+command -v pacman >/dev/null 2>&1 || die "pacman is not installed"
+command -v veldmuis-refresh-arch-mirrors >/dev/null 2>&1 || \
+  die "veldmuis-refresh-arch-mirrors is not installed"
+
+log_file="$(mktemp -t veldmuis-update.XXXXXX)"
+mirrorlist_tmp="$(mktemp -t veldmuis-update-mirrorlist.XXXXXX)"
+
+run_pacman() {
+  pacman -Syu "$@" 2>&1 | tee "${log_file}"
+}
+
+is_retrieval_failure() {
+  grep -Eqi \
+    'failed retrieving file|failed to retrieve some files|returned error: 404|The requested URL returned error: 404' \
+    "${log_file}"
+}
+
+failed_hosts() {
+  sed -nE 's/.*failed retrieving file .* from ([^ ]+) :.*/\1/p' "${log_file}" | sort -u
+}
+
+remove_failed_mirrors() {
+  local host
+  local -a hosts=()
+
+  mapfile -t hosts < <(failed_hosts)
+  ((${#hosts[@]} > 0)) || return 1
+
+  cp -p "${mirrorlist}" "${backup_path}"
+
+  for host in "${hosts[@]}"; do
+    [[ -n "${host}" ]] || continue
+    grep -qF "//${host}/" "${mirrorlist}" || continue
+    log "Removing failing mirror: ${host}"
+    grep -vF "//${host}/" "${mirrorlist}" > "${mirrorlist_tmp}"
+    install -m644 "${mirrorlist_tmp}" "${mirrorlist}"
+  done
+
+  return 0
+}
+
+refresh_mirrors() {
+  log "Refreshing the Arch mirrorlist."
+  veldmuis-refresh-arch-mirrors
+}
+
+main() {
+  if run_pacman "$@"; then
+    return 0
+  fi
+
+  if ! is_retrieval_failure; then
+    log "pacman failed for a reason other than package retrieval; not changing mirrors."
+    return 1
+  fi
+
+  if remove_failed_mirrors; then
+    log "Retrying after removing the failing mirror(s)."
+    if run_pacman "$@"; then
+      return 0
+    fi
+  fi
+
+  if ! refresh_mirrors; then
+    log "Mirror refresh failed; leaving the existing mirrorlist in place."
+    return 1
+  fi
+
+  log "Retrying after refreshing the Arch mirrorlist."
+  run_pacman "$@"
+}
+
+main "$@"

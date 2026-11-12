@@ -1,6 +1,6 @@
 pkgname=veldmuis-mirrorlist
 pkgver=20260305
-pkgrel=8
+pkgrel=9
 pkgdesc="Mirrorlist and Arch mirror refresh tooling for Veldmuis Linux"
 arch=("any")
 url="https://github.com/ruannnebornman/veldmuis"
@@ -10,6 +10,7 @@ source=(
   "veldmuis-mirrorlist"
   "arch-mirrorlist-fallback"
   "veldmuis-refresh-arch-mirrors"
+  "veldmuis-update"
   "veldmuis-refresh-arch-mirrors.service"
   "veldmuis-refresh-arch-mirrors.timer"
 )
@@ -17,6 +18,7 @@ sha256sums=(
   "64a8ce0f088374db8fd519bd9d315aae1099808d59a5336f4de88367ad7097b0"
   "66f94c75ecbe491f83af35b33ce71cefaaf8180b17f13b6ac46274a20f9448fc"
   "410b1fdb8a8eb06a3039852d4b3452a09e6c8978737617a60e184ab66aeba6b9"
+  "cbc7be466911581dfc65f8d8a0d1f16fe00bf0403ac8e6411f934f409cab35e9"
   "8e352c3f940641b67e19c9c748e516061f0907bec5d8041c9d558288c2304bf2"
   "e8dc06402b6aff032cd1241e808766b8b660d2f7d696b2df022cdce318167727"
 )
@@ -28,6 +30,8 @@ package() {
     "$pkgdir/usr/share/veldmuis/arch-mirrorlist-fallback"
   install -Dm755 veldmuis-refresh-arch-mirrors \
     "$pkgdir/usr/bin/veldmuis-refresh-arch-mirrors"
+  install -Dm755 veldmuis-update \
+    "$pkgdir/usr/bin/veldmuis-update"
   install -Dm644 veldmuis-refresh-arch-mirrors.service \
     "$pkgdir/usr/lib/systemd/system/veldmuis-refresh-arch-mirrors.service"
   install -Dm644 veldmuis-refresh-arch-mirrors.timer \
