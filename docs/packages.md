@@ -259,8 +259,9 @@ Veldmuis pacman repository include file.
 
 `veldmuis-keyring` owns the Veldmuis pacman keyring files.
 
-`veldmuis-mirrorlist` owns the Veldmuis mirrorlist and Arch mirror refresh
-tooling.
+`veldmuis-mirrorlist` owns the Veldmuis mirrorlist, Arch mirror refresh tooling,
+and `veldmuis-update`, the update wrapper that retries after a mirror retrieval
+failure.
 
 ## Installer Package Flow
 

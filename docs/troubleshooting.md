@@ -157,6 +157,15 @@ sudo pacman -Syu
 Do not install one package from updated repositories while leaving the rest of
 the system behind unless you understand the dependency risk.
 
+If the failure is a mirror retrieval error (404, missing package, or missing
+signature), use the wrapper:
+
+```sh
+sudo veldmuis-update
+```
+
+It removes the failing mirror, refreshes the Arch mirrorlist, and retries once.
+
 If mirror issues are suspected:
 
 ```sh
